@@ -1,15 +1,18 @@
-import { AdvisorChat } from "@/components/advisor/AdvisorChat";
+"use client";
 
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+
+/** Finance advisor folds into the unified pocket team (CFO mode). */
 export default function AdvisorPage() {
+  const router = useRouter();
+  useEffect(() => {
+    router.replace("/team?specialist=cfo");
+  }, [router]);
+
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Finance Advisor</h1>
-        <p className="mt-1 text-muted-foreground">
-          AI-powered CFO and counsel for Swiss freelancers.
-        </p>
-      </div>
-      <AdvisorChat />
+    <div className="flex h-40 items-center justify-center">
+      <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
     </div>
   );
 }

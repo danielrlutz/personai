@@ -2,7 +2,6 @@
 
 import { useCallback, useRef, useState } from "react";
 import { streamSSE } from "@/lib/api-client";
-import type { AdvisorPersona } from "./PersonaToggle";
 
 export interface ChatMessage {
   id: string;
@@ -11,11 +10,11 @@ export interface ChatMessage {
 }
 
 interface UseChatStreamOptions {
-  persona: AdvisorPersona;
+  specialist: string;
   onSessionId?: (id: string) => void;
 }
 
-export function useChatStream({ persona, onSessionId }: UseChatStreamOptions) {
+export function useChatStream({ specialist, onSessionId }: UseChatStreamOptions) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [streaming, setStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -40,12 +39,12 @@ export function useChatStream({ persona, onSessionId }: UseChatStreamOptions) {
       abortRef.current?.();
 
       try {
-        abortRef.current = await streamSSE("/advisor/chat/stream", {
+        abortRef.current = await streamSSE("/team/chat/stream", {
           method: "POST",
           body: {
             message: text.trim(),
             sessionId: sessionIdRef.current,
-            persona,
+            specialist,
           },
           onEvent: (event, data) => {
             if (event === "context" && typeof data === "object" && data && "sessionId" in data) {
@@ -75,7 +74,7 @@ export function useChatStream({ persona, onSessionId }: UseChatStreamOptions) {
         setStreaming(false);
       }
     },
-    [streaming, persona, onSessionId],
+    [streaming, specialist, onSessionId],
   );
 
   const clear = useCallback(() => {

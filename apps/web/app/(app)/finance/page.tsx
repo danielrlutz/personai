@@ -2,6 +2,7 @@ import Link from "next/link";
 import { List, MessageSquare } from "lucide-react";
 import { BudgetOverview } from "@/components/finance/BudgetOverview";
 import { QRBillList } from "@/components/finance/QRBillList";
+import { ConfirmGate } from "@/components/confirm/ConfirmGate";
 import { Button } from "@/components/ui/button";
 
 export default function FinancePage() {
@@ -11,7 +12,7 @@ export default function FinancePage() {
         <div>
           <h1 className="md-title-large text-[26px] tracking-tight">Finance</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Budget templates, QR bills, and cashflow.
+            Budget templates, QR bills, and cashflow — ledger writes stay behind confirm.
           </p>
         </div>
         <div className="flex gap-2">
@@ -22,13 +23,14 @@ export default function FinancePage() {
             </Link>
           </Button>
           <Button size="sm" asChild>
-            <Link href="/finance/advisor">
+            <Link href="/team?specialist=cfo">
               <MessageSquare className="mr-2 h-4 w-4" />
-              Advisor
+              CFO
             </Link>
           </Button>
         </div>
       </div>
+      <ConfirmGate />
       <BudgetOverview />
       <QRBillList />
     </div>

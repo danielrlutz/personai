@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { FileDropzone } from "@/components/ingest/FileDropzone";
 import { IngestionQueue } from "@/components/ingest/IngestionQueue";
+import { ConfirmGate } from "@/components/confirm/ConfirmGate";
 
 export default function IngestPage() {
   const [refreshKey, setRefreshKey] = useState(0);
@@ -10,11 +11,12 @@ export default function IngestPage() {
   return (
     <div className="mx-auto max-w-4xl space-y-5">
       <div>
-        <h1 className="md-title-large text-[26px] tracking-tight">Document Ingest</h1>
+        <h1 className="md-title-large text-[26px] tracking-tight">Archive</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Upload bills, receipts, and records for AI extraction.
+          OCR, proposed names ({`{date}_{DocType}_{Entity}`}), and Fristen — money-adjacent writes wait for confirm.
         </p>
       </div>
+      <ConfirmGate refreshKey={refreshKey} onResolved={() => setRefreshKey((k) => k + 1)} />
       <FileDropzone onUploaded={() => setRefreshKey((k) => k + 1)} />
       <IngestionQueue refreshKey={refreshKey} />
     </div>

@@ -379,5 +379,27 @@ export interface LicenseInfo {
     ocr: boolean;
     advisorChat: boolean;
     dualMedicalAnalysis: boolean;
+    teamChat?: boolean;
+    careerPdf?: boolean;
   };
+}
+
+export interface PendingConfirmation {
+  id: string;
+  action: string;
+  summary: string;
+  payload: unknown;
+  entity?: string | null;
+  entityId?: string | null;
+  status: "pending" | "confirmed" | "rejected" | "expired";
+  createdAt: string;
+  resolvedAt?: string | null;
+}
+
+export interface SpecialistInfo {
+  id: string;
+  label: string;
+  shortLabel: string;
+  description: string;
+  group: "ops" | "code" | "care" | "coaching";
 }

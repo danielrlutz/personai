@@ -9,6 +9,7 @@ import {
   Scale,
   HeartPulse,
   Settings,
+  Users,
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
@@ -17,8 +18,9 @@ import { Button } from "@/components/ui/button";
 import { OllamaStatusIndicator } from "@/components/shared/OllamaStatusIndicator";
 
 const navItems = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/ingest", label: "Ingest", icon: Upload },
+  { href: "/dashboard", label: "Home", icon: LayoutDashboard },
+  { href: "/team", label: "Team", icon: Users },
+  { href: "/ingest", label: "Archive", icon: Upload },
   { href: "/finance", label: "Finance", icon: Wallet },
   { href: "/legal", label: "Legal", icon: Scale },
   { href: "/medical", label: "Medical", icon: HeartPulse },
