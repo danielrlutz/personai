@@ -1,4 +1,5 @@
 import {
+  clearStoredProfileId,
   getStoredApiBaseUrl,
   getStoredProfileId,
   setStoredApiBaseUrl,
@@ -7,7 +8,8 @@ import {
 
 const DEFAULT_API_BASE = "http://localhost:4000";
 
-let profileIdOverride: string | null = null;
+/** undefined = use storage; null = explicitly logged out; string = active override */
+let profileIdOverride: string | null | undefined = undefined;
 
 export class ApiError extends Error {
   constructor(
@@ -34,13 +36,17 @@ export function setApiBaseUrl(url: string): void {
 }
 
 export function getProfileId(): string | null {
-  return profileIdOverride ?? getStoredProfileId();
+  if (profileIdOverride !== undefined) return profileIdOverride;
+  return getStoredProfileId();
 }
 
 export function setProfileId(id: string | null): void {
   profileIdOverride = id;
-  if (typeof window !== "undefined" && id) {
+  if (typeof window === "undefined") return;
+  if (id) {
     setStoredProfileId(id);
+  } else {
+    clearStoredProfileId();
   }
 }
 

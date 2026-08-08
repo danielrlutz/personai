@@ -2,12 +2,12 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Command } from "lucide-react";
+import { Search } from "lucide-react";
 import { Sidebar } from "./Sidebar";
 import { ProfileSwitcher } from "./ProfileSwitcher";
 import { MobileNav } from "./MobileNav";
-import { getStoredProfileId } from "@/lib/platform";
 import { setProfileId } from "@/lib/api-client";
+import { logoutToProfiles, requireProfile } from "@/lib/session";
 import { cn } from "@/lib/utils";
 
 const commandItems = [
@@ -19,7 +19,7 @@ const commandItems = [
   { label: "Legal tasks", href: "/legal", keys: "G L" },
   { label: "Medical log", href: "/medical", keys: "G M" },
   { label: "Settings", href: "/settings", keys: "G S" },
-  { label: "Switch profile", href: "/profiles", keys: "G P" },
+  { label: "Switch profile", href: "__logout__", keys: "G P" },
 ];
 
 interface AppShellProps {
@@ -34,13 +34,23 @@ export function AppShell({ children }: AppShellProps) {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    const profileId = getStoredProfileId();
+    const profileId = requireProfile();
     if (!profileId) {
       router.replace("/profiles");
       return;
     }
     setProfileId(profileId);
     setReady(true);
+
+    const onProfileChanged = (event: Event) => {
+      const detail = (event as CustomEvent<{ profileId: string | null }>).detail;
+      if (!detail?.profileId) {
+        setReady(false);
+        router.replace("/profiles");
+      }
+    };
+    window.addEventListener("personai:profile-changed", onProfileChanged);
+    return () => window.removeEventListener("personai:profile-changed", onProfileChanged);
   }, [router]);
 
   useEffect(() => {
@@ -63,6 +73,10 @@ export function AppShell({ children }: AppShellProps) {
     (href: string) => {
       setPaletteOpen(false);
       setQuery("");
+      if (href === "__logout__") {
+        logoutToProfiles();
+        return;
+      }
       router.push(href);
     },
     [router],
@@ -70,37 +84,37 @@ export function AppShell({ children }: AppShellProps) {
 
   if (!ready) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-teal-500 border-t-transparent" />
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
       </div>
     );
   }
 
   return (
-    <div className="flex h-screen overflow-hidden pt-[env(safe-area-inset-top)]">
+    <div className="flex h-screen overflow-hidden bg-background pt-[env(safe-area-inset-top)]">
       <div className="hidden h-full shrink-0 md:block">
         <Sidebar collapsed={collapsed} onToggle={() => setCollapsed((v) => !v)} />
       </div>
 
       <div className="flex flex-1 flex-col overflow-hidden">
-        <header className="glass-panel flex h-[var(--header-height)] shrink-0 items-center justify-between border-b border-border px-4 sm:px-6">
+        <header className="surface-panel flex h-[var(--header-height)] shrink-0 items-center justify-between border-b px-4 sm:px-6">
           <div className="flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-teal-500/20 md:hidden">
-              <span className="text-sm font-bold text-teal-400">P</span>
+            <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-primary-foreground md:hidden">
+              <span className="text-sm font-medium">P</span>
             </div>
             <button
               type="button"
               onClick={() => setPaletteOpen(true)}
-              className="flex items-center gap-2 rounded-lg border border-border bg-muted/20 px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
+              className="flex h-10 items-center gap-2 rounded-full border border-border bg-surface-container px-4 text-sm text-muted-foreground transition-colors duration-md ease-md hover:bg-surface-container-high hover:text-foreground"
             >
-              <Command className="h-4 w-4" />
-              <span className="hidden sm:inline">Command palette</span>
-              <kbd className="hidden rounded border border-border bg-background px-1.5 py-0.5 text-[10px] sm:inline">
+              <Search className="h-4 w-4" />
+              <span className="hidden sm:inline">Search</span>
+              <kbd className="ml-2 hidden rounded border border-border bg-background px-1.5 py-0.5 text-[10px] text-muted-foreground sm:inline">
                 ⌘K
               </kbd>
             </button>
           </div>
-          <div className="w-40 sm:w-48">
+          <div className="w-40 sm:w-52">
             <ProfileSwitcher />
           </div>
         </header>
@@ -119,24 +133,30 @@ export function AppShell({ children }: AppShellProps) {
 
       {paletteOpen && (
         <>
-          <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm" onClick={() => setPaletteOpen(false)} />
-          <div className="fixed left-1/2 top-[20%] z-50 w-full max-w-lg -translate-x-1/2 animate-in rounded-xl border border-border bg-zinc-900 shadow-2xl">
-            <div className="border-b border-border p-4">
-              <input
-                autoFocus
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search commands..."
-                className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-              />
+          <div
+            className="fixed inset-0 z-50 bg-black/50"
+            onClick={() => setPaletteOpen(false)}
+          />
+          <div className="fixed left-1/2 top-[18%] z-50 w-full max-w-lg -translate-x-1/2 animate-in overflow-hidden rounded-xl border border-border bg-card shadow-elev-3">
+            <div className="border-b border-border/80 p-3">
+              <div className="flex items-center gap-2 rounded-md bg-surface-container px-3">
+                <Search className="h-4 w-4 text-muted-foreground" />
+                <input
+                  autoFocus
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Search commands..."
+                  className="h-11 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+                />
+              </div>
             </div>
-            <ul className="max-h-72 overflow-y-auto p-2">
+            <ul className="max-h-72 overflow-y-auto py-1">
               {filtered.map((item) => (
                 <li key={item.href}>
                   <button
                     type="button"
                     onClick={() => navigate(item.href)}
-                    className="flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-sm hover:bg-muted/50"
+                    className="md-list-row w-full justify-between text-left text-sm hover:bg-surface-container-high"
                   >
                     <span>{item.label}</span>
                     <span className="text-xs text-muted-foreground">{item.keys}</span>
@@ -144,7 +164,7 @@ export function AppShell({ children }: AppShellProps) {
                 </li>
               ))}
               {filtered.length === 0 && (
-                <li className="px-3 py-8 text-center text-sm text-muted-foreground">No results</li>
+                <li className="px-4 py-10 text-center text-sm text-muted-foreground">No results</li>
               )}
             </ul>
           </div>

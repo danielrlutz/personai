@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import { Settings, Server, User, Shield } from "lucide-react";
 import {
   apiGet,
@@ -10,15 +9,14 @@ import {
   type LicenseInfo,
   type ProfileRegistry,
 } from "@/lib/api-client";
-import { getStoredProfileId, getStoredApiBaseUrl, setStoredApiBaseUrl, clearStoredProfileId } from "@/lib/platform";
+import { getStoredProfileId, getStoredApiBaseUrl, setStoredApiBaseUrl, getPlatform } from "@/lib/platform";
+import { getActiveProfileId, logoutToProfiles } from "@/lib/session";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { getPlatform } from "@/lib/platform";
 
 export default function SettingsPage() {
-  const router = useRouter();
   const [apiUrl, setApiUrl] = useState("");
   const [license, setLicense] = useState<LicenseInfo | null>(null);
   const [profileName, setProfileName] = useState("");
@@ -29,7 +27,7 @@ export default function SettingsPage() {
     setApiUrl(getStoredApiBaseUrl() ?? getApiBaseUrl());
     void apiGet<LicenseInfo>("/license").then(setLicense).catch(() => undefined);
     void apiGet<ProfileRegistry>("/profiles").then((registry) => {
-      const id = getStoredProfileId();
+      const id = getActiveProfileId();
       const profile = registry.profiles.find((p) => p.id === id);
       setProfileName(profile?.name ?? "Unknown");
     });
@@ -42,16 +40,11 @@ export default function SettingsPage() {
     setTimeout(() => setSaved(false), 2000);
   };
 
-  const switchProfile = () => {
-    clearStoredProfileId();
-    router.push("/profiles");
-  };
-
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <div>
         <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
-          <Settings className="h-6 w-6 text-teal-400" />
+          <Settings className="h-6 w-6 text-primary" />
           Settings
         </h1>
         <p className="mt-1 text-muted-foreground">Configure API connection and profile.</p>
@@ -60,7 +53,7 @@ export default function SettingsPage() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
-            <Server className="h-4 w-4 text-teal-400" />
+            <Server className="h-4 w-4 text-primary" />
             API Server
           </CardTitle>
           <CardDescription>Node sidecar endpoint (default http://localhost:4000)</CardDescription>
@@ -74,7 +67,7 @@ export default function SettingsPage() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
-            <User className="h-4 w-4 text-teal-400" />
+            <User className="h-4 w-4 text-primary" />
             Active Profile
           </CardTitle>
         </CardHeader>
@@ -83,7 +76,7 @@ export default function SettingsPage() {
             <p className="font-medium">{profileName}</p>
             <p className="text-xs text-muted-foreground font-mono">{getStoredProfileId()}</p>
           </div>
-          <Button variant="outline" onClick={switchProfile}>
+          <Button variant="outline" onClick={() => logoutToProfiles()}>
             Switch profile
           </Button>
         </CardContent>
@@ -92,7 +85,7 @@ export default function SettingsPage() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
-            <Shield className="h-4 w-4 text-teal-400" />
+            <Shield className="h-4 w-4 text-primary" />
             License
           </CardTitle>
         </CardHeader>
@@ -106,7 +99,7 @@ export default function SettingsPage() {
               <ul className="grid grid-cols-2 gap-2 text-sm">
                 {Object.entries(license.features).map(([key, enabled]) => (
                   <li key={key} className="flex items-center gap-2">
-                    <span className={enabled ? "text-teal-400" : "text-muted-foreground"}>
+                    <span className={enabled ? "text-primary" : "text-muted-foreground"}>
                       {enabled ? "✓" : "—"}
                     </span>
                     {key.replace(/([A-Z])/g, " $1").trim()}
