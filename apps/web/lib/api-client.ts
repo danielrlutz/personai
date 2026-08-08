@@ -338,14 +338,31 @@ export interface MedicalAnalysis {
 
 export type OllamaRuntime = "native" | "docker" | "remote" | "unknown";
 
+export interface OllamaCandidateStatus {
+  host: string;
+  up: boolean;
+  runtime: OllamaRuntime;
+}
+
 export interface OllamaHealth {
   ok: boolean;
   host?: string;
   configuredHost?: string;
+  lastKnownGood?: string | null;
   runtime?: OllamaRuntime;
   apiInDocker?: boolean;
   models?: string[];
   running?: string[];
+  candidates?: string[];
+  candidatesUp?: string[];
+  candidateStatus?: OllamaCandidateStatus[];
+  /** True when a healthy host is reachable via failover / multiple candidates. */
+  failoverOk?: boolean;
+  hints?: {
+    native: string;
+    dockerFromApi: string;
+    composeService: string;
+  };
   reachable?: boolean;
   note?: string;
   vram?: {

@@ -6,9 +6,23 @@ export type OllamaSlot = "VISION" | "REASONING";
 /** How Ollama appears relative to this API process. */
 export type OllamaRuntime = "native" | "docker" | "remote" | "unknown";
 
+export type OllamaCandidateStatus = {
+  host: string;
+  up: boolean;
+  runtime: OllamaRuntime;
+};
+
 const NATIVE_LOOPBACK = ["http://127.0.0.1:11434", "http://localhost:11434"] as const;
+const HOST_DOCKER_INTERNAL = "http://host.docker.internal:11434";
+const COMPOSE_OLLAMA = "http://ollama:11434";
+const HOST_CACHE_TTL_MS = 10_000;
+const PROBE_TIMEOUT_MS = 1500;
 
 let hostOverride: string | null = null;
+let lastKnownGood: string | null = null;
+let cachedHost: string | null = null;
+let cachedAt = 0;
+let resolveInFlight: Promise<string> | null = null;
 
 export function modelForSlot(slot: OllamaSlot): string {
   return slot === "VISION" ? config.visionModel : config.reasoningModel;
@@ -21,6 +35,16 @@ export function getConfiguredOllamaHost(): string {
 /** Runtime override (settings UI). Does not rewrite process.env permanently. */
 export function setOllamaHostOverride(host: string): void {
   hostOverride = host.trim().replace(/\/$/, "");
+  invalidateOllamaHostCache();
+}
+
+export function invalidateOllamaHostCache(): void {
+  cachedHost = null;
+  cachedAt = 0;
+}
+
+export function getLastKnownGoodOllamaHost(): string | null {
+  return lastKnownGood;
 }
 
 export function isApiInDocker(): boolean {
@@ -55,46 +79,46 @@ export function classifyOllamaRuntime(host: string): OllamaRuntime {
   }
 }
 
-function buildProbeCandidates(): string[] {
+function normalizeHost(host: string): string {
+  return host.replace(/\/$/, "");
+}
+
+function markHostHealthy(host: string): void {
+  const normalized = normalizeHost(host);
+  cachedHost = normalized;
+  cachedAt = Date.now();
+  lastKnownGood = normalized;
+}
+
+/** Ordered failover candidates (deduped). */
+export function buildProbeCandidates(): string[] {
   const configured = getConfiguredOllamaHost();
   const inDocker = isApiInDocker();
   const candidates: string[] = [];
 
-  const push = (host: string | undefined) => {
+  const push = (host: string | undefined | null) => {
     if (!host) return;
-    const normalized = host.replace(/\/$/, "");
+    const normalized = normalizeHost(host);
     if (!candidates.includes(normalized)) candidates.push(normalized);
   };
 
-  // Prefer native loopback first when the configured host is loopback or unset-like.
-  // When the API runs in Docker against a native Ollama, prefer host.docker.internal
-  // over container localhost (which would miss the host process).
-  const configuredIsLoopback =
-    /^(https?:\/\/)?(127\.0\.0\.1|localhost|\[::1\])(:|\/|$)/i.test(configured);
-
-  if (inDocker && configuredIsLoopback) {
-    push("http://host.docker.internal:11434");
-    push(configured);
-  } else {
-    push(configured);
-  }
-
+  // 1) Configured OLLAMA_HOST / settings override
+  push(configured);
+  // 2) Last known healthy host
+  push(lastKnownGood);
+  // 3–4) Native loopback
   for (const native of NATIVE_LOOPBACK) push(native);
-
-  if (inDocker) {
-    push("http://host.docker.internal:11434");
-    push("http://ollama:11434");
-  } else {
-    // Desktop / bare-metal: still try host gateway in case someone pointed compose at us
-    push("http://host.docker.internal:11434");
-  }
+  // 5) Host gateway (Docker Desktop / compose → native Ollama)
+  push(HOST_DOCKER_INTERNAL);
+  // 6) Compose service name when API is in Docker
+  if (inDocker) push(COMPOSE_OLLAMA);
 
   return candidates;
 }
 
-export async function probeOllamaHost(host: string, timeoutMs = 2000): Promise<boolean> {
+export async function probeOllamaHost(host: string, timeoutMs = PROBE_TIMEOUT_MS): Promise<boolean> {
   try {
-    const res = await fetch(`${host.replace(/\/$/, "")}/api/tags`, {
+    const res = await fetch(`${normalizeHost(host)}/api/tags`, {
       signal: AbortSignal.timeout(timeoutMs),
     });
     return res.ok;
@@ -103,17 +127,99 @@ export async function probeOllamaHost(host: string, timeoutMs = 2000): Promise<b
   }
 }
 
-export async function resolveOllamaHost(): Promise<string> {
-  const candidates = buildProbeCandidates();
-  for (const host of candidates) {
-    if (await probeOllamaHost(host)) return host;
+function isConnectionError(err: unknown): boolean {
+  if (!(err instanceof Error)) return false;
+  const msg = err.message.toLowerCase();
+  if (
+    msg.includes("fetch failed") ||
+    msg.includes("network") ||
+    msg.includes("socket") ||
+    msg.includes("econnrefused") ||
+    msg.includes("econnreset") ||
+    msg.includes("enotfound") ||
+    msg.includes("etimedout") ||
+    msg.includes("ehostunreach") ||
+    msg.includes("other side closed")
+  ) {
+    return true;
   }
-  return getConfiguredOllamaHost();
+  const cause = (err as { cause?: { code?: string; message?: string } }).cause;
+  const code = cause?.code?.toUpperCase();
+  if (
+    code &&
+    ["ECONNREFUSED", "ECONNRESET", "ENOTFOUND", "ETIMEDOUT", "EHOSTUNREACH", "UND_ERR_SOCKET"].includes(
+      code,
+    )
+  ) {
+    return true;
+  }
+  if (cause?.message?.toLowerCase().includes("fetch failed")) return true;
+  return false;
+}
+
+async function probeFirstHealthy(candidates: string[], timeoutMs = PROBE_TIMEOUT_MS): Promise<string | null> {
+  for (const host of candidates) {
+    if (await probeOllamaHost(host, timeoutMs)) return host;
+  }
+  return null;
+}
+
+/**
+ * Resolve a healthy Ollama base URL.
+ * Caches briefly; pass `{ force: true }` after failures or for fresh probes.
+ */
+export async function resolveOllamaHost(opts?: { force?: boolean }): Promise<string> {
+  if (!opts?.force && cachedHost && Date.now() - cachedAt < HOST_CACHE_TTL_MS) {
+    return cachedHost;
+  }
+
+  if (!opts?.force && resolveInFlight) {
+    return resolveInFlight;
+  }
+
+  const run = async (): Promise<string> => {
+    const candidates = buildProbeCandidates();
+    const healthy = await probeFirstHealthy(candidates);
+    if (healthy) {
+      markHostHealthy(healthy);
+      return healthy;
+    }
+    invalidateOllamaHostCache();
+    return getConfiguredOllamaHost();
+  };
+
+  if (opts?.force) {
+    return run();
+  }
+
+  resolveInFlight = run().finally(() => {
+    resolveInFlight = null;
+  });
+  return resolveInFlight;
+}
+
+async function withHostFailover<T>(
+  host: string,
+  run: (host: string) => Promise<T>,
+): Promise<T> {
+  try {
+    const result = await run(host);
+    markHostHealthy(host);
+    return result;
+  } catch (err) {
+    if (!isConnectionError(err)) throw err;
+    invalidateOllamaHostCache();
+    const next = await resolveOllamaHost({ force: true });
+    if (normalizeHost(next) === normalizeHost(host)) throw err;
+    const result = await run(next);
+    markHostHealthy(next);
+    return result;
+  }
 }
 
 export async function listRunningModels(host: string): Promise<string[]> {
   try {
-    const res = await fetch(`${host}/api/ps`);
+    const res = await fetch(`${normalizeHost(host)}/api/ps`);
     if (!res.ok) return [];
     const data = (await res.json()) as { models?: Array<{ name: string }> };
     return (data.models ?? []).map((m) => m.name);
@@ -123,43 +229,101 @@ export async function listRunningModels(host: string): Promise<string[]> {
 }
 
 export async function unloadModel(host: string, model: string): Promise<void> {
-  try {
-    await fetch(`${host}/api/generate`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ model, keep_alive: 0, prompt: "" }),
-    });
-  } catch {
-    // best effort
-  }
+  await withHostFailover(host, async (activeHost) => {
+    try {
+      await fetch(`${normalizeHost(activeHost)}/api/generate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model, keep_alive: 0, prompt: "" }),
+      });
+    } catch (err) {
+      if (isConnectionError(err)) throw err;
+      // best effort for non-connection errors
+    }
 
-  const deadline = Date.now() + 15_000;
-  while (Date.now() < deadline) {
-    const running = await listRunningModels(host);
-    const stillLoaded = running.some((r) => r.includes(model.split(":")[0]!));
-    if (!stillLoaded) return;
-    await new Promise((r) => setTimeout(r, 500));
-  }
+    const deadline = Date.now() + 15_000;
+    while (Date.now() < deadline) {
+      const running = await listRunningModels(activeHost);
+      const stillLoaded = running.some((r) => r.includes(model.split(":")[0]!));
+      if (!stillLoaded) return;
+      await new Promise((r) => setTimeout(r, 500));
+    }
+  });
 }
 
 export async function ollamaHealth(): Promise<{
   ok: boolean;
   host: string;
   configuredHost: string;
+  lastKnownGood: string | null;
   runtime: OllamaRuntime;
   apiInDocker: boolean;
   models: string[];
   running: string[];
+  candidates: string[];
+  candidatesUp: string[];
+  candidateStatus: OllamaCandidateStatus[];
+  failoverOk: boolean;
+  hints: {
+    native: string;
+    dockerFromApi: string;
+    composeService: string;
+  };
 }> {
   const configuredHost = getConfiguredOllamaHost();
   const apiInDocker = isApiInDocker();
-  const host = await resolveOllamaHost();
+  const candidates = buildProbeCandidates();
+  const candidateStatus: OllamaCandidateStatus[] = [];
+
+  for (const candidate of candidates) {
+    const up = await probeOllamaHost(candidate, PROBE_TIMEOUT_MS);
+    candidateStatus.push({
+      host: candidate,
+      up,
+      runtime: classifyOllamaRuntime(candidate),
+    });
+  }
+
+  const candidatesUp = candidateStatus.filter((c) => c.up).map((c) => c.host);
+  const host = candidatesUp[0] ?? configuredHost;
+
+  if (candidatesUp[0]) {
+    markHostHealthy(candidatesUp[0]);
+  } else {
+    invalidateOllamaHostCache();
+  }
+
   const runtime = classifyOllamaRuntime(host);
+  const failoverOk =
+    candidatesUp.length > 0 &&
+    (candidatesUp.length > 1 || normalizeHost(host) !== normalizeHost(configuredHost));
+
+  const hints = {
+    native: NATIVE_LOOPBACK[0],
+    dockerFromApi: HOST_DOCKER_INTERNAL,
+    composeService: COMPOSE_OLLAMA,
+  };
 
   try {
-    const tagsRes = await fetch(`${host}/api/tags`, { signal: AbortSignal.timeout(3000) });
+    const tagsRes = await fetch(`${normalizeHost(host)}/api/tags`, {
+      signal: AbortSignal.timeout(3000),
+    });
     if (!tagsRes.ok) {
-      return { ok: false, host, configuredHost, runtime, apiInDocker, models: [], running: [] };
+      return {
+        ok: false,
+        host,
+        configuredHost,
+        lastKnownGood,
+        runtime,
+        apiInDocker,
+        models: [],
+        running: [],
+        candidates,
+        candidatesUp,
+        candidateStatus,
+        failoverOk: false,
+        hints,
+      };
     }
     const tags = (await tagsRes.json()) as { models?: Array<{ name: string }> };
     const running = await listRunningModels(host);
@@ -167,13 +331,33 @@ export async function ollamaHealth(): Promise<{
       ok: true,
       host,
       configuredHost,
+      lastKnownGood,
       runtime,
       apiInDocker,
       models: (tags.models ?? []).map((m) => m.name),
       running,
+      candidates,
+      candidatesUp,
+      candidateStatus,
+      failoverOk,
+      hints,
     };
   } catch {
-    return { ok: false, host, configuredHost, runtime, apiInDocker, models: [], running: [] };
+    return {
+      ok: false,
+      host,
+      configuredHost,
+      lastKnownGood,
+      runtime,
+      apiInDocker,
+      models: [],
+      running: [],
+      candidates,
+      candidatesUp,
+      candidateStatus,
+      failoverOk: false,
+      hints,
+    };
   }
 }
 
@@ -183,30 +367,35 @@ export async function chatCompletion(opts: {
   messages: Array<{ role: string; content: string }>;
   stream?: false;
 }): Promise<string> {
-  const res = await fetch(`${opts.host}/api/chat`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: opts.model,
-      messages: opts.messages,
-      stream: false,
-      keep_alive: 0,
-    }),
+  return withHostFailover(opts.host, async (host) => {
+    const res = await fetch(`${normalizeHost(host)}/api/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: opts.model,
+        messages: opts.messages,
+        stream: false,
+        keep_alive: 0,
+      }),
+    });
+    if (!res.ok) {
+      throw new Error(`Ollama chat failed: ${res.status} ${await res.text()}`);
+    }
+    const data = (await res.json()) as { message?: { content?: string } };
+    return data.message?.content ?? "";
   });
-  if (!res.ok) {
-    throw new Error(`Ollama chat failed: ${res.status} ${await res.text()}`);
-  }
-  const data = (await res.json()) as { message?: { content?: string } };
-  return data.message?.content ?? "";
 }
 
-export async function* streamChat(opts: {
+async function* streamChatOnce(opts: {
   host: string;
   model: string;
-  messages: Array<{ role: string; content: string | Array<{ type: string; text?: string; image_url?: string }> }>;
+  messages: Array<{
+    role: string;
+    content: string | Array<{ type: string; text?: string; image_url?: string }>;
+  }>;
   signal?: AbortSignal;
 }): AsyncGenerator<string> {
-  const res = await fetch(`${opts.host}/api/chat`, {
+  const res = await fetch(`${normalizeHost(opts.host)}/api/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -220,6 +409,8 @@ export async function* streamChat(opts: {
   if (!res.ok || !res.body) {
     throw new Error(`Ollama stream failed: ${res.status} ${await res.text()}`);
   }
+
+  markHostHealthy(opts.host);
 
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
@@ -246,32 +437,54 @@ export async function* streamChat(opts: {
   }
 }
 
+export async function* streamChat(opts: {
+  host: string;
+  model: string;
+  messages: Array<{
+    role: string;
+    content: string | Array<{ type: string; text?: string; image_url?: string }>;
+  }>;
+  signal?: AbortSignal;
+}): AsyncGenerator<string> {
+  try {
+    yield* streamChatOnce(opts);
+  } catch (err) {
+    if (!isConnectionError(err)) throw err;
+    invalidateOllamaHostCache();
+    const next = await resolveOllamaHost({ force: true });
+    if (normalizeHost(next) === normalizeHost(opts.host)) throw err;
+    yield* streamChatOnce({ ...opts, host: next });
+  }
+}
+
 export async function visionExtract(opts: {
   host: string;
   model: string;
   imageBase64: string;
   prompt: string;
 }): Promise<string> {
-  const res = await fetch(`${opts.host}/api/chat`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: opts.model,
-      messages: [
-        {
-          role: "user",
-          content: opts.prompt,
-          images: [opts.imageBase64],
-        },
-      ],
-      stream: false,
-      keep_alive: 0,
-      format: "json",
-    }),
+  return withHostFailover(opts.host, async (host) => {
+    const res = await fetch(`${normalizeHost(host)}/api/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: opts.model,
+        messages: [
+          {
+            role: "user",
+            content: opts.prompt,
+            images: [opts.imageBase64],
+          },
+        ],
+        stream: false,
+        keep_alive: 0,
+        format: "json",
+      }),
+    });
+    if (!res.ok) {
+      throw new Error(`Ollama vision failed: ${res.status} ${await res.text()}`);
+    }
+    const data = (await res.json()) as { message?: { content?: string } };
+    return data.message?.content ?? "{}";
   });
-  if (!res.ok) {
-    throw new Error(`Ollama vision failed: ${res.status} ${await res.text()}`);
-  }
-  const data = (await res.json()) as { message?: { content?: string } };
-  return data.message?.content ?? "{}";
 }

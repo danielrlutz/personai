@@ -126,6 +126,7 @@ export default function SettingsPage() {
               {ollama?.ok ? "Reachable" : "Offline"}
             </Badge>
             <Badge variant="outline">{runtimeBadge(ollama?.runtime)}</Badge>
+            {ollama?.failoverOk ? <Badge variant="outline">Failover OK</Badge> : null}
             {ollama?.apiInDocker ? <Badge variant="outline">API in Docker</Badge> : null}
             {ollama?.ok && ollama.models ? (
               <span className="text-xs text-muted-foreground">{ollama.models.length} models</span>
@@ -134,6 +135,31 @@ export default function SettingsPage() {
           {ollama?.host ? (
             <p className="text-sm text-muted-foreground">
               Active: <span className="font-mono text-foreground">{ollama.host}</span>
+              {ollama.configuredHost && ollama.configuredHost !== ollama.host ? (
+                <span className="ml-2 text-xs">
+                  (configured {ollama.configuredHost})
+                </span>
+              ) : null}
+            </p>
+          ) : null}
+          {ollama?.candidateStatus?.length ? (
+            <ul className="space-y-1 text-xs text-muted-foreground">
+              {ollama.candidateStatus.map((c) => (
+                <li key={c.host} className="flex items-center gap-2 font-mono">
+                  <span className={c.up ? "text-success" : "text-destructive"}>{c.up ? "●" : "○"}</span>
+                  <span className={c.host === ollama.host ? "text-foreground" : undefined}>{c.host}</span>
+                  <span className="text-muted-foreground">({runtimeBadge(c.runtime)})</span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {ollama?.hints ? (
+            <p className="text-xs text-muted-foreground">
+              Hints: native {ollama.hints.native}
+              {" · "}
+              Docker→host {ollama.hints.dockerFromApi}
+              {" · "}
+              compose {ollama.hints.composeService}
             </p>
           ) : null}
           <Input
