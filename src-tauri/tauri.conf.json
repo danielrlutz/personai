@@ -4,7 +4,10 @@
   "version": "0.1.0",
   "identifier": "com.personai.os",
   "build": {
-    "beforeDevCommand": "node scripts/tauri-before-dev.mjs",
+    "beforeDevCommand": {
+      "script": "node scripts/tauri-before-dev.mjs",
+      "cwd": ".."
+    },
     "devUrl": "http://localhost:3000",
     "beforeBuildCommand": "pnpm build:server && pnpm --filter @personai/web build",
     "frontendDist": "../apps/web/out"
