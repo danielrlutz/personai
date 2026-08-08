@@ -23,7 +23,45 @@ These are **separate deployments** of the same UI — decentralized by design.
 - **Phone PWA + laptop browser** against the *same* VPS URL **do** share that VPS profile database.
 - **Optional later:** encrypted export/import, or point a desktop build at a remote API (trades local-first privacy for sync). Not enabled by default.
 
+## Setup wizard (desktop + VPS)
+
+Cross-platform wizard that detects/installs Node (≥20), pnpm, Rust, Tauri CLI v2, and OS build tools (MSVC + WebView2 on Windows, Xcode CLT on macOS, webkit2gtk etc. on Linux). Modes: **desktop deps**, **VPS Docker stack** (delegates to `install.sh`), **full setup**, or **check-only**.
+
+### One-liners
+
+```powershell
+# Windows (PowerShell)
+irm https://raw.githubusercontent.com/danielrlutz/personai/main/setup.ps1 | iex
+```
+
+```bash
+# macOS / Linux
+curl -fsSL https://raw.githubusercontent.com/danielrlutz/personai/main/setup.sh | bash
+```
+
+### From a local checkout
+
+```bash
+# macOS / Linux
+./setup.sh                 # interactive menu
+./scripts/setup --mode=check
+./setup.sh --yes --mode=desktop
+./setup.sh --yes --mode=full --docker=yes --pull-models=no
+```
+
+```powershell
+# Windows
+.\setup.cmd                # or .\setup.ps1
+.\scripts\setup.ps1 -Mode check
+.\setup.ps1 -Yes -Mode desktop
+.\setup.ps1 -Yes -Mode full -Docker yes -PullModels no
+```
+
+Non-interactive: pass `--yes` / `-Yes`. When piped (`curl | bash`), prompts still read from `/dev/tty` when available.
+
 ## One-line install **or update** (Linux / VPS)
+
+Prefer the wizard’s **VPS** mode, or call the Docker installer directly:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/danielrlutz/personai/main/install.sh | bash
@@ -50,6 +88,8 @@ curl -fsSL https://raw.githubusercontent.com/danielrlutz/personai/main/install.s
 ```
 
 ## Quick start (local dev)
+
+After the setup wizard (or once Node/pnpm are installed):
 
 ```bash
 pnpm install
@@ -82,10 +122,13 @@ Edit `Caddyfile` hostnames before production TLS.
 ## Desktop (Tauri)
 
 ```bash
+# Install toolchain first (recommended)
+./setup.sh --mode=desktop          # macOS/Linux
+.\setup.ps1 -Mode desktop          # Windows
+
 pnpm build:server
 pnpm build:web
-# Requires Rust + Tauri CLI
-cd src-tauri && cargo tauri dev
+pnpm tauri:dev
 ```
 
 ## Profiles

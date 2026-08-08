@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Thin entry → repo-root setup.sh
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+exec bash "$ROOT/setup.sh" "$@"
