@@ -275,13 +275,25 @@ declare -a FOUND_HTTP=()
 
 discover_ollama() {
   info "Scanning for existing Ollama / AI runtimes…"
+  FOUND_NATIVE=()
+  FOUND_DOCKER=()
+  FOUND_PORTS=()
+  FOUND_HTTP=()
+
+  if command -v ollama >/dev/null 2>&1; then
+    FOUND_NATIVE+=("binary: $(command -v ollama) ($(ollama --version 2>/dev/null | head -n1 || echo present))")
+  fi
+  if command -v systemctl >/dev/null 2>&1; then
+    if systemctl is-active --quiet ollama 2>/dev/null || systemctl --user is-active --quiet ollama 2>/dev/null; then
+      FOUND_NATIVE+=("service: ollama (systemd active)")
+    elif systemctl list-unit-files ollama.service 2>/dev/null | grep -q ollama.service; then
+      FOUND_NATIVE+=("service: ollama.service installed")
+    fi
+  fi
   if command -v ps >/dev/null 2>&1; then
     while IFS= read -r line; do
       FOUND_NATIVE+=("process: $line")
-    done < <(ps -eo pid,comm,args 2>/dev/null | grep -Ei 'ollama|open-webui|llama\.cpp|lmstudio|localai|gpt4all' | grep -v grep || true)
-  fi
-  if command -v ollama >/dev/null 2>&1; then
-    FOUND_NATIVE+=("binary: $(command -v ollama) ($(ollama --version 2>/dev/null | head -n1 || echo present))")
+    done < <(ps -eo pid,comm,args 2>/dev/null | grep -Ei '[o]llama|[o]pen-webui|llama\.cpp|lmstudio|localai|gpt4all' || true)
   fi
   if command -v docker >/dev/null 2>&1; then
     while IFS= read -r line; do
@@ -301,6 +313,16 @@ discover_ollama() {
   for url in "http://127.0.0.1:11434/api/tags" "http://localhost:11434/api/tags" "http://127.0.0.1:11435/api/tags"; do
     http_ok "$url" && FOUND_HTTP+=("$url")
   done
+}
+
+native_ollama_detected() {
+  ((${#FOUND_NATIVE[@]} > 0)) && return 0
+  ((${#FOUND_HTTP[@]} > 0)) && return 0
+  local p
+  for p in "${FOUND_PORTS[@]}"; do
+    [[ "$p" == "11434" ]] && return 0
+  done
+  return 1
 }
 
 print_discovery() {
@@ -332,17 +354,22 @@ choose_ollama() {
   fi
 
   log "${BOLD}Ollama setup${RST}"
-  log "  1) Use existing Ollama instance (native)"
-  log "  2) Use existing Ollama instance (Docker)"
-  log "  3) Start a new Ollama instance via Docker"
+  if native_ollama_detected; then
+    ok "Native Ollama signals detected (binary / process / service / :11434 /api/tags)"
+    log "  Prefer option 1 unless you intentionally want a compose-bundled Ollama."
+  fi
+  log "  1) Use existing native Ollama (host process — recommended when installed)"
+  log "  2) Use existing Ollama container (Docker)"
+  log "  3) Start a new Ollama instance via Docker Compose"
   log "  4) Skip AI for now (Core tier)"
   log ""
 
+  # Prefer native whenever present; do not assume Ollama only lives in compose.
   local default="3"
-  if ((${#FOUND_HTTP[@]})); then
-    if ((${#FOUND_DOCKER[@]})); then default="2"; else default="1"; fi
-  elif ((${#FOUND_DOCKER[@]})); then default="2"
-  elif ((${#FOUND_NATIVE[@]})); then default="1"
+  if native_ollama_detected; then
+    default="1"
+  elif ((${#FOUND_DOCKER[@]} > 0)); then
+    default="2"
   fi
 
   local choice
@@ -364,11 +391,17 @@ choose_ollama() {
     else
       warn "Could not reach ${OLLAMA_HOST%/}/api/tags — continuing anyway."
     fi
+    if [[ "$OLLAMA_MODE" == "existing-native" ]]; then
+      info "API containers will use http://host.docker.internal:11434 to reach native Ollama."
+    fi
   elif [[ "$OLLAMA_MODE" == "new-docker" ]]; then
     OLLAMA_HOST="http://127.0.0.1:11434"
     if port_in_use 11434 && [[ $IS_UPDATE -eq 0 ]]; then
-      warn "Port 11434 is already in use."
-      if ! ask_yn "Still create a new Docker Ollama (may conflict)?" "n"; then
+      warn "Port 11434 is already in use (often a native Ollama)."
+      if ask_yn "Use the existing listener instead of a new Docker Ollama?" "y"; then
+        OLLAMA_MODE="existing-native"
+        OLLAMA_HOST="$(ask "Ollama base URL" "http://127.0.0.1:11434")"
+      elif ! ask_yn "Still create a new Docker Ollama (may conflict)?" "n"; then
         OLLAMA_MODE="existing-docker"
         OLLAMA_HOST="$(ask "Ollama base URL" "http://127.0.0.1:11434")"
       fi
@@ -556,8 +589,14 @@ write_env() {
     public_api="http://api.${DOMAIN}"
   fi
 
+  # OLLAMA_HOST in .env is what the API container sees.
+  # Native Ollama on the host → host.docker.internal (not container localhost).
   local compose_ollama_host="$OLLAMA_HOST"
-  [[ "$OLLAMA_MODE" == "new-docker" ]] && compose_ollama_host="http://ollama:11434"
+  if [[ "$OLLAMA_MODE" == "new-docker" ]]; then
+    compose_ollama_host="http://ollama:11434"
+  elif [[ "$OLLAMA_MODE" == "existing-native" ]] && [[ "$OLLAMA_HOST" == *"127.0.0.1"* || "$OLLAMA_HOST" == *"localhost"* ]]; then
+    compose_ollama_host="http://host.docker.internal:11434"
+  fi
 
   # On update: merge into existing .env instead of clobbering unknown keys
   if [[ $IS_UPDATE -eq 1 && -f "$env_file" ]]; then
@@ -686,6 +725,7 @@ YAML
       OLLAMA_HOST: ${ollama_env_host}
       LICENSE_TIER: ${LICENSE_TIER}
       DATA_DIR: /app/data
+      PERSONAI_IN_DOCKER: "1"
     volumes:
       - ${DATA_DIR}:/app/data
     extra_hosts:

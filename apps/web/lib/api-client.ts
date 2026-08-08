@@ -111,6 +111,16 @@ export async function apiPatch<T>(path: string, body?: unknown, init?: RequestIn
   return parseResponse<T>(res);
 }
 
+export async function apiPut<T>(path: string, body?: unknown, init?: RequestInit): Promise<T> {
+  const res = await fetch(`${getApiBaseUrl()}${path}`, {
+    ...init,
+    method: "PUT",
+    headers: buildHeaders(init?.headers),
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
+  return parseResponse<T>(res);
+}
+
 export async function apiUpload<T>(path: string, formData: FormData, init?: RequestInit): Promise<T> {
   const headers = buildHeaders(init?.headers);
   headers.delete("Content-Type");
@@ -321,11 +331,18 @@ export interface MedicalAnalysis {
   createdAt: string;
 }
 
+export type OllamaRuntime = "native" | "docker" | "remote" | "unknown";
+
 export interface OllamaHealth {
   ok: boolean;
   host?: string;
+  configuredHost?: string;
+  runtime?: OllamaRuntime;
+  apiInDocker?: boolean;
   models?: string[];
   running?: string[];
+  reachable?: boolean;
+  note?: string;
   vram?: {
     holder: string | null;
     waiting: number;

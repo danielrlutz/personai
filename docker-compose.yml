@@ -24,11 +24,16 @@ services:
     environment:
       PORT: "4000"
       DATA_DIR: /app/data
-      OLLAMA_HOST: http://ollama:11434
+      # Bundled compose Ollama. For native host Ollama set:
+      #   OLLAMA_HOST=http://host.docker.internal:11434
+      OLLAMA_HOST: ${OLLAMA_HOST:-http://ollama:11434}
       OLLAMA_VISION_MODEL: maternion/LightOnOCR-2
       OLLAMA_REASONING_MODEL: deepseek-r1:8b
       LICENSE_TIER: pro
       DATABASE_URL: file:/app/data/profiles/bootstrap/personai.db
+      PERSONAI_IN_DOCKER: "1"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       ollama:
         condition: service_healthy

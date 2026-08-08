@@ -5,6 +5,15 @@ import { Cpu, Loader2 } from "lucide-react";
 import { apiGet, type OllamaHealth } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 
+function statusLabel(health: OllamaHealth | null): string {
+  if (!health?.ok) return "Ollama offline";
+  if (health.vram?.holder) return "VRAM busy";
+  if (health.runtime === "native") return "Native Ollama";
+  if (health.runtime === "docker") return "Ollama (Docker)";
+  if (health.runtime === "remote") return "Ollama (remote)";
+  return "Ollama ready";
+}
+
 export function OllamaStatusIndicator({ className }: { className?: string }) {
   const [health, setHealth] = useState<OllamaHealth | null>(null);
   const [loading, setLoading] = useState(true);
@@ -40,13 +49,15 @@ export function OllamaStatusIndicator({ className }: { className?: string }) {
 
   const locked = Boolean(health?.vram?.holder);
   const ok = health?.ok;
+  const label = statusLabel(health);
+  const title = health?.host
+    ? `${label} · ${health.host}${health.apiInDocker ? " (API in Docker)" : ""}`
+    : label;
 
   return (
-    <div className={cn("flex items-center gap-2 text-xs", className)}>
+    <div className={cn("flex items-center gap-2 text-xs", className)} title={title}>
       <Cpu className={cn("h-3.5 w-3.5", ok ? "text-primary" : "text-destructive")} />
-      <span className={ok ? "text-muted-foreground" : "text-destructive"}>
-        {ok ? (locked ? "VRAM busy" : "Ollama ready") : "Ollama offline"}
-      </span>
+      <span className={ok ? "text-muted-foreground" : "text-destructive"}>{label}</span>
       <span
         className={cn(
           "h-1.5 w-1.5 rounded-full",

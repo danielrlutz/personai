@@ -7,7 +7,14 @@ import { renderToBuffer } from "@react-pdf/renderer";
 import React from "react";
 import { createProfile, listProfiles, switchProfile, getActiveProfile } from "../profiles/registry.js";
 import { config, profileExportsDir, profileUploadsDir } from "../config.js";
-import { ollamaHealth, resolveOllamaHost, streamChat, chatCompletion } from "../ollama/client.js";
+import {
+  ollamaHealth,
+  resolveOllamaHost,
+  streamChat,
+  chatCompletion,
+  setOllamaHostOverride,
+  probeOllamaHost,
+} from "../ollama/client.js";
 import { vramLock } from "../ollama/vram-lock.js";
 import { ingestionEvents } from "../ollama/ingestion-worker.js";
 import {
@@ -30,6 +37,33 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   app.get("/ollama/health", async () => {
     const health = await ollamaHealth();
     return { ...health, vram: vramLock.getState() };
+  });
+
+  /** Set Ollama base URL for this API process (in-memory; prefer OLLAMA_HOST in .env for persistence). */
+  app.put<{ Body: { host: string } }>("/ollama/host", async (req, reply) => {
+    const raw = req.body?.host?.trim();
+    if (!raw) return reply.status(400).send({ error: "host is required" });
+    let parsed: URL;
+    try {
+      parsed = new URL(raw);
+    } catch {
+      return reply.status(400).send({ error: "Invalid URL" });
+    }
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return reply.status(400).send({ error: "host must be http(s)" });
+    }
+    const host = raw.replace(/\/$/, "");
+    const reachable = await probeOllamaHost(host, 3000);
+    setOllamaHostOverride(host);
+    const health = await ollamaHealth();
+    return {
+      ...health,
+      reachable,
+      vram: vramLock.getState(),
+      note: reachable
+        ? "Ollama host updated for this process. Set OLLAMA_HOST in .env to persist across restarts."
+        : "Saved host, but /api/tags was not reachable yet. If the API runs in Docker and Ollama is native, use http://host.docker.internal:11434.",
+    };
   });
 
   // Profiles

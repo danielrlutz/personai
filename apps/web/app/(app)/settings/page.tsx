@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Settings, Server, User, Shield } from "lucide-react";
+import { Settings, Server, User, Shield, Cpu } from "lucide-react";
 import {
   apiGet,
+  apiPut,
   getApiBaseUrl,
   setApiBaseUrl,
   type LicenseInfo,
+  type OllamaHealth,
   type ProfileRegistry,
 } from "@/lib/api-client";
 import { getStoredProfileId, getStoredApiBaseUrl, setStoredApiBaseUrl, getPlatform } from "@/lib/platform";
@@ -16,12 +18,39 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 
+function runtimeBadge(runtime?: OllamaHealth["runtime"]): string {
+  switch (runtime) {
+    case "native":
+      return "Native";
+    case "docker":
+      return "Docker";
+    case "remote":
+      return "Remote";
+    default:
+      return "Unknown";
+  }
+}
+
 export default function SettingsPage() {
   const [apiUrl, setApiUrl] = useState("");
   const [license, setLicense] = useState<LicenseInfo | null>(null);
   const [profileName, setProfileName] = useState("");
   const [saved, setSaved] = useState(false);
+  const [ollama, setOllama] = useState<OllamaHealth | null>(null);
+  const [ollamaHost, setOllamaHost] = useState("");
+  const [ollamaNote, setOllamaNote] = useState<string | null>(null);
+  const [ollamaSaving, setOllamaSaving] = useState(false);
   const platform = typeof window !== "undefined" ? getPlatform() : "browser";
+
+  const refreshOllama = async () => {
+    try {
+      const data = await apiGet<OllamaHealth>("/ollama/health");
+      setOllama(data);
+      setOllamaHost(data.configuredHost ?? data.host ?? "http://127.0.0.1:11434");
+    } catch {
+      setOllama({ ok: false });
+    }
+  };
 
   useEffect(() => {
     setApiUrl(getStoredApiBaseUrl() ?? getApiBaseUrl());
@@ -31,6 +60,7 @@ export default function SettingsPage() {
       const profile = registry.profiles.find((p) => p.id === id);
       setProfileName(profile?.name ?? "Unknown");
     });
+    void refreshOllama();
   }, []);
 
   const saveApiUrl = () => {
@@ -38,6 +68,21 @@ export default function SettingsPage() {
     setApiBaseUrl(apiUrl);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
+  };
+
+  const saveOllamaHost = async () => {
+    setOllamaSaving(true);
+    setOllamaNote(null);
+    try {
+      const data = await apiPut<OllamaHealth>("/ollama/host", { host: ollamaHost.trim() });
+      setOllama(data);
+      setOllamaHost(data.configuredHost ?? data.host ?? ollamaHost.trim());
+      setOllamaNote(data.note ?? (data.ok ? "Ollama host updated." : "Host saved; offline."));
+    } catch (err) {
+      setOllamaNote(err instanceof Error ? err.message : "Failed to update Ollama host");
+    } finally {
+      setOllamaSaving(false);
+    }
   };
 
   return (
@@ -61,6 +106,50 @@ export default function SettingsPage() {
         <CardContent className="space-y-4">
           <Input value={apiUrl} onChange={(e) => setApiUrl(e.target.value)} placeholder="http://localhost:4000" />
           <Button onClick={saveApiUrl}>{saved ? "Saved!" : "Save API URL"}</Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Cpu className="h-4 w-4 text-primary" />
+            Ollama
+          </CardTitle>
+          <CardDescription>
+            Native host install is preferred for desktop. If the API runs in Docker against host Ollama, use
+            http://host.docker.internal:11434
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant={ollama?.ok ? "default" : "destructive"}>
+              {ollama?.ok ? "Reachable" : "Offline"}
+            </Badge>
+            <Badge variant="outline">{runtimeBadge(ollama?.runtime)}</Badge>
+            {ollama?.apiInDocker ? <Badge variant="outline">API in Docker</Badge> : null}
+            {ollama?.ok && ollama.models ? (
+              <span className="text-xs text-muted-foreground">{ollama.models.length} models</span>
+            ) : null}
+          </div>
+          {ollama?.host ? (
+            <p className="text-sm text-muted-foreground">
+              Active: <span className="font-mono text-foreground">{ollama.host}</span>
+            </p>
+          ) : null}
+          <Input
+            value={ollamaHost}
+            onChange={(e) => setOllamaHost(e.target.value)}
+            placeholder="http://127.0.0.1:11434"
+          />
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={() => void saveOllamaHost()} disabled={ollamaSaving || !ollamaHost.trim()}>
+              {ollamaSaving ? "Saving…" : "Use this Ollama host"}
+            </Button>
+            <Button variant="outline" onClick={() => void refreshOllama()}>
+              Refresh status
+            </Button>
+          </div>
+          {ollamaNote ? <p className="text-xs text-muted-foreground">{ollamaNote}</p> : null}
         </CardContent>
       </Card>
 
