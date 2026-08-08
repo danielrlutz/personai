@@ -20,14 +20,13 @@ function ensureProfileDirs(profileId: string): void {
 function ensureDatabase(profileId: string): void {
   ensureProfileDirs(profileId);
   const dbPath = profileDbPath(profileId);
-  if (!fs.existsSync(dbPath)) {
-    const url = `file:${dbPath}`;
-    execSync(`npx prisma db push --schema "${schemaPath}" --skip-generate`, {
-      env: { ...process.env, DATABASE_URL: url },
-      stdio: "pipe",
-      cwd: path.resolve(__dirname, "../.."),
-    });
-  }
+  // Always push so existing profiles pick up new models (e.g. Personal manners / Life).
+  const url = `file:${dbPath}`;
+  execSync(`npx prisma db push --schema "${schemaPath}" --skip-generate`, {
+    env: { ...process.env, DATABASE_URL: url },
+    stdio: "pipe",
+    cwd: path.resolve(__dirname, "../.."),
+  });
 }
 
 export async function getPrisma(profileId: string): Promise<PrismaClient> {

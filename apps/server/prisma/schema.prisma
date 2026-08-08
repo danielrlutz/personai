@@ -96,6 +96,32 @@ enum BriefingStatus {
   FAILED
 }
 
+enum HabitFrequency {
+  DAILY
+  WEEKLY
+  CUSTOM
+}
+
+enum PersonalGoalStatus {
+  ACTIVE
+  PAUSED
+  COMPLETED
+  ABANDONED
+}
+
+enum PersonalTaskStatus {
+  TODO
+  IN_PROGRESS
+  DONE
+  CANCELLED
+}
+
+enum LifeDomain {
+  PERSONAL
+  BUSINESS
+  BOTH
+}
+
 model Setting {
   id        String   @id @default(cuid())
   key       String   @unique
@@ -293,4 +319,104 @@ model DailyBriefing {
 
   @@unique([briefingDate])
   @@index([briefingDate, status])
+}
+
+model Habit {
+  id          String         @id @default(cuid())
+  title       String
+  description String?
+  frequency   HabitFrequency @default(DAILY)
+  customRule  String?
+  domain      LifeDomain     @default(PERSONAL)
+  active      Boolean        @default(true)
+  targetCount Int            @default(1)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  logs        HabitLog[]
+
+  @@index([active, frequency])
+}
+
+model HabitLog {
+  id        String   @id @default(cuid())
+  habitId   String
+  habit     Habit    @relation(fields: [habitId], references: [id], onDelete: Cascade)
+  loggedAt  DateTime @default(now())
+  note      String?
+  createdAt DateTime @default(now())
+
+  @@index([habitId, loggedAt])
+}
+
+model PersonalGoal {
+  id          String             @id @default(cuid())
+  title       String
+  description String?
+  status      PersonalGoalStatus @default(ACTIVE)
+  domain      LifeDomain         @default(PERSONAL)
+  targetDate  DateTime?
+  progress    Float              @default(0)
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  tasks       PersonalTask[]
+
+  @@index([status])
+  @@index([targetDate])
+}
+
+model PersonalTask {
+  id          String             @id @default(cuid())
+  title       String
+  description String?
+  status      PersonalTaskStatus @default(TODO)
+  domain      LifeDomain         @default(PERSONAL)
+  dueDate     DateTime?
+  completedAt DateTime?
+  goalId      String?
+  goal        PersonalGoal?      @relation(fields: [goalId], references: [id], onDelete: SetNull)
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  @@index([status, dueDate])
+  @@index([goalId])
+}
+
+model RelationshipTouchpoint {
+  id              String     @id @default(cuid())
+  contactName     String
+  relationship    String?
+  domain          LifeDomain @default(PERSONAL)
+  cadenceDays     Int        @default(30)
+  lastContactedAt DateTime?
+  nextDueAt       DateTime?
+  notes           String?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  @@index([nextDueAt])
+}
+
+model PersonalNote {
+  id        String     @id @default(cuid())
+  title     String?
+  body      String
+  domain    LifeDomain @default(PERSONAL)
+  pinned    Boolean    @default(false)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@index([pinned, updatedAt])
+}
+
+model LifestyleMetric {
+  id         String   @id @default(cuid())
+  key        String
+  label      String?
+  value      Float
+  unit       String?
+  recordedAt DateTime @default(now())
+  note       String?
+  createdAt  DateTime @default(now())
+
+  @@index([key, recordedAt])
 }
