@@ -4,6 +4,7 @@ import { useCallback, useState } from "react";
 import { Upload, FileText } from "lucide-react";
 import { apiUpload } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 
 interface FileDropzoneProps {
   onUploaded?: () => void;
@@ -49,25 +50,27 @@ export function FileDropzone({ onUploaded }: FileDropzoneProps) {
       onDragLeave={() => setDragging(false)}
       onDrop={onDrop}
       className={cn(
-        "relative flex flex-col items-center justify-center rounded-xl border-2 border-dashed p-12 transition-colors",
-        dragging ? "border-teal-400 bg-teal-500/10" : "border-border bg-muted/10 hover:border-teal-500/40",
+        "surface-card relative flex flex-col items-center justify-center border-2 border-dashed p-12 transition-colors duration-md ease-md",
+        dragging ? "border-primary bg-primary-container/40" : "border-border hover:border-primary/50",
         uploading && "pointer-events-none opacity-60",
       )}
     >
-      <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-teal-500/15">
+      <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-primary-container">
         {uploading ? (
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-teal-400 border-t-transparent" />
+          <div className="h-7 w-7 animate-spin rounded-full border-2 border-primary border-t-transparent" />
         ) : (
-          <Upload className="h-8 w-8 text-teal-400" />
+          <Upload className="h-7 w-7 text-primary-on-container" />
         )}
       </div>
-      <h3 className="text-lg font-medium">Drop files to ingest</h3>
-      <p className="mt-1 text-sm text-muted-foreground">PDF, images, receipts, medical records</p>
+      <h3 className="md-title-medium">Drop files to ingest</h3>
+      <p className="mt-1 md-body-medium text-muted-foreground">PDF, images, receipts, medical records</p>
       <label className="mt-6 cursor-pointer">
-        <span className="inline-flex items-center gap-2 rounded-md bg-teal-500 px-4 py-2 text-sm font-medium text-white hover:bg-teal-400">
-          <FileText className="h-4 w-4" />
-          Browse files
-        </span>
+        <Button asChild variant="default" disabled={uploading}>
+          <span>
+            <FileText className="h-4 w-4" />
+            Browse files
+          </span>
+        </Button>
         <input
           type="file"
           multiple
@@ -75,7 +78,7 @@ export function FileDropzone({ onUploaded }: FileDropzoneProps) {
           onChange={(e) => e.target.files && void uploadFiles(e.target.files)}
         />
       </label>
-      {error && <p className="mt-4 text-sm text-red-400">{error}</p>}
+      {error && <p className="mt-4 text-sm text-destructive">{error}</p>}
     </div>
   );
 }

@@ -36,27 +36,25 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   return (
     <aside
       className={cn(
-        "glass-panel flex h-full flex-col border-r border-border transition-all duration-300",
-        collapsed ? "w-[4.5rem]" : "w-[var(--sidebar-width)]",
+        "surface-panel flex h-full flex-col border-r transition-[width] duration-md ease-md",
+        collapsed ? "w-[var(--nav-rail-width)]" : "w-[var(--sidebar-width)]",
       )}
     >
-      <div className="flex h-[var(--header-height)] items-center justify-between border-b border-border px-4">
+      <div className="flex h-[var(--header-height)] items-center justify-between border-b border-border/80 px-3">
         {!collapsed && (
-          <Link href="/dashboard" className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-teal-500/20">
-              <span className="text-sm font-bold text-teal-400">P</span>
+          <Link href="/dashboard" className="flex items-center gap-2.5 min-w-0">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground">
+              <span className="text-sm font-medium">P</span>
             </div>
-            <span className="font-semibold tracking-tight">
-              Person<span className="text-teal-400">AI</span>
-            </span>
+            <span className="md-title-medium truncate">PersonAI</span>
           </Link>
         )}
-        <Button variant="ghost" size="icon" onClick={onToggle} className="shrink-0">
+        <Button variant="ghost" size="icon" onClick={onToggle} className="shrink-0 h-9 w-9">
           {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
         </Button>
       </div>
 
-      <nav className="flex-1 space-y-1 p-3">
+      <nav className={cn("flex-1 space-y-1 p-2", collapsed && "px-1.5")}>
         {navItems.map(({ href, label, icon: Icon }) => {
           const active = pathname === href || pathname.startsWith(`${href}/`);
           return (
@@ -64,22 +62,22 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
               key={href}
               href={href}
               className={cn(
-                "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                "flex items-center gap-3 rounded-full px-3 py-2.5 md-label-large transition-colors duration-md ease-md",
                 active
-                  ? "bg-teal-500/15 text-teal-300"
-                  : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
-                collapsed && "justify-center px-2",
+                  ? "bg-secondary text-secondary-foreground"
+                  : "text-muted-foreground hover:bg-surface-container-high hover:text-foreground",
+                collapsed && "justify-center px-0 py-3 rounded-2xl",
               )}
               title={collapsed ? label : undefined}
             >
-              <Icon className="h-4 w-4 shrink-0" />
+              <Icon className={cn("h-5 w-5 shrink-0", active && "text-primary")} />
               {!collapsed && <span>{label}</span>}
             </Link>
           );
         })}
       </nav>
 
-      <div className={cn("border-t border-border p-4", collapsed && "px-2")}>
+      <div className={cn("border-t border-border/80 p-3", collapsed && "px-1.5")}>
         <OllamaStatusIndicator className={collapsed ? "justify-center" : undefined} />
       </div>
     </aside>

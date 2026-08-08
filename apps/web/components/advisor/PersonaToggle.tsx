@@ -18,7 +18,7 @@ interface PersonaToggleProps {
 
 export function PersonaToggle({ value, onChange, disabled }: PersonaToggleProps) {
   return (
-    <div className="flex gap-2 rounded-lg border border-border bg-muted/10 p-1">
+    <div className="flex gap-1 rounded-full border border-border/80 bg-surface-container p-1">
       {personas.map((p) => (
         <button
           key={p.id}
@@ -26,11 +26,13 @@ export function PersonaToggle({ value, onChange, disabled }: PersonaToggleProps)
           disabled={disabled}
           onClick={() => onChange(p.id)}
           className={cn(
-            "flex-1 rounded-md px-3 py-2 text-left transition-colors disabled:opacity-50",
-            value === p.id ? "bg-teal-500/20 text-teal-300" : "hover:bg-muted/30 text-muted-foreground",
+            "flex-1 rounded-full px-3 py-2 text-left transition-colors duration-md ease-md disabled:opacity-50",
+            value === p.id
+              ? "bg-secondary text-secondary-foreground shadow-elev-1"
+              : "text-muted-foreground hover:bg-surface-container-high",
           )}
         >
-          <span className="block text-sm font-medium">{p.label}</span>
+          <span className="block md-label-large">{p.label}</span>
           <span className="block text-xs opacity-70">{p.description}</span>
         </button>
       ))}

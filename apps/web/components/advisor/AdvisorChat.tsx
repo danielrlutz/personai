@@ -23,14 +23,14 @@ export function AdvisorChat() {
 
   return (
     <Card className="flex h-[calc(100vh-12rem)] flex-col">
-      <CardHeader className="shrink-0 space-y-4 border-b border-border pb-4">
+      <CardHeader className="shrink-0 space-y-4 border-b border-border/80 pb-4">
         <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center gap-2 text-base">
-            <MessageSquare className="h-4 w-4 text-teal-400" />
+          <CardTitle className="flex items-center gap-2">
+            <MessageSquare className="h-4 w-4 text-primary" />
             Finance Advisor
           </CardTitle>
           <Button variant="ghost" size="sm" onClick={clear} disabled={streaming || messages.length === 0}>
-            <Trash2 className="mr-1 h-4 w-4" />
+            <Trash2 className="h-4 w-4" />
             Clear
           </Button>
         </div>
@@ -38,7 +38,7 @@ export function AdvisorChat() {
       </CardHeader>
 
       <CardContent className="flex flex-1 flex-col overflow-hidden p-0">
-        <div className="flex-1 space-y-4 overflow-y-auto p-6">
+        <div className="flex-1 space-y-3 overflow-y-auto p-5">
           {messages.length === 0 ? (
             <EmptyState
               icon={MessageSquare}
@@ -55,10 +55,10 @@ export function AdvisorChat() {
               />
             ))
           )}
-          {error && <p className="text-sm text-red-400">{error}</p>}
+          {error && <p className="text-sm text-destructive">{error}</p>}
         </div>
 
-        <div className="shrink-0 border-t border-border p-4">
+        <div className="shrink-0 border-t border-border/80 p-4">
           <div className="flex gap-2">
             <Textarea
               placeholder="Ask your advisor..."

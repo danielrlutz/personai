@@ -61,13 +61,13 @@ export function BriefingActionItems({ snapshot }: BriefingActionItemsProps) {
         {actions.slice(0, 6).map((action, i) => (
           <div
             key={i}
-            className="flex items-center justify-between rounded-lg border border-border bg-muted/10 px-4 py-3"
+            className="md-list-row justify-between rounded-none border-x-0 border-t-0 px-0 first:pt-0"
           >
             <div className="flex items-center gap-3">
               {action.done ? (
-                <CheckCircle2 className="h-4 w-4 text-teal-400" />
+                <CheckCircle2 className="h-4 w-4 text-success" />
               ) : (
-                <Circle className={`h-4 w-4 ${action.priority === "high" ? "text-amber-400" : "text-muted-foreground"}`} />
+                <Circle className={`h-4 w-4 ${action.priority === "high" ? "text-warning" : "text-muted-foreground"}`} />
               )}
               <span className="text-sm">{action.label}</span>
             </div>

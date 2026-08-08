@@ -45,7 +45,7 @@ export function LegalTaskForm({ onCreated }: LegalTaskFormProps) {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
-          <Plus className="h-4 w-4 text-teal-400" />
+          <Plus className="h-4 w-4 text-primary" />
           New legal task
         </CardTitle>
       </CardHeader>

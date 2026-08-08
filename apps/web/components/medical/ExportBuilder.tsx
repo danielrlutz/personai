@@ -89,7 +89,7 @@ export function ExportBuilder() {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
-          <FileDown className="h-4 w-4 text-teal-400" />
+          <FileDown className="h-4 w-4 text-primary" />
           Export medical report
         </CardTitle>
       </CardHeader>

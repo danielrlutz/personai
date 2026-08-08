@@ -67,9 +67,9 @@ export function LegalTimeline() {
                   className="relative z-10 mt-1 shrink-0"
                 >
                   {task.status === "DONE" ? (
-                    <CheckCircle2 className="h-8 w-8 text-teal-400" />
+                    <CheckCircle2 className="h-8 w-8 text-primary" />
                   ) : (
-                    <Circle className="h-8 w-8 text-muted-foreground hover:text-teal-400" />
+                    <Circle className="h-8 w-8 text-muted-foreground hover:text-primary" />
                   )}
                 </button>
                 <div className="flex-1 rounded-lg border border-border bg-muted/10 p-4">

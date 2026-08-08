@@ -49,7 +49,7 @@ export function BudgetOverview() {
     name: c.name,
     spent: c.spent,
     limit: c.monthlyLimit ?? 0,
-    color: c.color ?? "#14b8a6",
+    color: c.color ?? "#1a73e8",
   }));
 
   const totalSpent = categories.reduce((s, c) => s + c.spent, 0);
@@ -93,7 +93,7 @@ export function BudgetOverview() {
             <CardTitle className="text-sm text-muted-foreground">Remaining</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className={`text-2xl font-bold ${totalLimit - totalSpent < 0 ? "text-red-400" : "text-teal-400"}`}>
+            <p className={`text-2xl font-normal ${totalLimit - totalSpent < 0 ? "text-destructive" : "text-primary"}`}>
               {formatCHF(totalLimit - totalSpent)}
             </p>
           </CardContent>
@@ -107,13 +107,14 @@ export function BudgetOverview() {
         <CardContent>
           <ResponsiveContainer width="100%" height={280}>
             <BarChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-              <XAxis dataKey="name" tick={{ fill: "#a1a1aa", fontSize: 12 }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: "#a1a1aa", fontSize: 12 }} axisLine={false} tickLine={false} />
+              <XAxis dataKey="name" tick={{ fill: "#bdc1c6", fontSize: 12 }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fill: "#bdc1c6", fontSize: 12 }} axisLine={false} tickLine={false} />
               <Tooltip
                 contentStyle={{
-                  background: "#18181b",
-                  border: "1px solid rgba(255,255,255,0.08)",
+                  background: "#303134",
+                  border: "1px solid rgba(232,234,237,0.12)",
                   borderRadius: 8,
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
                 }}
                 formatter={(value: number) => formatCHF(value)}
               />

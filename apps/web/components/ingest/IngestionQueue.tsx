@@ -109,23 +109,23 @@ export function IngestionQueue({ refreshKey }: IngestionQueueProps) {
               description="Upload documents to start extracting data."
             />
           ) : (
-            <ul className="divide-y divide-border">
+            <ul>
               {jobs.map((job) => {
                 const config = statusConfig[job.status];
                 const Icon = config.icon;
                 return (
-                  <li key={job.id} className="flex items-center justify-between py-4 first:pt-0 last:pb-0">
+                  <li key={job.id} className="md-list-row justify-between px-0">
                     <div className="flex items-center gap-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted/30">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-surface-container-high">
                         <FileText className="h-5 w-5 text-muted-foreground" />
                       </div>
                       <div>
-                        <p className="text-sm font-medium">{job.document.filename}</p>
+                        <p className="md-label-large">{job.document.filename}</p>
                         <p className="text-xs text-muted-foreground">
                           {(job.document.fileSize / 1024).toFixed(1)} KB · {formatRelative(job.createdAt)}
                         </p>
                         {job.errorMessage && (
-                          <p className="mt-1 text-xs text-red-400">{job.errorMessage}</p>
+                          <p className="mt-1 text-xs text-destructive">{job.errorMessage}</p>
                         )}
                       </div>
                     </div>

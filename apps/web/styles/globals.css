@@ -10,19 +10,17 @@
   }
 
   html {
-    @apply scroll-smooth antialiased;
+    @apply antialiased;
   }
 
   body {
     @apply bg-background text-foreground font-sans;
-    background-image:
-      radial-gradient(ellipse 80% 50% at 50% -20%, var(--teal-glow), transparent),
-      radial-gradient(ellipse 60% 40% at 100% 100%, rgba(20, 184, 166, 0.06), transparent);
     min-height: 100vh;
   }
 
   ::selection {
-    @apply bg-teal-500/30 text-white;
+    background: hsl(var(--primary) / 0.28);
+    color: hsl(var(--foreground));
   }
 
   ::-webkit-scrollbar {
@@ -35,39 +33,69 @@
   }
 
   ::-webkit-scrollbar-thumb {
-    @apply rounded-full bg-zinc-700/80;
+    @apply rounded-sm bg-muted;
   }
 
   ::-webkit-scrollbar-thumb:hover {
-    @apply bg-zinc-600;
+    background: hsl(var(--muted-foreground) / 0.35);
   }
 }
 
 @layer components {
-  .glass-card {
-    background: var(--glass-bg);
-    border: 1px solid var(--glass-border);
-    @apply rounded-lg backdrop-blur-glass shadow-glass;
+  .surface-card {
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border) / 0.6);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--elevation-1);
   }
 
-  .glass-panel {
-    background: rgba(9, 9, 11, 0.85);
-    border: 1px solid var(--glass-border);
-    @apply backdrop-blur-glass;
+  .surface-panel {
+    background: hsl(var(--background));
+    border-color: hsl(var(--border) / 0.8);
   }
 
-  .text-gradient-teal {
-    @apply bg-gradient-to-r from-teal-300 via-teal-400 to-teal-500 bg-clip-text text-transparent;
+  .md-list-row {
+    @apply flex items-center gap-3 border-b border-border/60 px-4 py-3 transition-colors;
+    transition-duration: var(--motion-duration);
+    transition-timing-function: var(--motion-easing);
+  }
+
+  .md-list-row:last-child {
+    @apply border-b-0;
+  }
+
+  .md-list-row:hover {
+    background: hsl(var(--surface-container-high) / 0.55);
   }
 
   .focus-ring {
     @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background;
   }
+
+  .md-title-large {
+    @apply text-[22px] font-normal leading-7 tracking-normal;
+  }
+
+  .md-title-medium {
+    @apply text-base font-medium leading-6 tracking-[0.15px];
+  }
+
+  .md-body-medium {
+    @apply text-sm font-normal leading-5 tracking-[0.25px];
+  }
+
+  .md-label-large {
+    @apply text-sm font-medium leading-5 tracking-[0.1px];
+  }
+
+  .md-label-medium {
+    @apply text-xs font-medium leading-4 tracking-[0.5px];
+  }
 }
 
 @layer utilities {
   .animate-in {
-    animation: animate-in 0.3s ease-out;
+    animation: animate-in var(--motion-duration) var(--motion-easing);
   }
 
   @keyframes animate-in {

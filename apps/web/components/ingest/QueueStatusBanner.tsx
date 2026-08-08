@@ -21,24 +21,31 @@ export function QueueStatusBanner({ vram, queuedCount }: QueueStatusBannerProps)
   return (
     <div
       className={cn(
-        "flex items-center justify-between rounded-lg border px-4 py-3",
-        locked ? "border-amber-500/30 bg-amber-500/10" : "border-teal-500/30 bg-teal-500/10",
+        "surface-card flex items-center justify-between px-4 py-3",
+        locked && "border-warning/40",
       )}
     >
       <div className="flex items-center gap-3">
-        <Cpu className={cn("h-5 w-5", locked ? "text-amber-400" : "text-teal-400")} />
+        <span
+          className={cn(
+            "flex h-10 w-10 items-center justify-center rounded-full",
+            locked ? "bg-warning/15" : "bg-primary-container",
+          )}
+        >
+          <Cpu className={cn("h-5 w-5", locked ? "text-warning" : "text-primary-on-container")} />
+        </span>
         <div>
-          <p className="text-sm font-medium">
+          <p className="md-label-large">
             {locked ? "VRAM lock active — competing jobs wait" : "Ingestion queue ready"}
           </p>
-          <p className="text-xs text-muted-foreground">
+          <p className="md-body-medium text-muted-foreground">
             {queuedCount} job(s) in queue
             {locked && vram?.holder ? ` · Held by ${vram.holder}` : ""}
             {vram?.pausedReason ? ` · ${vram.pausedReason}` : ""}
           </p>
         </div>
       </div>
-      <Badge variant={locked ? "warning" : "success"}>{locked ? "Locked" : "Idle"}</Badge>
+      <Badge variant={locked ? "warning" : "secondary"}>{locked ? "Locked" : "Idle"}</Badge>
     </div>
   );
 }

@@ -29,7 +29,7 @@ export function ExtractionPreview({ filename, structured, rawJson }: ExtractionP
       >
         <CardTitle className="flex items-center justify-between text-base">
           <span className="flex items-center gap-2">
-            <Code2 className="h-4 w-4 text-teal-400" />
+            <Code2 className="h-4 w-4 text-primary" />
             Extraction: {filename}
           </span>
           {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
@@ -39,7 +39,7 @@ export function ExtractionPreview({ filename, structured, rawJson }: ExtractionP
         <CardContent>
           <pre
             className={cn(
-              "max-h-96 overflow-auto rounded-lg border border-border bg-zinc-950 p-4 text-xs text-teal-100/90",
+              "max-h-96 overflow-auto rounded-md border border-border bg-surface-container p-4 text-xs text-muted-foreground",
             )}
           >
             {display}

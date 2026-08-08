@@ -50,7 +50,7 @@ export function BriefingNarrative({ initialNarrative, tier }: BriefingNarrativeP
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="flex items-center gap-2 text-base">
-          <Sparkles className="h-4 w-4 text-teal-400" />
+          <Sparkles className="h-4 w-4 text-primary" />
           AI Narrative
         </CardTitle>
         {pro && (

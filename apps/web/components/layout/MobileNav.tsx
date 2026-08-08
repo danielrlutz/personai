@@ -18,7 +18,7 @@ export function MobileNav() {
 
   return (
     <nav
-      className="glass-panel fixed inset-x-0 bottom-0 z-40 border-t border-border md:hidden"
+      className="surface-panel fixed inset-x-0 bottom-0 z-40 border-t md:hidden"
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
       <ul className="flex items-stretch justify-around px-1 pt-1">
@@ -29,11 +29,18 @@ export function MobileNav() {
               <Link
                 href={href}
                 className={cn(
-                  "flex flex-col items-center gap-0.5 px-1 py-2 text-[10px] font-medium",
-                  active ? "text-teal-300" : "text-muted-foreground",
+                  "flex flex-col items-center gap-1 px-1 py-1.5 md-label-medium transition-colors duration-md ease-md",
+                  active ? "text-primary" : "text-muted-foreground",
                 )}
               >
-                <Icon className={cn("h-5 w-5", active && "text-teal-400")} />
+                <span
+                  className={cn(
+                    "flex h-8 w-14 items-center justify-center rounded-full transition-colors duration-md ease-md",
+                    active && "bg-secondary",
+                  )}
+                >
+                  <Icon className="h-5 w-5" />
+                </span>
                 {label}
               </Link>
             </li>

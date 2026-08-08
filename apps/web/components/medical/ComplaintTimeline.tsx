@@ -94,7 +94,7 @@ export function ComplaintTimeline({ refreshKey }: ComplaintTimelineProps) {
                     {analyzing === c.id ? "Analyzing..." : "Dual analysis"}
                   </Button>
                   {(c.analyses?.length ?? 0) > 0 && (
-                    <span className="text-xs text-teal-400">{c.analyses!.length} analysis(es)</span>
+                    <span className="text-xs text-primary">{c.analyses!.length} analysis(es)</span>
                   )}
                 </div>
               </li>

@@ -14,7 +14,7 @@ export function BriefingSnapshotCards({ snapshot }: BriefingSnapshotCardsProps) 
     {
       title: "Finance",
       icon: Wallet,
-      accent: "text-teal-400",
+      accent: "text-primary",
       items: [
         { label: "Budget remaining", value: formatCHF(snapshot.finance.budgetRemainingChf) },
         { label: "Bills due today", value: String(snapshot.finance.billsDueToday.length) },
@@ -83,11 +83,11 @@ export function BriefingSnapshotCards({ snapshot }: BriefingSnapshotCardsProps) 
       ))}
 
       {snapshot.finance.billsDueToday.length > 0 && (
-        <Card className="sm:col-span-2 xl:col-span-4 border-amber-500/30 bg-amber-500/5">
+        <Card className="sm:col-span-2 xl:col-span-4 border-warning/30 bg-warning/5">
           <CardContent className="flex items-start gap-3 p-4">
-            <AlertCircle className="mt-0.5 h-5 w-5 text-amber-400" />
+            <AlertCircle className="mt-0.5 h-5 w-5 text-warning" />
             <div>
-              <p className="font-medium text-amber-200">Bills due today</p>
+              <p className="font-medium text-warning">Bills due today</p>
               <ul className="mt-1 space-y-1 text-sm text-muted-foreground">
                 {snapshot.finance.billsDueToday.map((bill, i) => (
                   <li key={i}>

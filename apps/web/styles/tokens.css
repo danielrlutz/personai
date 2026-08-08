@@ -1,20 +1,43 @@
 :root {
-  --background: 240 6% 6%;
-  --foreground: 0 0% 98%;
-  --card: 240 5% 10%;
-  --card-foreground: 0 0% 98%;
-  --muted: 240 4% 16%;
-  --muted-foreground: 240 5% 65%;
-  --accent: 173 80% 40%;
+  /* Google Workspace dark (Gmail / Drive) — Material tonal surfaces */
+  --background: 0 0% 12.5%; /* #202124 */
+  --foreground: 0 0% 91%; /* #e8eaed */
+  --card: 0 0% 19%; /* #303134 */
+  --card-foreground: 0 0% 91%;
+  --surface-container: 0 0% 17%; /* #2d2e30 */
+  --surface-container-high: 0 0% 22%; /* #38393c */
+  --muted: 0 0% 22%;
+  --muted-foreground: 0 0% 70%; /* #bdc1c6 */
+  --primary: 214 89% 51%; /* #1a73e8 */
+  --primary-foreground: 0 0% 100%;
+  --primary-container: 214 55% 22%;
+  --on-primary-container: 214 100% 85%;
+  --secondary: 214 30% 24%;
+  --secondary-foreground: 214 80% 88%;
+  --accent: 214 89% 51%;
   --accent-foreground: 0 0% 100%;
-  --border: 240 4% 18%;
-  --input: 240 4% 18%;
-  --ring: 173 80% 40%;
-  --radius: 0.75rem;
+  --border: 0 0% 28%;
+  --input: 0 0% 28%;
+  --ring: 214 89% 51%;
+  --destructive: 4 72% 55%;
+  --destructive-foreground: 0 0% 100%;
+  --success: 142 45% 42%;
+  --warning: 38 92% 50%;
 
-  --glass-bg: rgba(24, 24, 27, 0.72);
-  --glass-border: rgba(255, 255, 255, 0.08);
-  --teal-glow: rgba(20, 184, 166, 0.25);
+  /* Material shape — 8–12px */
+  --radius: 0.5rem;
+  --radius-lg: 0.75rem;
+
   --sidebar-width: 16rem;
+  --nav-rail-width: 4.5rem;
   --header-height: 3.5rem;
+
+  /* Material elevation (dark theme) */
+  --elevation-1: 0 1px 2px 0 rgba(0, 0, 0, 0.3), 0 1px 3px 1px rgba(0, 0, 0, 0.15);
+  --elevation-2: 0 1px 2px 0 rgba(0, 0, 0, 0.3), 0 2px 6px 2px rgba(0, 0, 0, 0.15);
+  --elevation-3: 0 4px 8px 3px rgba(0, 0, 0, 0.15), 0 1px 3px 0 rgba(0, 0, 0, 0.3);
+
+  /* Material motion */
+  --motion-duration: 200ms;
+  --motion-easing: cubic-bezier(0.2, 0, 0, 1);
 }
