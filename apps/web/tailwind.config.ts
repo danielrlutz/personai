@@ -57,9 +57,9 @@ const config: Config = {
         mono: ["var(--font-geist-mono)", "monospace"],
       },
       boxShadow: {
-        elev-1: "var(--elevation-1)",
-        elev-2: "var(--elevation-2)",
-        elev-3: "var(--elevation-3)",
+        "elev-1": "var(--elevation-1)",
+        "elev-2": "var(--elevation-2)",
+        "elev-3": "var(--elevation-3)",
       },
       transitionDuration: {
         md: "200ms",
