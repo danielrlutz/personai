@@ -1,0 +1,251 @@
+import type { PrismaClient } from "@prisma/client";
+import { config } from "../config.js";
+import { resolveOllamaHost, streamChat } from "../ollama/client.js";
+import { vramLock } from "../ollama/vram-lock.js";
+
+export type BriefingSnapshot = {
+  greeting: string;
+  finance: {
+    budgetRemainingChf: number;
+    billsDueToday: Array<{ creditor: string; amount: number }>;
+    billsDueThisWeek: number;
+    recentTransactions: number;
+  };
+  legal: {
+    tasksDueToday: Array<{ title: string; type: string }>;
+    overdueTasks: number;
+    upcomingThisWeek: number;
+  };
+  medical: {
+    recentComplaints: number;
+    avgMoodScore7d: number | null;
+    notableTrend: string | null;
+  };
+  ingest: {
+    queuedJobs: number;
+    completedYesterday: number;
+  };
+};
+
+function startOfDay(d = new Date()): Date {
+  // Use local calendar day at noon to avoid UTC date rollover in SQLite/JSON
+  const x = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 12, 0, 0, 0);
+  return x;
+}
+
+function endOfDay(d = new Date()): Date {
+  const x = new Date(d);
+  x.setHours(23, 59, 59, 999);
+  return x;
+}
+
+function addDays(d: Date, n: number): Date {
+  const x = new Date(d);
+  x.setDate(x.getDate() + n);
+  return x;
+}
+
+function greetingForNow(): string {
+  const h = new Date().getHours();
+  if (h < 11) return "Guten Morgen";
+  if (h < 17) return "Guten Tag";
+  return "Guten Abend";
+}
+
+export async function buildSnapshot(prisma: PrismaClient): Promise<BriefingSnapshot> {
+  const todayStart = startOfDay();
+  const todayEnd = endOfDay();
+  const weekEnd = endOfDay(addDays(todayStart, 7));
+  const yesterdayStart = startOfDay(addDays(todayStart, -1));
+  const weekAgo = startOfDay(addDays(todayStart, -7));
+
+  const categories = await prisma.budgetCategory.findMany({ include: { transactions: true } });
+  let spent = 0;
+  let limit = 0;
+  for (const cat of categories) {
+    limit += cat.monthlyLimit ?? 0;
+    const monthStart = new Date();
+    monthStart.setDate(1);
+    monthStart.setHours(0, 0, 0, 0);
+    spent += cat.transactions
+      .filter((t) => t.type === "EXPENSE" && t.date >= monthStart)
+      .reduce((s, t) => s + t.amount, 0);
+  }
+
+  const billsDueToday = await prisma.qRBill.findMany({
+    where: {
+      status: "PENDING",
+      dueDate: { gte: todayStart, lte: todayEnd },
+    },
+  });
+
+  const billsDueThisWeek = await prisma.qRBill.count({
+    where: {
+      status: "PENDING",
+      dueDate: { gte: todayStart, lte: weekEnd },
+    },
+  });
+
+  const recentTransactions = await prisma.transaction.count({
+    where: { date: { gte: weekAgo } },
+  });
+
+  const tasksDueToday = await prisma.legalTask.findMany({
+    where: {
+      status: { in: ["TODO", "IN_PROGRESS"] },
+      dueDate: { gte: todayStart, lte: todayEnd },
+    },
+  });
+
+  const overdueTasks = await prisma.legalTask.count({
+    where: {
+      status: { in: ["TODO", "IN_PROGRESS"] },
+      dueDate: { lt: todayStart },
+    },
+  });
+
+  const upcomingThisWeek = await prisma.legalTask.count({
+    where: {
+      status: { in: ["TODO", "IN_PROGRESS"] },
+      dueDate: { gte: todayStart, lte: weekEnd },
+    },
+  });
+
+  const complaints = await prisma.complaintLog.findMany({
+    where: { occurredAt: { gte: weekAgo } },
+  });
+  const moodScores = complaints.map((c) => c.moodScore).filter((m): m is number => m != null);
+  const avgMood =
+    moodScores.length > 0 ? moodScores.reduce((a, b) => a + b, 0) / moodScores.length : null;
+  const sleepScores = complaints.map((c) => c.sleepHours).filter((s): s is number => s != null);
+  const avgSleep =
+    sleepScores.length > 0 ? sleepScores.reduce((a, b) => a + b, 0) / sleepScores.length : null;
+
+  const queuedJobs = await prisma.ingestionJob.count({ where: { status: "QUEUED" } });
+  const completedYesterday = await prisma.ingestionJob.count({
+    where: {
+      status: "COMPLETED",
+      completedAt: { gte: yesterdayStart, lt: todayStart },
+    },
+  });
+
+  return {
+    greeting: greetingForNow(),
+    finance: {
+      budgetRemainingChf: Math.round((limit - spent) * 100) / 100,
+      billsDueToday: billsDueToday.map((b) => ({
+        creditor: b.creditorName,
+        amount: b.amount,
+      })),
+      billsDueThisWeek,
+      recentTransactions,
+    },
+    legal: {
+      tasksDueToday: tasksDueToday.map((t) => ({ title: t.title, type: t.type })),
+      overdueTasks,
+      upcomingThisWeek,
+    },
+    medical: {
+      recentComplaints: complaints.length,
+      avgMoodScore7d: avgMood != null ? Math.round(avgMood * 10) / 10 : null,
+      notableTrend: avgSleep != null && avgSleep < 6 ? "sleep_down" : null,
+    },
+    ingest: {
+      queuedJobs,
+      completedYesterday,
+    },
+  };
+}
+
+export async function getOrCreateTodayBriefing(prisma: PrismaClient) {
+  const day = startOfDay();
+  let briefing = await prisma.dailyBriefing.findUnique({ where: { briefingDate: day } });
+  if (!briefing) {
+    const snapshot = await buildSnapshot(prisma);
+    briefing = await prisma.dailyBriefing.create({
+      data: {
+        briefingDate: day,
+        status: "PENDING",
+        snapshot: JSON.stringify(snapshot),
+      },
+    });
+  }
+  return briefing;
+}
+
+export async function regenerateBriefing(prisma: PrismaClient) {
+  const day = startOfDay();
+  const snapshot = await buildSnapshot(prisma);
+  return prisma.dailyBriefing.upsert({
+    where: { briefingDate: day },
+    create: {
+      briefingDate: day,
+      status: config.licenseTier === "pro" ? "GENERATING" : "READY",
+      snapshot: JSON.stringify(snapshot),
+      generatedAt: new Date(),
+    },
+    update: {
+      status: config.licenseTier === "pro" ? "GENERATING" : "READY",
+      snapshot: JSON.stringify(snapshot),
+      narrative: null,
+      generatedAt: new Date(),
+    },
+  });
+}
+
+export async function* streamBriefingNarrative(
+  prisma: PrismaClient,
+  signal?: AbortSignal,
+): AsyncGenerator<string> {
+  if (config.licenseTier !== "pro") {
+    throw new Error("AI briefing narrative requires Pro license");
+  }
+
+  const briefing = await getOrCreateTodayBriefing(prisma);
+  await prisma.dailyBriefing.update({
+    where: { id: briefing.id },
+    data: { status: "GENERATING" },
+  });
+
+  const release = await vramLock.acquire("REASONING");
+  let full = "";
+  try {
+    const host = await resolveOllamaHost();
+    const system = `Du bist ein persönlicher Assistent für Schweizer Freelancer.
+Schreibe eine kurze, klare Tagesbriefing-Zusammenfassung auf Deutsch (de-CH).
+Maximal 3 Absätze. Sei konkret und handlungsorientiert. Keine medizinische Diagnose.`;
+
+    for await (const token of streamChat({
+      host,
+      model: config.reasoningModel,
+      messages: [
+        { role: "system", content: system },
+        {
+          role: "user",
+          content: `Erstelle das Tagesbriefing aus diesem Snapshot:\n${briefing.snapshot}`,
+        },
+      ],
+      signal,
+    })) {
+      full += token;
+      yield token;
+    }
+
+    await prisma.dailyBriefing.update({
+      where: { id: briefing.id },
+      data: {
+        narrative: full,
+        status: "READY",
+        generatedAt: new Date(),
+      },
+    });
+  } catch (err) {
+    await prisma.dailyBriefing.update({
+      where: { id: briefing.id },
+      data: { status: "FAILED" },
+    });
+    throw err;
+  } finally {
+    await release();
+  }
+}
