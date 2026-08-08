@@ -54,6 +54,7 @@ export async function getPrisma(profileId: string): Promise<PrismaClient> {
   return activeClient;
 }
 
+/** Settings + empty budget category templates only — never invents user content. */
 async function seedDefaults(client: PrismaClient): Promise<void> {
   const defaults: Record<string, string> = {
     "ollama.visionModel": "maternion/LightOnOCR-2",
@@ -71,6 +72,7 @@ async function seedDefaults(client: PrismaClient): Promise<void> {
     });
   }
 
+  // Empty category shells (zero spend/transactions). Limits are templates, not fake activity.
   const catCount = await client.budgetCategory.count();
   if (catCount === 0) {
     await client.budgetCategory.createMany({

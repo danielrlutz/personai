@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Scale, CheckCircle2, Circle } from "lucide-react";
 import { apiGet, apiPatch, type LegalTask } from "@/lib/api-client";
 import { formatDate } from "@/lib/utils";
@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/shared/EmptyState";
+import { ApiLoadError } from "@/components/shared/ApiLoadError";
 
 const statusVariant = {
   TODO: "secondary" as const,
@@ -20,12 +21,22 @@ const statusVariant = {
 export function LegalTimeline() {
   const [tasks, setTasks] = useState<LegalTask[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const load = () => apiGet<{ tasks: LegalTask[] }>("/legal/tasks").then((data) => setTasks(data.tasks));
+  const load = useCallback(async () => {
+    setError(null);
+    try {
+      const data = await apiGet<{ tasks: LegalTask[] }>("/legal/tasks");
+      setTasks(data.tasks);
+    } catch (err) {
+      setTasks([]);
+      setError(err instanceof Error ? err.message : "Failed to load legal tasks");
+    }
+  }, []);
 
   useEffect(() => {
     void load().finally(() => setLoading(false));
-  }, []);
+  }, [load]);
 
   const toggleDone = async (task: LegalTask) => {
     const next = task.status === "DONE" ? "TODO" : "DONE";
@@ -41,7 +52,9 @@ export function LegalTimeline() {
         <CardTitle className="text-base">Legal timeline</CardTitle>
       </CardHeader>
       <CardContent>
-        {tasks.length === 0 ? (
+        {error ? (
+          <ApiLoadError message={error} onRetry={() => void load()} />
+        ) : tasks.length === 0 ? (
           <EmptyState icon={Scale} title="No legal tasks" description="Add deadlines, filings, and compliance items." />
         ) : (
           <div className="relative space-y-0">
@@ -78,7 +91,12 @@ export function LegalTimeline() {
                     <p className="mt-2 text-xs text-muted-foreground">Due {formatDate(task.dueDate)}</p>
                   )}
                   {task.status !== "DONE" && task.status !== "BLOCKED" && (
-                    <Button variant="ghost" size="sm" className="mt-2 h-7 px-2 text-xs" onClick={() => void apiPatch(`/legal/tasks/${task.id}`, { status: "IN_PROGRESS" }).then(load)}>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="mt-2 h-7 px-2 text-xs"
+                      onClick={() => void apiPatch(`/legal/tasks/${task.id}`, { status: "IN_PROGRESS" }).then(load)}
+                    >
                       Mark in progress
                     </Button>
                   )}

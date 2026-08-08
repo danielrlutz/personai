@@ -1,22 +1,46 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Brain, Leaf } from "lucide-react";
 import { apiGet, type ComplaintLog } from "@/lib/api-client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ApiLoadError } from "@/components/shared/ApiLoadError";
 
 export function DualAnalysisPanel() {
   const [complaints, setComplaints] = useState<ComplaintLog[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    void apiGet<{ complaints: ComplaintLog[] }>("/medical/complaints")
-      .then((data) => setComplaints(data.complaints.filter((c) => (c.analyses?.length ?? 0) > 0)))
-      .finally(() => setLoading(false));
+  const load = useCallback(async () => {
+    setError(null);
+    setLoading(true);
+    try {
+      const data = await apiGet<{ complaints: ComplaintLog[] }>("/medical/complaints");
+      setComplaints(data.complaints.filter((c) => (c.analyses?.length ?? 0) > 0));
+    } catch (err) {
+      setComplaints([]);
+      setError(err instanceof Error ? err.message : "Failed to load analyses");
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
+  useEffect(() => {
+    void load();
+  }, [load]);
+
   if (loading) return <Skeleton className="h-64 rounded-lg" />;
+
+  if (error) {
+    return (
+      <Card>
+        <CardContent className="pt-6">
+          <ApiLoadError message={error} onRetry={() => void load()} />
+        </CardContent>
+      </Card>
+    );
+  }
 
   const latest = complaints[0];
   const western = latest?.analyses?.find((a) => a.framework === "WESTERN");

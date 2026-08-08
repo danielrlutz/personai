@@ -41,7 +41,13 @@ export function BriefingSnapshotCards({ snapshot }: BriefingSnapshotCardsProps) 
           label: "Avg mood (7d)",
           value: snapshot.medical.avgMoodScore7d != null ? `${snapshot.medical.avgMoodScore7d}/10` : "—",
         },
-        { label: "Trend", value: snapshot.medical.notableTrend ?? "Stable" },
+        {
+          label: "Trend",
+          value:
+            snapshot.medical.notableTrend === "sleep_down"
+              ? "Sleep ↓"
+              : snapshot.medical.notableTrend ?? "—",
+        },
       ],
     },
     {

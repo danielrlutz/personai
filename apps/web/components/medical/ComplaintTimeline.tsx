@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Activity, Sparkles } from "lucide-react";
 import { apiGet, apiPost, type ComplaintLog } from "@/lib/api-client";
 import { formatDate, formatRelative } from "@/lib/utils";
@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/shared/EmptyState";
+import { ApiLoadError } from "@/components/shared/ApiLoadError";
 
 const severityVariant = {
   MILD: "secondary" as const,
@@ -23,14 +24,24 @@ interface ComplaintTimelineProps {
 export function ComplaintTimeline({ refreshKey }: ComplaintTimelineProps) {
   const [complaints, setComplaints] = useState<ComplaintLog[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [analyzing, setAnalyzing] = useState<string | null>(null);
 
-  const load = () =>
-    apiGet<{ complaints: ComplaintLog[] }>("/medical/complaints").then((data) => setComplaints(data.complaints));
+  const load = useCallback(async () => {
+    setError(null);
+    try {
+      const data = await apiGet<{ complaints: ComplaintLog[] }>("/medical/complaints");
+      setComplaints(data.complaints);
+    } catch (err) {
+      setComplaints([]);
+      setError(err instanceof Error ? err.message : "Failed to load complaints");
+    }
+  }, []);
 
   useEffect(() => {
+    setLoading(true);
     void load().finally(() => setLoading(false));
-  }, [refreshKey]);
+  }, [load, refreshKey]);
 
   const analyze = async (complaintId: string) => {
     setAnalyzing(complaintId);
@@ -50,7 +61,9 @@ export function ComplaintTimeline({ refreshKey }: ComplaintTimelineProps) {
         <CardTitle className="text-base">Complaint timeline</CardTitle>
       </CardHeader>
       <CardContent>
-        {complaints.length === 0 ? (
+        {error ? (
+          <ApiLoadError message={error} onRetry={() => void load()} />
+        ) : complaints.length === 0 ? (
           <EmptyState icon={Activity} title="No complaints logged" description="Track physical and psychological symptoms over time." />
         ) : (
           <ul className="space-y-4">

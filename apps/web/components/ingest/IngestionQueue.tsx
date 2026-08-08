@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/shared/EmptyState";
+import { ApiLoadError } from "@/components/shared/ApiLoadError";
 import { QueueStatusBanner } from "./QueueStatusBanner";
 
 const statusConfig = {
@@ -29,6 +30,8 @@ export function IngestionQueue({ refreshKey }: IngestionQueueProps) {
     pausedReason: string | null;
   }>();
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [reloadToken, setReloadToken] = useState(0);
 
   const applyQueue = useCallback(
     (data: {
@@ -46,6 +49,8 @@ export function IngestionQueue({ refreshKey }: IngestionQueueProps) {
     let mounted = true;
 
     const init = async () => {
+      setError(null);
+      setLoading(true);
       try {
         const data = await apiGet<{ jobs: IngestionJob[]; vram?: typeof vram }>("/ingest/queue");
         if (mounted) {
@@ -59,8 +64,12 @@ export function IngestionQueue({ refreshKey }: IngestionQueueProps) {
             }
           },
         });
-      } catch {
-        if (mounted) setLoading(false);
+      } catch (err) {
+        if (mounted) {
+          setJobs([]);
+          setError(err instanceof Error ? err.message : "Failed to load ingestion queue");
+          setLoading(false);
+        }
       }
     };
 
@@ -69,7 +78,7 @@ export function IngestionQueue({ refreshKey }: IngestionQueueProps) {
       mounted = false;
       abort?.();
     };
-  }, [applyQueue, refreshKey]);
+  }, [applyQueue, refreshKey, reloadToken]);
 
   const queuedCount = jobs.filter((j) => j.status === "QUEUED" || j.status === "PROCESSING").length;
 
@@ -91,7 +100,9 @@ export function IngestionQueue({ refreshKey }: IngestionQueueProps) {
           <CardTitle className="text-base">Ingestion queue</CardTitle>
         </CardHeader>
         <CardContent>
-          {jobs.length === 0 ? (
+          {error ? (
+            <ApiLoadError message={error} onRetry={() => setReloadToken((n) => n + 1)} />
+          ) : jobs.length === 0 ? (
             <EmptyState
               icon={FileText}
               title="No ingestion jobs"

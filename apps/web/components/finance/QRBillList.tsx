@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Receipt, Check } from "lucide-react";
 import { apiGet, apiPatch, type QRBill } from "@/lib/api-client";
 import { formatCHF, formatDate } from "@/lib/utils";
@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/shared/EmptyState";
+import { ApiLoadError } from "@/components/shared/ApiLoadError";
 
 const statusVariant = {
   PENDING: "warning" as const,
@@ -20,13 +21,22 @@ const statusVariant = {
 export function QRBillList() {
   const [bills, setBills] = useState<QRBill[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const load = () =>
-    apiGet<{ bills: QRBill[] }>("/finance/qr-bills").then((data) => setBills(data.bills));
+  const load = useCallback(async () => {
+    setError(null);
+    try {
+      const data = await apiGet<{ bills: QRBill[] }>("/finance/qr-bills");
+      setBills(data.bills);
+    } catch (err) {
+      setBills([]);
+      setError(err instanceof Error ? err.message : "Failed to load QR bills");
+    }
+  }, []);
 
   useEffect(() => {
     void load().finally(() => setLoading(false));
-  }, []);
+  }, [load]);
 
   const markPaid = async (id: string) => {
     await apiPatch(`/finance/qr-bills/${id}`, { status: "PAID" });
@@ -41,7 +51,9 @@ export function QRBillList() {
         <CardTitle className="text-base">QR Bills</CardTitle>
       </CardHeader>
       <CardContent>
-        {bills.length === 0 ? (
+        {error ? (
+          <ApiLoadError message={error} onRetry={() => void load()} />
+        ) : bills.length === 0 ? (
           <EmptyState icon={Receipt} title="No QR bills" description="Bills extracted from documents will appear here." />
         ) : (
           <ul className="divide-y divide-border">

@@ -18,14 +18,19 @@ export function ExportBuilder() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    void apiGet<{ complaints: ComplaintLog[] }>("/medical/complaints").then((data) => {
-      setComplaints(data.complaints);
-      if (data.complaints.length) {
-        const dates = data.complaints.map((c) => c.occurredAt).sort();
-        setDateFrom(dates[0]?.slice(0, 10) ?? "");
-        setDateTo(dates[dates.length - 1]?.slice(0, 10) ?? "");
-      }
-    });
+    void apiGet<{ complaints: ComplaintLog[] }>("/medical/complaints")
+      .then((data) => {
+        setComplaints(data.complaints);
+        if (data.complaints.length) {
+          const dates = data.complaints.map((c) => c.occurredAt).sort();
+          setDateFrom(dates[0]?.slice(0, 10) ?? "");
+          setDateTo(dates[dates.length - 1]?.slice(0, 10) ?? "");
+        }
+      })
+      .catch((err) => {
+        setComplaints([]);
+        setError(err instanceof Error ? err.message : "Failed to load complaints");
+      });
   }, []);
 
   const toggle = (id: string) => {

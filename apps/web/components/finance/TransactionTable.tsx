@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ArrowDownLeft, ArrowUpRight, ArrowLeftRight } from "lucide-react";
 import { apiGet, type Transaction } from "@/lib/api-client";
 import { formatCHF, formatDate } from "@/lib/utils";
@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/shared/EmptyState";
+import { ApiLoadError } from "@/components/shared/ApiLoadError";
 
 const typeIcons = {
   INCOME: ArrowDownLeft,
@@ -24,12 +25,25 @@ const typeColors = {
 export function TransactionTable() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setError(null);
+    setLoading(true);
+    try {
+      const data = await apiGet<{ transactions: Transaction[] }>("/finance/transactions");
+      setTransactions(data.transactions);
+    } catch (err) {
+      setTransactions([]);
+      setError(err instanceof Error ? err.message : "Failed to load transactions");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    void apiGet<{ transactions: Transaction[] }>("/finance/transactions")
-      .then((data) => setTransactions(data.transactions))
-      .finally(() => setLoading(false));
-  }, []);
+    void load();
+  }, [load]);
 
   if (loading) return <Skeleton className="h-96 rounded-lg" />;
 
@@ -39,7 +53,9 @@ export function TransactionTable() {
         <CardTitle className="text-base">Transactions</CardTitle>
       </CardHeader>
       <CardContent>
-        {transactions.length === 0 ? (
+        {error ? (
+          <ApiLoadError message={error} onRetry={() => void load()} />
+        ) : transactions.length === 0 ? (
           <EmptyState
             icon={ArrowLeftRight}
             title="No transactions"

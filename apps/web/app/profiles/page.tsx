@@ -15,13 +15,21 @@ export default function ProfilesPage() {
   const router = useRouter();
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     void apiGet<ProfileRegistry>("/profiles")
-      .then((registry) => setProfiles(registry.profiles))
+      .then((registry) => {
+        setProfiles(registry.profiles);
+        setError(null);
+      })
+      .catch((err) => {
+        setProfiles([]);
+        setError(err instanceof Error ? err.message : "Failed to load profiles");
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -86,8 +94,20 @@ export default function ProfilesPage() {
             <Skeleton className="h-16 rounded-lg" />
             <Skeleton className="h-16 rounded-lg" />
           </div>
+        ) : error ? (
+          <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-6 text-center">
+            <p className="text-sm text-red-300">{error}</p>
+            <p className="mt-2 text-xs text-muted-foreground">
+              Ensure the API server is running, then reload this page.
+            </p>
+          </div>
         ) : (
           <div className="space-y-3">
+            {profiles.length === 0 && (
+              <p className="rounded-lg border border-border bg-muted/10 p-4 text-center text-sm text-muted-foreground">
+                No profiles yet — create one below to get started.
+              </p>
+            )}
             {profiles.map((profile) => (
               <Card
                 key={profile.id}
