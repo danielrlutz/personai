@@ -45,11 +45,11 @@ export function DailyBriefing() {
 
   if (loading) {
     return (
-      <div className="space-y-6">
-        <Skeleton className="h-28 w-full rounded-lg" />
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="space-y-4">
+        <Skeleton className="h-24 w-full rounded-lg" />
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="h-40 rounded-lg" />
+            <Skeleton key={i} className="h-32 rounded-lg" />
           ))}
         </div>
       </div>
@@ -58,9 +58,9 @@ export function DailyBriefing() {
 
   if (error || !briefing) {
     return (
-      <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-6 text-center">
-        <p className="text-destructive">{error ?? "Briefing unavailable"}</p>
-        <Button className="mt-4" onClick={() => void load()}>
+      <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-5 text-center">
+        <p className="text-sm text-destructive">{error ?? "Briefing unavailable"}</p>
+        <Button className="mt-3" size="sm" onClick={() => void load()}>
           Retry
         </Button>
       </div>
@@ -68,18 +68,18 @@ export function DailyBriefing() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="surface-card animate-in p-6 sm:p-8">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <div className="space-y-4">
+      <div className="surface-card animate-in p-5 sm:p-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <div className="mb-2 flex items-center gap-2 text-primary">
-              <Sun className="h-5 w-5" />
+            <div className="mb-1.5 flex items-center gap-2 text-primary">
+              <Sun className="h-4 w-4" />
               <span className="md-label-large">Daily briefing</span>
             </div>
-            <h1 className="md-title-large text-[28px] tracking-tight">
+            <h1 className="md-title-large text-[26px] tracking-tight">
               {briefing.snapshot.greeting}
             </h1>
-            <p className="mt-2 md-body-medium text-muted-foreground">
+            <p className="mt-1 md-body-medium text-muted-foreground">
               {new Date(briefing.briefingDate).toLocaleDateString("de-CH", {
                 weekday: "long",
                 day: "numeric",
@@ -88,7 +88,7 @@ export function DailyBriefing() {
               })}
             </p>
           </div>
-          <Button variant="outline" onClick={() => void regenerate()} disabled={regenerating}>
+          <Button variant="outline" size="sm" onClick={() => void regenerate()} disabled={regenerating}>
             <RefreshCw className={`h-4 w-4 ${regenerating ? "animate-spin" : ""}`} />
             Refresh snapshot
           </Button>
@@ -97,7 +97,7 @@ export function DailyBriefing() {
 
       <BriefingSnapshotCards snapshot={briefing.snapshot} />
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-3 lg:grid-cols-2">
         <BriefingNarrative initialNarrative={briefing.narrative} tier={briefing.tier} />
         <BriefingActionItems snapshot={briefing.snapshot} />
       </div>

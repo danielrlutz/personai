@@ -84,19 +84,19 @@ export function IngestionQueue({ refreshKey }: IngestionQueueProps) {
 
   if (loading) {
     return (
-      <div className="space-y-4">
-        <Skeleton className="h-16 rounded-lg" />
-        <Skeleton className="h-64 rounded-lg" />
+      <div className="space-y-3">
+        <Skeleton className="h-14 rounded-lg" />
+        <Skeleton className="h-52 rounded-lg" />
       </div>
     );
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <QueueStatusBanner vram={vram} queuedCount={queuedCount} />
 
       <Card>
-        <CardHeader>
+        <CardHeader className="pb-2">
           <CardTitle className="text-base">Ingestion queue</CardTitle>
         </CardHeader>
         <CardContent>
@@ -105,8 +105,8 @@ export function IngestionQueue({ refreshKey }: IngestionQueueProps) {
           ) : jobs.length === 0 ? (
             <EmptyState
               icon={FileText}
-              title="No ingestion jobs"
-              description="Upload documents to start extracting data."
+              title="Queue is empty"
+              description="Drop a PDF or image above to extract QR bills, transactions, and records."
             />
           ) : (
             <ul>
@@ -114,22 +114,22 @@ export function IngestionQueue({ refreshKey }: IngestionQueueProps) {
                 const config = statusConfig[job.status];
                 const Icon = config.icon;
                 return (
-                  <li key={job.id} className="md-list-row justify-between px-0">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-surface-container-high">
-                        <FileText className="h-5 w-5 text-muted-foreground" />
+                  <li key={job.id} className="md-list-row justify-between px-0 py-2.5">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface-container-high">
+                        <FileText className="h-4 w-4 text-muted-foreground" />
                       </div>
-                      <div>
-                        <p className="md-label-large">{job.document.filename}</p>
+                      <div className="min-w-0">
+                        <p className="md-label-large truncate">{job.document.filename}</p>
                         <p className="text-xs text-muted-foreground">
                           {(job.document.fileSize / 1024).toFixed(1)} KB · {formatRelative(job.createdAt)}
                         </p>
                         {job.errorMessage && (
-                          <p className="mt-1 text-xs text-destructive">{job.errorMessage}</p>
+                          <p className="mt-0.5 text-xs text-destructive">{job.errorMessage}</p>
                         )}
                       </div>
                     </div>
-                    <Badge variant={config.variant} className="gap-1">
+                    <Badge variant={config.variant} className="shrink-0 gap-1">
                       <Icon className={`h-3 w-3 ${job.status === "PROCESSING" ? "animate-spin" : ""}`} />
                       {config.label}
                     </Badge>
