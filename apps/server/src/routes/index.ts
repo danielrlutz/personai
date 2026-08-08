@@ -210,7 +210,8 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
           monthlyLimit: c.monthlyLimit,
           color: c.color,
           spent,
-          remaining: (c.monthlyLimit ?? 0) - spent,
+          // null when unused — category monthlyLimit shells are templates, not remaining cash
+          remaining: spent > 0 ? (c.monthlyLimit ?? 0) - spent : null,
         };
       });
       return { categories: overview };

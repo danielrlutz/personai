@@ -224,7 +224,11 @@ export interface ProfileRegistry {
 export interface BriefingSnapshot {
   greeting: string;
   finance: {
-    budgetRemainingChf: number;
+    /** null when no expense activity — template category limits are not spendable cash */
+    budgetRemainingChf: number | null;
+    budgetIsTemplateOnly?: boolean;
+    monthlyLimitChf?: number;
+    spentThisMonthChf?: number;
     billsDueToday: Array<{ creditor: string; amount: number }>;
     billsDueThisWeek: number;
     recentTransactions: number;
@@ -275,7 +279,8 @@ export interface BudgetCategoryOverview {
   monthlyLimit: number | null;
   color: string | null;
   spent: number;
-  remaining: number;
+  /** null when category has no spend this month (limit is a template only) */
+  remaining: number | null;
 }
 
 export interface QRBill {
