@@ -22,6 +22,7 @@ import {
   regenerateBriefing,
   streamBriefingNarrative,
 } from "../briefing/briefing-service.js";
+import { buildPersonalTodaySummary, startOfDay } from "../life/life-service.js";
 import { MedicalReportDocument } from "../export/medical-report.js";
 import { getPrisma } from "../db/prisma-singleton.js";
 import { sendError, sseWrite, withPrisma, getProfileId } from "./helpers.js";
@@ -210,7 +211,8 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
           monthlyLimit: c.monthlyLimit,
           color: c.color,
           spent,
-          remaining: (c.monthlyLimit ?? 0) - spent,
+          // null when unused — category monthlyLimit shells are templates, not remaining cash
+          remaining: spent > 0 ? (c.monthlyLimit ?? 0) - spent : null,
         };
       });
       return { categories: overview };
@@ -689,6 +691,489 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
         await release();
         reply.raw.end();
       }
+    } catch (err) {
+      return sendError(reply, err);
+    }
+  });
+
+  // Personal manners (Life)
+  app.get("/life/today", async (req, reply) => {
+    try {
+      const { prisma } = await withPrisma(req);
+      const summary = await buildPersonalTodaySummary(prisma);
+      return { summary };
+    } catch (err) {
+      return sendError(reply, err);
+    }
+  });
+
+  app.get("/life/habits", async (req, reply) => {
+    try {
+      const { prisma } = await withPrisma(req);
+      const day = startOfDay();
+      const habits = await prisma.habit.findMany({
+        orderBy: { createdAt: "desc" },
+        include: {
+          logs: {
+            where: { date: day },
+            take: 1,
+          },
+        },
+      });
+      return {
+        habits: habits.map((h) => ({
+          ...h,
+          completedToday: h.logs.length > 0,
+          logs: undefined,
+        })),
+      };
+    } catch (err) {
+      return sendError(reply, err);
+    }
+  });
+
+  app.post<{
+    Body: {
+      title: string;
+      description?: string;
+      frequency?: "DAILY" | "WEEKLY" | "CUSTOM";
+      schedule?: string;
+      domain?: "PERSONAL" | "BUSINESS" | "BOTH";
+      color?: string;
+      active?: boolean;
+    };
+  }>("/life/habits", async (req, reply) => {
+    try {
+      const { prisma } = await withPrisma(req);
+      const habit = await prisma.habit.create({
+        data: {
+          title: req.body.title,
+          description: req.body.description,
+          frequency: req.body.frequency ?? "DAILY",
+          schedule: req.body.schedule,
+          domain: req.body.domain ?? "PERSONAL",
+          color: req.body.color,
+          active: req.body.active ?? true,
+        },
+      });
+      return habit;
+    } catch (err) {
+      return sendError(reply, err);
+    }
+  });
+
+  app.patch<{
+    Params: { id: string };
+    Body: {
+      title?: string;
+      description?: string | null;
+      frequency?: "DAILY" | "WEEKLY" | "CUSTOM";
+      domain?: "PERSONAL" | "BUSINESS" | "BOTH";
+      active?: boolean;
+      color?: string | null;
+    };
+  }>("/life/habits/:id", async (req, reply) => {
+    try {
+      const { prisma } = await withPrisma(req);
+      const habit = await prisma.habit.update({
+        where: { id: req.params.id },
+        data: {
+          title: req.body.title,
+          description: req.body.description,
+          frequency: req.body.frequency,
+          domain: req.body.domain,
+          active: req.body.active,
+          color: req.body.color,
+        },
+      });
+      return habit;
+    } catch (err) {
+      return sendError(reply, err);
+    }
+  });
+
+  app.post<{
+    Params: { id: string };
+    Body: { note?: string; energy?: number; focus?: number; date?: string };
+  }>("/life/habits/:id/log", async (req, reply) => {
+    try {
+      const { prisma } = await withPrisma(req);
+      const date = req.body.date ? startOfDay(new Date(req.body.date)) : startOfDay();
+      const log = await prisma.habitLog.upsert({
+        where: { habitId_date: { habitId: req.params.id, date } },
+        create: {
+          habitId: req.params.id,
+          date,
+          note: req.body.note,
+          energy: req.body.energy,
+          focus: req.body.focus,
+        },
+        update: {
+          note: req.body.note,
+          energy: req.body.energy,
+          focus: req.body.focus,
+          loggedAt: new Date(),
+        },
+      });
+      return log;
+    } catch (err) {
+      return sendError(reply, err);
+    }
+  });
+
+  app.delete<{ Params: { id: string }; Querystring: { date?: string } }>(
+    "/life/habits/:id/log",
+    async (req, reply) => {
+      try {
+        const { prisma } = await withPrisma(req);
+        const date = req.query.date ? startOfDay(new Date(req.query.date)) : startOfDay();
+        await prisma.habitLog.deleteMany({
+          where: { habitId: req.params.id, date },
+        });
+        return { ok: true };
+      } catch (err) {
+        return sendError(reply, err);
+      }
+    },
+  );
+
+  app.get("/life/goals", async (req, reply) => {
+    try {
+      const { prisma } = await withPrisma(req);
+      const goals = await prisma.personalGoal.findMany({ orderBy: { updatedAt: "desc" } });
+      return { goals };
+    } catch (err) {
+      return sendError(reply, err);
+    }
+  });
+
+  app.post<{
+    Body: {
+      title: string;
+      description?: string;
+      targetDate?: string;
+      progress?: number;
+      domain?: "PERSONAL" | "BUSINESS" | "BOTH";
+      status?: "ACTIVE" | "PAUSED" | "DONE" | "DROPPED";
+    };
+  }>("/life/goals", async (req, reply) => {
+    try {
+      const { prisma } = await withPrisma(req);
+      const progress = Math.min(100, Math.max(0, req.body.progress ?? 0));
+      const goal = await prisma.personalGoal.create({
+        data: {
+          title: req.body.title,
+          description: req.body.description,
+          targetDate: req.body.targetDate ? new Date(req.body.targetDate) : null,
+          progress,
+          domain: req.body.domain ?? "PERSONAL",
+          status: req.body.status ?? "ACTIVE",
+        },
+      });
+      return goal;
+    } catch (err) {
+      return sendError(reply, err);
+    }
+  });
+
+  app.patch<{
+    Params: { id: string };
+    Body: {
+      title?: string;
+      description?: string | null;
+      targetDate?: string | null;
+      progress?: number;
+      domain?: "PERSONAL" | "BUSINESS" | "BOTH";
+      status?: "ACTIVE" | "PAUSED" | "DONE" | "DROPPED";
+    };
+  }>("/life/goals/:id", async (req, reply) => {
+    try {
+      const { prisma } = await withPrisma(req);
+      const data: Record<string, unknown> = {};
+      if (req.body.title !== undefined) data.title = req.body.title;
+      if (req.body.description !== undefined) data.description = req.body.description;
+      if (req.body.domain !== undefined) data.domain = req.body.domain;
+      if (req.body.status !== undefined) data.status = req.body.status;
+      if (req.body.progress !== undefined) {
+        data.progress = Math.min(100, Math.max(0, req.body.progress));
+      }
+      if (req.body.targetDate !== undefined) {
+        data.targetDate = req.body.targetDate ? new Date(req.body.targetDate) : null;
+      }
+      const goal = await prisma.personalGoal.update({
+        where: { id: req.params.id },
+        data,
+      });
+      return goal;
+    } catch (err) {
+      return sendError(reply, err);
+    }
+  });
+
+  app.get("/life/tasks", async (req, reply) => {
+    try {
+      const { prisma } = await withPrisma(req);
+      const tasks = await prisma.personalTask.findMany({ orderBy: { dueDate: "asc" } });
+      return { tasks };
+    } catch (err) {
+      return sendError(reply, err);
+    }
+  });
+
+  app.post<{
+    Body: {
+      title: string;
+      description?: string;
+      dueDate?: string;
+      domain?: "PERSONAL" | "BUSINESS" | "BOTH";
+      category?: string;
+      status?: "TODO" | "IN_PROGRESS" | "DONE" | "CANCELLED";
+    };
+  }>("/life/tasks", async (req, reply) => {
+    try {
+      const { prisma } = await withPrisma(req);
+      const task = await prisma.personalTask.create({
+        data: {
+          title: req.body.title,
+          description: req.body.description,
+          dueDate: req.body.dueDate ? new Date(req.body.dueDate) : null,
+          domain: req.body.domain ?? "PERSONAL",
+          category: req.body.category,
+          status: req.body.status ?? "TODO",
+        },
+      });
+      return task;
+    } catch (err) {
+      return sendError(reply, err);
+    }
+  });
+
+  app.patch<{
+    Params: { id: string };
+    Body: {
+      title?: string;
+      description?: string | null;
+      dueDate?: string | null;
+      domain?: "PERSONAL" | "BUSINESS" | "BOTH";
+      category?: string | null;
+      status?: "TODO" | "IN_PROGRESS" | "DONE" | "CANCELLED";
+    };
+  }>("/life/tasks/:id", async (req, reply) => {
+    try {
+      const { prisma } = await withPrisma(req);
+      const data: Record<string, unknown> = {};
+      if (req.body.title !== undefined) data.title = req.body.title;
+      if (req.body.description !== undefined) data.description = req.body.description;
+      if (req.body.domain !== undefined) data.domain = req.body.domain;
+      if (req.body.category !== undefined) data.category = req.body.category;
+      if (req.body.dueDate !== undefined) {
+        data.dueDate = req.body.dueDate ? new Date(req.body.dueDate) : null;
+      }
+      if (req.body.status !== undefined) {
+        data.status = req.body.status;
+        data.completedAt = req.body.status === "DONE" ? new Date() : null;
+      }
+      const task = await prisma.personalTask.update({
+        where: { id: req.params.id },
+        data,
+      });
+      return task;
+    } catch (err) {
+      return sendError(reply, err);
+    }
+  });
+
+  app.get("/life/touchpoints", async (req, reply) => {
+    try {
+      const { prisma } = await withPrisma(req);
+      const touchpoints = await prisma.relationshipTouchpoint.findMany({
+        orderBy: { nextCheckInAt: "asc" },
+      });
+      return { touchpoints };
+    } catch (err) {
+      return sendError(reply, err);
+    }
+  });
+
+  app.post<{
+    Body: {
+      personName: string;
+      relationship?: string;
+      lastContactAt?: string;
+      nextCheckInAt?: string;
+      notes?: string;
+      cadenceDays?: number;
+    };
+  }>("/life/touchpoints", async (req, reply) => {
+    try {
+      const { prisma } = await withPrisma(req);
+      const touchpoint = await prisma.relationshipTouchpoint.create({
+        data: {
+          personName: req.body.personName,
+          relationship: req.body.relationship,
+          lastContactAt: req.body.lastContactAt ? new Date(req.body.lastContactAt) : null,
+          nextCheckInAt: req.body.nextCheckInAt ? new Date(req.body.nextCheckInAt) : null,
+          notes: req.body.notes,
+          cadenceDays: req.body.cadenceDays,
+        },
+      });
+      return touchpoint;
+    } catch (err) {
+      return sendError(reply, err);
+    }
+  });
+
+  app.patch<{
+    Params: { id: string };
+    Body: {
+      personName?: string;
+      relationship?: string | null;
+      lastContactAt?: string | null;
+      nextCheckInAt?: string | null;
+      notes?: string | null;
+      cadenceDays?: number | null;
+      markContacted?: boolean;
+    };
+  }>("/life/touchpoints/:id", async (req, reply) => {
+    try {
+      const { prisma } = await withPrisma(req);
+      const existing = await prisma.relationshipTouchpoint.findUnique({
+        where: { id: req.params.id },
+      });
+      if (!existing) return reply.status(404).send({ error: "Touchpoint not found" });
+
+      const data: Record<string, unknown> = {};
+      if (req.body.personName !== undefined) data.personName = req.body.personName;
+      if (req.body.relationship !== undefined) data.relationship = req.body.relationship;
+      if (req.body.notes !== undefined) data.notes = req.body.notes;
+      if (req.body.cadenceDays !== undefined) data.cadenceDays = req.body.cadenceDays;
+      if (req.body.lastContactAt !== undefined) {
+        data.lastContactAt = req.body.lastContactAt ? new Date(req.body.lastContactAt) : null;
+      }
+      if (req.body.nextCheckInAt !== undefined) {
+        data.nextCheckInAt = req.body.nextCheckInAt ? new Date(req.body.nextCheckInAt) : null;
+      }
+      if (req.body.markContacted) {
+        const now = new Date();
+        data.lastContactAt = now;
+        const cadence = req.body.cadenceDays ?? existing.cadenceDays ?? 14;
+        const next = new Date(now);
+        next.setDate(next.getDate() + cadence);
+        data.nextCheckInAt = startOfDay(next);
+      }
+
+      const touchpoint = await prisma.relationshipTouchpoint.update({
+        where: { id: req.params.id },
+        data,
+      });
+      return touchpoint;
+    } catch (err) {
+      return sendError(reply, err);
+    }
+  });
+
+  app.get("/life/notes", async (req, reply) => {
+    try {
+      const { prisma } = await withPrisma(req);
+      const notes = await prisma.personalNote.findMany({
+        orderBy: [{ pinned: "desc" }, { noteDate: "asc" }, { updatedAt: "desc" }],
+      });
+      return { notes };
+    } catch (err) {
+      return sendError(reply, err);
+    }
+  });
+
+  app.post<{
+    Body: {
+      title: string;
+      body: string;
+      noteDate?: string;
+      domain?: "PERSONAL" | "BUSINESS" | "BOTH";
+      pinned?: boolean;
+    };
+  }>("/life/notes", async (req, reply) => {
+    try {
+      const { prisma } = await withPrisma(req);
+      const note = await prisma.personalNote.create({
+        data: {
+          title: req.body.title,
+          body: req.body.body,
+          noteDate: req.body.noteDate ? startOfDay(new Date(req.body.noteDate)) : null,
+          domain: req.body.domain ?? "PERSONAL",
+          pinned: req.body.pinned ?? false,
+        },
+      });
+      return note;
+    } catch (err) {
+      return sendError(reply, err);
+    }
+  });
+
+  app.patch<{
+    Params: { id: string };
+    Body: {
+      title?: string;
+      body?: string;
+      noteDate?: string | null;
+      domain?: "PERSONAL" | "BUSINESS" | "BOTH";
+      pinned?: boolean;
+    };
+  }>("/life/notes/:id", async (req, reply) => {
+    try {
+      const { prisma } = await withPrisma(req);
+      const data: Record<string, unknown> = {};
+      if (req.body.title !== undefined) data.title = req.body.title;
+      if (req.body.body !== undefined) data.body = req.body.body;
+      if (req.body.domain !== undefined) data.domain = req.body.domain;
+      if (req.body.pinned !== undefined) data.pinned = req.body.pinned;
+      if (req.body.noteDate !== undefined) {
+        data.noteDate = req.body.noteDate ? startOfDay(new Date(req.body.noteDate)) : null;
+      }
+      const note = await prisma.personalNote.update({
+        where: { id: req.params.id },
+        data,
+      });
+      return note;
+    } catch (err) {
+      return sendError(reply, err);
+    }
+  });
+
+  app.get("/life/metrics", async (req, reply) => {
+    try {
+      const { prisma } = await withPrisma(req);
+      const metrics = await prisma.lifestyleMetric.findMany({
+        orderBy: { date: "desc" },
+        take: 30,
+      });
+      return { metrics };
+    } catch (err) {
+      return sendError(reply, err);
+    }
+  });
+
+  app.post<{
+    Body: { date?: string; energy?: number; focus?: number; note?: string };
+  }>("/life/metrics", async (req, reply) => {
+    try {
+      const { prisma } = await withPrisma(req);
+      const date = req.body.date ? startOfDay(new Date(req.body.date)) : startOfDay();
+      const metric = await prisma.lifestyleMetric.upsert({
+        where: { date },
+        create: {
+          date,
+          energy: req.body.energy,
+          focus: req.body.focus,
+          note: req.body.note,
+        },
+        update: {
+          energy: req.body.energy,
+          focus: req.body.focus,
+          note: req.body.note,
+        },
+      });
+      return metric;
     } catch (err) {
       return sendError(reply, err);
     }

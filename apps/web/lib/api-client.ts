@@ -121,6 +121,15 @@ export async function apiPut<T>(path: string, body?: unknown, init?: RequestInit
   return parseResponse<T>(res);
 }
 
+export async function apiDelete<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(`${getApiBaseUrl()}${path}`, {
+    ...init,
+    method: "DELETE",
+    headers: buildHeaders(init?.headers),
+  });
+  return parseResponse<T>(res);
+}
+
 export async function apiUpload<T>(path: string, formData: FormData, init?: RequestInit): Promise<T> {
   const headers = buildHeaders(init?.headers);
   headers.delete("Content-Type");
@@ -224,7 +233,11 @@ export interface ProfileRegistry {
 export interface BriefingSnapshot {
   greeting: string;
   finance: {
-    budgetRemainingChf: number;
+    /** null when no expense activity — template category limits are not spendable cash */
+    budgetRemainingChf: number | null;
+    budgetIsTemplateOnly?: boolean;
+    monthlyLimitChf?: number;
+    spentThisMonthChf?: number;
     billsDueToday: Array<{ creditor: string; amount: number }>;
     billsDueThisWeek: number;
     recentTransactions: number;
@@ -243,6 +256,90 @@ export interface BriefingSnapshot {
     queuedJobs: number;
     completedYesterday: number;
   };
+  personal?: {
+    habitsDueToday: number;
+    habitsCompletedToday: number;
+    tasksDueToday: Array<{ title: string }>;
+    overdueTasks: number;
+    activeGoals: number;
+    goalsAvgProgress: number | null;
+    checkInsDue: number;
+    notesToday: number;
+  };
+}
+
+export type LifeDomain = "PERSONAL" | "BUSINESS" | "BOTH";
+
+export interface Habit {
+  id: string;
+  title: string;
+  description?: string | null;
+  frequency: "DAILY" | "WEEKLY" | "CUSTOM";
+  active: boolean;
+  domain: LifeDomain;
+  color?: string | null;
+  completedToday?: boolean;
+}
+
+export interface PersonalGoal {
+  id: string;
+  title: string;
+  description?: string | null;
+  status: "ACTIVE" | "PAUSED" | "DONE" | "DROPPED";
+  targetDate?: string | null;
+  progress: number;
+  domain: LifeDomain;
+}
+
+export interface PersonalTask {
+  id: string;
+  title: string;
+  description?: string | null;
+  status: "TODO" | "IN_PROGRESS" | "DONE" | "CANCELLED";
+  dueDate?: string | null;
+  domain: LifeDomain;
+  category?: string | null;
+}
+
+export interface RelationshipTouchpoint {
+  id: string;
+  personName: string;
+  relationship?: string | null;
+  lastContactAt?: string | null;
+  nextCheckInAt?: string | null;
+  notes?: string | null;
+  cadenceDays?: number | null;
+}
+
+export interface PersonalNote {
+  id: string;
+  title: string;
+  body: string;
+  noteDate?: string | null;
+  domain: LifeDomain;
+  pinned: boolean;
+}
+
+export interface LifestyleMetric {
+  id: string;
+  date: string;
+  energy?: number | null;
+  focus?: number | null;
+  note?: string | null;
+}
+
+export interface PersonalTodaySummary {
+  habitsDue: Array<{ id: string; title: string; completed: boolean }>;
+  habitsCompleted: number;
+  habitsTotal: number;
+  tasksDueToday: Array<{ id: string; title: string; category: string | null }>;
+  overdueTasks: number;
+  openTasks: number;
+  activeGoals: Array<{ id: string; title: string; progress: number }>;
+  goalsAvgProgress: number | null;
+  checkInsDue: Array<{ id: string; personName: string; relationship: string | null }>;
+  notesToday: Array<{ id: string; title: string }>;
+  lifestyle: { energy: number | null; focus: number | null } | null;
 }
 
 export interface DailyBriefing {
@@ -275,7 +372,8 @@ export interface BudgetCategoryOverview {
   monthlyLimit: number | null;
   color: string | null;
   spent: number;
-  remaining: number;
+  /** null when category has no spend this month (limit is a template only) */
+  remaining: number | null;
 }
 
 export interface QRBill {

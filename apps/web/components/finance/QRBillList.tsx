@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { Receipt, Check } from "lucide-react";
 import { apiGet, apiPatch, type QRBill } from "@/lib/api-client";
 import { formatCHF, formatDate } from "@/lib/utils";
@@ -43,33 +44,44 @@ export function QRBillList() {
     await load();
   };
 
-  if (loading) return <Skeleton className="h-64 rounded-lg" />;
+  if (loading) return <Skeleton className="h-56 rounded-lg" />;
 
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className="pb-2">
         <CardTitle className="text-base">QR Bills</CardTitle>
       </CardHeader>
       <CardContent>
         {error ? (
           <ApiLoadError message={error} onRetry={() => void load()} />
         ) : bills.length === 0 ? (
-          <EmptyState icon={Receipt} title="No QR bills" description="Bills extracted from documents will appear here." />
+          <EmptyState
+            icon={Receipt}
+            title="No QR bills yet"
+            description="Nothing pending — upload a Swiss QR invoice under Ingest, or add one manually when available."
+            action={
+              <Button variant="tonal" size="sm" asChild>
+                <Link href="/ingest">Go to Ingest</Link>
+              </Button>
+            }
+          />
         ) : (
-          <ul className="divide-y divide-border">
+          <ul>
             {bills.map((bill) => (
-              <li key={bill.id} className="flex items-center justify-between py-4 first:pt-0 last:pb-0">
-                <div>
-                  <p className="font-medium">{bill.creditorName}</p>
-                  <p className="text-sm text-muted-foreground">
+              <li key={bill.id} className="md-list-row justify-between px-0">
+                <div className="min-w-0">
+                  <p className="md-label-large truncate">{bill.creditorName}</p>
+                  <p className="text-xs text-muted-foreground">
                     {formatCHF(bill.amount, bill.currency)}
                     {bill.dueDate && ` · Due ${formatDate(bill.dueDate)}`}
                   </p>
                   {bill.reference && (
-                    <p className="mt-1 font-mono text-xs text-muted-foreground">{bill.reference}</p>
+                    <p className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground">
+                      {bill.reference}
+                    </p>
                   )}
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex shrink-0 items-center gap-2">
                   <Badge variant={statusVariant[bill.status]}>{bill.status}</Badge>
                   {bill.status === "PENDING" && (
                     <Button size="sm" variant="outline" onClick={() => void markPaid(bill.id)}>

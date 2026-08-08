@@ -33,13 +33,27 @@ export function BudgetOverview() {
     void load();
   }, [load]);
 
-  if (loading) return <Skeleton className="h-80 rounded-lg" />;
+  if (loading) return <Skeleton className="h-72 rounded-lg" />;
 
   if (error) {
     return (
       <Card>
-        <CardContent className="pt-6">
+        <CardContent className="pt-5">
           <ApiLoadError message={error} onRetry={() => void load()} />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (categories.length === 0) {
+    return (
+      <Card>
+        <CardContent className="pt-5">
+          <EmptyState
+            icon={Wallet}
+            title="No budget categories"
+            description="Budget categories appear here once configured for this profile."
+          />
         </CardContent>
       </Card>
     );
@@ -54,81 +68,89 @@ export function BudgetOverview() {
 
   const totalSpent = categories.reduce((s, c) => s + c.spent, 0);
   const totalLimit = categories.reduce((s, c) => s + (c.monthlyLimit ?? 0), 0);
-
-  if (categories.length === 0) {
-    return (
-      <Card>
-        <CardContent className="pt-6">
-          <EmptyState
-            icon={Wallet}
-            title="No budget categories"
-            description="Budget categories appear here once configured for this profile."
-          />
-        </CardContent>
-      </Card>
-    );
-  }
+  const hasSpending = totalSpent > 0;
+  const remaining = hasSpending ? totalLimit - totalSpent : null;
 
   return (
-    <div className="space-y-6">
-      <div className="grid gap-4 sm:grid-cols-3">
+    <div className="space-y-4">
+      <div className="grid gap-3 sm:grid-cols-3">
         <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-muted-foreground">Spent this month</CardTitle>
+          <CardHeader className="pb-1">
+            <CardTitle className="text-sm font-normal text-muted-foreground">Spent this month</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold">{formatCHF(totalSpent)}</p>
+            <p className="text-xl font-medium tracking-tight">{formatCHF(totalSpent)}</p>
           </CardContent>
         </Card>
         <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-muted-foreground">Monthly budget</CardTitle>
+          <CardHeader className="pb-1">
+            <CardTitle className="text-sm font-normal text-muted-foreground">
+              {hasSpending ? "Monthly budget" : "Category templates"}
+            </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold">{formatCHF(totalLimit)}</p>
+            <p className="text-xl font-medium tracking-tight">{formatCHF(totalLimit)}</p>
+            {!hasSpending && (
+              <p className="mt-1 text-xs text-muted-foreground">Planning shells — not cash on hand</p>
+            )}
           </CardContent>
         </Card>
         <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-muted-foreground">Remaining</CardTitle>
+          <CardHeader className="pb-1">
+            <CardTitle className="text-sm font-normal text-muted-foreground">Remaining</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className={`text-2xl font-normal ${totalLimit - totalSpent < 0 ? "text-destructive" : "text-primary"}`}>
-              {formatCHF(totalLimit - totalSpent)}
-            </p>
+            {remaining == null ? (
+              <>
+                <p className="text-xl font-medium tracking-tight text-muted-foreground">—</p>
+                <p className="mt-1 text-xs text-muted-foreground">Add spending to track remaining</p>
+              </>
+            ) : (
+              <p
+                className={`text-xl font-medium tracking-tight ${
+                  remaining < 0 ? "text-destructive" : "text-primary"
+                }`}
+              >
+                {formatCHF(remaining)}
+              </p>
+            )}
           </CardContent>
         </Card>
       </div>
 
       <Card>
-        <CardHeader>
+        <CardHeader className="pb-2">
           <CardTitle className="text-base">Budget by category</CardTitle>
         </CardHeader>
         <CardContent>
-          <ResponsiveContainer width="100%" height={280}>
-            <BarChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-              <XAxis dataKey="name" tick={{ fill: "#bdc1c6", fontSize: 12 }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: "#bdc1c6", fontSize: 12 }} axisLine={false} tickLine={false} />
-              <Tooltip
-                contentStyle={{
-                  background: "#303134",
-                  border: "1px solid rgba(232,234,237,0.12)",
-                  borderRadius: 8,
-                  boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
-                }}
-                formatter={(value: number) => formatCHF(value)}
-              />
-              <Bar dataKey="spent" radius={[4, 4, 0, 0]}>
-                {chartData.map((entry, i) => (
-                  <Cell key={i} fill={entry.color} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-          {totalSpent === 0 && (
-            <p className="mt-3 text-center text-xs text-muted-foreground">
-              No spending recorded this month — category limits are templates only.
-            </p>
+          {!hasSpending ? (
+            <EmptyState
+              className="py-8"
+              icon={Wallet}
+              title="No spending recorded"
+              description="Category limits are empty templates until transactions are ingested or logged."
+            />
+          ) : (
+            <ResponsiveContainer width="100%" height={240}>
+              <BarChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                <XAxis dataKey="name" tick={{ fill: "#bdc1c6", fontSize: 12 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fill: "#bdc1c6", fontSize: 12 }} axisLine={false} tickLine={false} />
+                <Tooltip
+                  contentStyle={{
+                    background: "#303134",
+                    border: "1px solid rgba(232,234,237,0.12)",
+                    borderRadius: 8,
+                    boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
+                  }}
+                  formatter={(value: number) => formatCHF(value)}
+                />
+                <Bar dataKey="spent" radius={[4, 4, 0, 0]}>
+                  {chartData.map((entry, i) => (
+                    <Cell key={i} fill={entry.color} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
           )}
         </CardContent>
       </Card>

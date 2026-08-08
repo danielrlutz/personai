@@ -1,6 +1,6 @@
 "use client";
 
-import { Wallet, Scale, HeartPulse, Upload, AlertCircle } from "lucide-react";
+import { Wallet, Scale, HeartPulse, Upload, AlertCircle, Receipt } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCHF } from "@/lib/utils";
 import type { BriefingSnapshot } from "@/lib/api-client";
@@ -9,16 +9,30 @@ interface BriefingSnapshotCardsProps {
   snapshot: BriefingSnapshot;
 }
 
+function formatBudgetRemaining(value: number | null, templateOnly?: boolean): string {
+  if (value == null || templateOnly) return "No spending yet";
+  return formatCHF(value);
+}
+
 export function BriefingSnapshotCards({ snapshot }: BriefingSnapshotCardsProps) {
+  const billsToday = snapshot.finance.billsDueToday.length;
+  const billsWeek = snapshot.finance.billsDueThisWeek;
+
   const cards = [
     {
       title: "Finance",
       icon: Wallet,
       accent: "text-primary",
       items: [
-        { label: "Budget remaining", value: formatCHF(snapshot.finance.budgetRemainingChf) },
-        { label: "Bills due today", value: String(snapshot.finance.billsDueToday.length) },
-        { label: "Due this week", value: String(snapshot.finance.billsDueThisWeek) },
+        {
+          label: "Budget remaining",
+          value: formatBudgetRemaining(
+            snapshot.finance.budgetRemainingChf,
+            snapshot.finance.budgetIsTemplateOnly,
+          ),
+        },
+        { label: "Bills due today", value: billsToday === 0 ? "None" : String(billsToday) },
+        { label: "Due this week", value: billsWeek === 0 ? "None" : String(billsWeek) },
       ],
     },
     {
@@ -62,30 +76,32 @@ export function BriefingSnapshotCards({ snapshot }: BriefingSnapshotCardsProps) 
   ];
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-      {cards.map(({ title, icon: Icon, accent, items }) => (
-        <Card key={title} className="overflow-hidden">
-          <CardHeader className="pb-2">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Icon className={`h-4 w-4 ${accent}`} />
-              {title}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {items.map((item) => (
-              <div key={item.label} className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">{item.label}</span>
-                <span className="font-medium">{item.value}</span>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      ))}
+    <div className="space-y-3">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {cards.map(({ title, icon: Icon, accent, items }) => (
+          <Card key={title} className="overflow-hidden">
+            <CardHeader className="pb-1.5">
+              <CardTitle className="flex items-center gap-2 text-sm">
+                <Icon className={`h-4 w-4 ${accent}`} />
+                {title}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-1.5">
+              {items.map((item) => (
+                <div key={item.label} className="flex items-center justify-between gap-2 text-sm">
+                  <span className="text-muted-foreground">{item.label}</span>
+                  <span className="text-right font-medium tabular-nums">{item.value}</span>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        ))}
+      </div>
 
-      {snapshot.finance.billsDueToday.length > 0 && (
-        <Card className="sm:col-span-2 xl:col-span-4 border-warning/30 bg-warning/5">
+      {billsToday > 0 ? (
+        <Card className="border-warning/30 bg-warning/5">
           <CardContent className="flex items-start gap-3 p-4">
-            <AlertCircle className="mt-0.5 h-5 w-5 text-warning" />
+            <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-warning" />
             <div>
               <p className="font-medium text-warning">Bills due today</p>
               <ul className="mt-1 space-y-1 text-sm text-muted-foreground">
@@ -95,6 +111,20 @@ export function BriefingSnapshotCards({ snapshot }: BriefingSnapshotCardsProps) 
                   </li>
                 ))}
               </ul>
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <CardContent className="flex items-center gap-3 p-4">
+            <Receipt className="h-5 w-5 shrink-0 text-muted-foreground" />
+            <div>
+              <p className="text-sm font-medium">No bills due today</p>
+              <p className="text-xs text-muted-foreground">
+                {billsWeek === 0
+                  ? "No pending QR bills this week — ingest a bill or add one under Finance."
+                  : `${billsWeek} pending bill${billsWeek === 1 ? "" : "s"} due later this week.`}
+              </p>
             </div>
           </CardContent>
         </Card>

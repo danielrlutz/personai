@@ -6,7 +6,12 @@ import { vramLock } from "../ollama/vram-lock.js";
 export type BriefingSnapshot = {
   greeting: string;
   finance: {
-    budgetRemainingChf: number;
+    /** Remaining budget when real spend exists; null when limits are unused templates. */
+    budgetRemainingChf: number | null;
+    /** True when category limits exist but no expenses/transactions this month. */
+    budgetIsTemplateOnly: boolean;
+    monthlyLimitChf: number;
+    spentThisMonthChf: number;
     billsDueToday: Array<{ creditor: string; amount: number }>;
     billsDueThisWeek: number;
     recentTransactions: number;
@@ -62,11 +67,11 @@ export async function buildSnapshot(prisma: PrismaClient): Promise<BriefingSnaps
   const categories = await prisma.budgetCategory.findMany({ include: { transactions: true } });
   let spent = 0;
   let limit = 0;
+  const monthStart = new Date();
+  monthStart.setDate(1);
+  monthStart.setHours(0, 0, 0, 0);
   for (const cat of categories) {
     limit += cat.monthlyLimit ?? 0;
-    const monthStart = new Date();
-    monthStart.setDate(1);
-    monthStart.setHours(0, 0, 0, 0);
     spent += cat.transactions
       .filter((t) => t.type === "EXPENSE" && t.date >= monthStart)
       .reduce((s, t) => s + t.amount, 0);
@@ -89,6 +94,13 @@ export async function buildSnapshot(prisma: PrismaClient): Promise<BriefingSnaps
   const recentTransactions = await prisma.transaction.count({
     where: { date: { gte: weekAgo } },
   });
+
+  const monthExpenseCount = await prisma.transaction.count({
+    where: { type: "EXPENSE", date: { gte: monthStart } },
+  });
+
+  // Do not present seed template limits (e.g. 4700 CHF) as "budget remaining".
+  const budgetIsTemplateOnly = spent === 0 && monthExpenseCount === 0 && limit > 0;
 
   const tasksDueToday = await prisma.legalTask.findMany({
     where: {
@@ -132,7 +144,10 @@ export async function buildSnapshot(prisma: PrismaClient): Promise<BriefingSnaps
   return {
     greeting: greetingForNow(),
     finance: {
-      budgetRemainingChf: Math.round((limit - spent) * 100) / 100,
+      budgetRemainingChf: budgetIsTemplateOnly ? null : Math.round((limit - spent) * 100) / 100,
+      budgetIsTemplateOnly,
+      monthlyLimitChf: Math.round(limit * 100) / 100,
+      spentThisMonthChf: Math.round(spent * 100) / 100,
       billsDueToday: billsDueToday.map((b) => ({
         creditor: b.creditorName,
         amount: b.amount,
@@ -157,6 +172,16 @@ export async function buildSnapshot(prisma: PrismaClient): Promise<BriefingSnaps
   };
 }
 
+function snapshotNeedsRefresh(raw: string): boolean {
+  try {
+    const parsed = JSON.parse(raw) as Partial<BriefingSnapshot>;
+    // Refresh cached snapshots that still expose template limits as "remaining".
+    return parsed.finance?.budgetIsTemplateOnly === undefined;
+  } catch {
+    return true;
+  }
+}
+
 export async function getOrCreateTodayBriefing(prisma: PrismaClient) {
   const day = startOfDay();
   let briefing = await prisma.dailyBriefing.findUnique({ where: { briefingDate: day } });
@@ -168,6 +193,12 @@ export async function getOrCreateTodayBriefing(prisma: PrismaClient) {
         status: "PENDING",
         snapshot: JSON.stringify(snapshot),
       },
+    });
+  } else if (snapshotNeedsRefresh(briefing.snapshot)) {
+    const snapshot = await buildSnapshot(prisma);
+    briefing = await prisma.dailyBriefing.update({
+      where: { id: briefing.id },
+      data: { snapshot: JSON.stringify(snapshot) },
     });
   }
   return briefing;
@@ -213,7 +244,8 @@ export async function* streamBriefingNarrative(
     const host = await resolveOllamaHost();
     const system = `Du bist ein persönlicher Assistent für Schweizer Freelancer.
 Schreibe eine kurze, klare Tagesbriefing-Zusammenfassung auf Deutsch (de-CH).
-Maximal 3 Absätze. Sei konkret und handlungsorientiert. Keine medizinische Diagnose.`;
+Maximal 3 Absätze. Sei konkret und handlungsorientiert. Keine medizinische Diagnose.
+Wenn budgetIsTemplateOnly true ist, erwähne kein verfügbares Budget / Restbudget — die Kategorie-Limits sind nur Vorlagen.`;
 
     for await (const token of streamChat({
       host,
