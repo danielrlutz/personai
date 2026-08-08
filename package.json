@@ -15,8 +15,8 @@
     "lint": "pnpm -r lint",
     "pull-models": "bash scripts/pull-models.sh",
     "pull-models:win": "powershell -File scripts/pull-models.ps1",
-    "tauri:dev": "cargo tauri dev --manifest-path src-tauri/Cargo.toml",
-    "tauri:build": "cargo tauri build --manifest-path src-tauri/Cargo.toml"
+    "tauri:dev": "cd src-tauri && cargo tauri dev",
+    "tauri:build": "cd src-tauri && cargo tauri build"
   },
   "engines": {
     "node": ">=20"
