@@ -1,0 +1,296 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum DocumentType {
+  BILL
+  MEDICAL_RECORD
+  LEGAL
+  CONTRACT
+  RECEIPT
+  OTHER
+}
+
+enum IngestionStatus {
+  QUEUED
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum TransactionType {
+  INCOME
+  EXPENSE
+  TRANSFER
+}
+
+enum QRBillStatus {
+  PENDING
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+enum LegalTaskType {
+  TAX
+  FILING
+  CONTRACT
+  REVIEW
+  DEADLINE
+  COMPLIANCE
+  OTHER
+}
+
+enum LegalTaskStatus {
+  TODO
+  IN_PROGRESS
+  DONE
+  BLOCKED
+}
+
+enum ComplaintCategory {
+  PHYSICAL
+  PSYCHOLOGICAL
+  BOTH
+}
+
+enum ComplaintSeverity {
+  MILD
+  MODERATE
+  SEVERE
+}
+
+enum AnalysisFramework {
+  WESTERN
+  EASTERN
+  COMBINED
+}
+
+enum ChatRole {
+  USER
+  ASSISTANT
+  SYSTEM
+}
+
+enum AdvisorPersona {
+  CFO
+  COUNSEL
+  COMBINED
+}
+
+enum ExportStatus {
+  DRAFT
+  GENERATED
+  FAILED
+}
+
+enum BriefingStatus {
+  PENDING
+  GENERATING
+  READY
+  FAILED
+}
+
+model Setting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  action    String
+  entity    String?
+  entityId  String?
+  metadata  String?
+  createdAt DateTime @default(now())
+}
+
+model Document {
+  id           String               @id @default(cuid())
+  filename     String
+  mimeType     String
+  documentType DocumentType         @default(OTHER)
+  storagePath  String
+  fileSize     Int
+  sha256       String?
+  uploadedAt   DateTime             @default(now())
+  jobs         IngestionJob[]
+  extractions  DocumentExtraction[]
+  transaction  Transaction?
+  qrBill       QRBill?
+  complaint    ComplaintLog?
+}
+
+model IngestionJob {
+  id           String          @id @default(cuid())
+  documentId   String
+  document     Document        @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  status       IngestionStatus @default(QUEUED)
+  ollamaModel  String          @default("maternion/LightOnOCR-2")
+  ollamaHost   String
+  errorMessage String?
+  pausedReason String?
+  queuePosition Int?
+  startedAt    DateTime?
+  completedAt  DateTime?
+  createdAt    DateTime        @default(now())
+
+  @@index([status])
+}
+
+model DocumentExtraction {
+  id         String   @id @default(cuid())
+  documentId String
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  jobId      String?
+  rawJson    String
+  structured String
+  confidence Float?
+  createdAt  DateTime @default(now())
+}
+
+model BudgetCategory {
+  id           String        @id @default(cuid())
+  name         String
+  monthlyLimit Float?
+  color        String?
+  transactions Transaction[]
+  createdAt    DateTime      @default(now())
+}
+
+model Transaction {
+  id          String          @id @default(cuid())
+  type        TransactionType
+  amount      Float
+  currency    String          @default("CHF")
+  description String
+  date        DateTime
+  categoryId  String?
+  category    BudgetCategory? @relation(fields: [categoryId], references: [id])
+  documentId  String?         @unique
+  document    Document?       @relation(fields: [documentId], references: [id])
+  createdAt   DateTime        @default(now())
+
+  @@index([date])
+}
+
+model QRBill {
+  id              String       @id @default(cuid())
+  creditorName    String
+  creditorAddress String?
+  iban            String
+  amount          Float
+  currency        String       @default("CHF")
+  reference       String?
+  dueDate         DateTime?
+  status          QRBillStatus @default(PENDING)
+  documentId      String?      @unique
+  document        Document?    @relation(fields: [documentId], references: [id])
+  paidAt          DateTime?
+  notes           String?
+  createdAt       DateTime     @default(now())
+
+  @@index([dueDate])
+  @@index([status])
+}
+
+model LegalTask {
+  id          String          @id @default(cuid())
+  title       String
+  description String?
+  type        LegalTaskType
+  status      LegalTaskStatus @default(TODO)
+  dueDate     DateTime?
+  completedAt DateTime?
+  documentId  String?
+  metadata    String?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@index([dueDate])
+}
+
+model ChatSession {
+  id        String         @id @default(cuid())
+  title     String?
+  persona   AdvisorPersona @default(COMBINED)
+  model     String         @default("deepseek-r1:8b")
+  messages  ChatMessage[]
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+}
+
+model ChatMessage {
+  id        String      @id @default(cuid())
+  sessionId String
+  session   ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  role      ChatRole
+  content   String
+  context   String?
+  createdAt DateTime    @default(now())
+}
+
+model ComplaintLog {
+  id          String            @id @default(cuid())
+  category    ComplaintCategory
+  title       String
+  description String
+  bodyRegion  String?
+  severity    ComplaintSeverity @default(MILD)
+  moodScore   Int?
+  sleepHours  Float?
+  triggers    String?
+  occurredAt  DateTime
+  documentId  String?           @unique
+  document    Document?         @relation(fields: [documentId], references: [id])
+  analyses    MedicalAnalysis[]
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  @@index([occurredAt])
+}
+
+model MedicalAnalysis {
+  id          String            @id @default(cuid())
+  complaintId String?
+  complaint   ComplaintLog?     @relation(fields: [complaintId], references: [id])
+  framework   AnalysisFramework
+  ollamaModel String
+  prompt      String
+  result      String
+  disclaimer  String            @default("Keine medizinische Diagnose. Konsultieren Sie einen Arzt.")
+  createdAt   DateTime          @default(now())
+}
+
+model MedicalExport {
+  id            String       @id @default(cuid())
+  title         String
+  dateRangeFrom DateTime
+  dateRangeTo   DateTime
+  complaintIds  String
+  analysisIds   String?
+  storagePath   String?
+  status        ExportStatus @default(DRAFT)
+  generatedAt   DateTime?
+  createdAt     DateTime     @default(now())
+}
+
+model DailyBriefing {
+  id           String         @id @default(cuid())
+  briefingDate DateTime
+  status       BriefingStatus @default(PENDING)
+  snapshot     String
+  narrative    String?
+  generatedAt  DateTime?
+  createdAt    DateTime       @default(now())
+
+  @@unique([briefingDate])
+  @@index([briefingDate, status])
+}
