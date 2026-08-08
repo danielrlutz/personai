@@ -1,19 +1,20 @@
 #!/usr/bin/env bash
-# PersonAI OS â€” one-line installer
+# PersonAI OS — install OR update (same command)
 #
 #   curl -fsSL https://raw.githubusercontent.com/danielrlutz/personai/main/install.sh | bash
 #
-# Non-interactive example:
-#   curl -fsSL .../install.sh | bash -s -- --yes --ollama=existing --tier=pro --domain=app.example.com
+# Non-interactive:
+#   curl -fsSL .../install.sh | bash -s -- --yes --ollama=new-docker --tier=pro
+#   curl -fsSL .../install.sh | bash -s -- --yes --update
 #
 set -euo pipefail
 
 REPO_URL="${PERSONAI_REPO_URL:-https://github.com/danielrlutz/personai.git}"
-REPO_RAW="${PERSONAI_RAW_URL:-https://raw.githubusercontent.com/danielrlutz/personai/main}"
 BRANCH="${PERSONAI_BRANCH:-main}"
 DEFAULT_DIR="${PERSONAI_HOME:-$HOME/personai}"
+STATE_FILE_NAME=".personai-install"
 
-# Defaults (overridable via flags / prompts)
+# Defaults
 INSTALL_DIR=""
 OLLAMA_MODE=""          # existing-native | existing-docker | new-docker | skip
 OLLAMA_HOST="http://127.0.0.1:11434"
@@ -22,30 +23,32 @@ APP_PORT="3000"
 API_PORT="4000"
 DATA_DIR=""
 DOMAIN=""
-ENABLE_TLS="ask"        # ask | yes | no
-PULL_MODELS="ask"      # ask | yes | no
-START_NOW="ask"         # ask | yes | no
-CREATE_SYSTEMD="ask"    # ask | yes | no
+ENABLE_TLS="ask"
+PULL_MODELS="ask"
+START_NOW="ask"
+CREATE_SYSTEMD="ask"
 ASSUME_YES=0
 SKIP_CLONE=0
+FORCE_MODE=""           # install | update (empty = auto-detect)
+IS_UPDATE=0
+PREV_COMMIT=""
+NEW_COMMIT=""
 
 RED=$'\033[0;31m'
 GRN=$'\033[0;32m'
 YLW=$'\033[0;33m'
-BLU=$'\033[0;34m'
 CYN=$'\033[0;36m'
 DIM=$'\033[2m'
 BOLD=$'\033[1m'
 RST=$'\033[0m'
 
 log()  { printf '%s\n' "$*"; }
-info() { printf '%sâ€º%s %s\n' "$CYN" "$RST" "$*"; }
-ok()   { printf '%sâœ“%s %s\n' "$GRN" "$RST" "$*"; }
+info() { printf '%s›%s %s\n' "$CYN" "$RST" "$*"; }
+ok()   { printf '%s✓%s %s\n' "$GRN" "$RST" "$*"; }
 warn() { printf '%s!%s %s\n' "$YLW" "$RST" "$*"; }
 err()  { printf '%sx%s %s\n' "$RED" "$RST" "$*" >&2; }
 die()  { err "$*"; exit 1; }
 
-# When piped from curl, stdin is the script â€” prompts must use the TTY.
 if [[ -r /dev/tty ]]; then
   exec 3</dev/tty
 else
@@ -54,34 +57,38 @@ fi
 
 usage() {
   cat <<'EOF'
-PersonAI OS installer
+PersonAI OS installer / updater
 
-Usage:
+Same command installs fresh OR upgrades an existing install:
+
   curl -fsSL https://raw.githubusercontent.com/danielrlutz/personai/main/install.sh | bash
-  curl -fsSL .../install.sh | bash -s -- [options]
 
 Options:
-  --dir PATH              Install directory (default: ~/personai)
+  --dir PATH              Install directory (default: ~/personai or detected)
+  --update                Force update mode
+  --install               Force fresh install prompts
   --ollama MODE           existing-native | existing-docker | new-docker | skip
-  --ollama-host URL       Ollama base URL (default: http://127.0.0.1:11434)
-  --tier core|pro         License tier (default: pro)
-  --port N                Web UI host port (default: 3000)
-  --api-port N            API host port (default: 4000)
+  --ollama-host URL       Ollama base URL
+  --tier core|pro         License tier
+  --port N                Web UI host port
+  --api-port N            API host port
   --data-dir PATH         Persistent data directory
-  --domain FQDN           Public hostname (enables Caddy TLS prompts)
-  --tls yes|no            Issue TLS via Caddy (prod compose)
-  --pull-models yes|no    Pull LightOnOCR-2 + deepseek-r1:8b after install
-  --start yes|no          Start stack after install
-  --systemd yes|no        Install user systemd unit (docker compose up)
-  --yes, -y               Accept defaults / non-interactive where possible
-  --skip-clone            Use current directory as install root
-  -h, --help              Show this help
+  --domain FQDN           Public hostname
+  --tls yes|no            HTTPS via Caddy
+  --pull-models yes|no    Pull OCR + reasoning models
+  --start yes|no          Start/restart stack after install/update
+  --systemd yes|no        User systemd unit
+  --yes, -y               Non-interactive defaults
+  --skip-clone            Use current directory
+  -h, --help              Show help
 EOF
 }
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --dir) INSTALL_DIR="${2:-}"; shift 2 ;;
+    --update) FORCE_MODE="update"; shift ;;
+    --install) FORCE_MODE="install"; shift ;;
     --ollama) OLLAMA_MODE="${2:-}"; shift 2 ;;
     --ollama-host) OLLAMA_HOST="${2:-}"; shift 2 ;;
     --tier) LICENSE_TIER="${2:-}"; shift 2 ;;
@@ -101,7 +108,6 @@ while [[ $# -gt 0 ]]; do
 done
 
 ask() {
-  # ask "Prompt" "default"
   local prompt="$1" default="${2:-}" reply
   if [[ $ASSUME_YES -eq 1 && -n "$default" ]]; then
     printf '%s\n' "$default"
@@ -113,17 +119,11 @@ ask() {
     printf '%s: ' "$prompt" >&2
   fi
   IFS= read -r reply <&3 || true
-  if [[ -z "$reply" ]]; then
-    printf '%s\n' "$default"
-  else
-    printf '%s\n' "$reply"
-  fi
+  printf '%s\n' "${reply:-$default}"
 }
 
 ask_yn() {
-  # ask_yn "Prompt" "y|n"
-  local prompt="$1" default="${2:-y}" reply
-  local hint="y/n"
+  local prompt="$1" default="${2:-y}" reply hint="y/n"
   [[ "$default" == "y" ]] && hint="Y/n"
   [[ "$default" == "n" ]] && hint="y/N"
   if [[ $ASSUME_YES -eq 1 ]]; then
@@ -132,15 +132,10 @@ ask_yn() {
   printf '%s [%s]: ' "$prompt" "$hint" >&2
   IFS= read -r reply <&3 || true
   reply="${reply:-$default}"
-  case "${reply,,}" in
-    y|yes) return 0 ;;
-    *) return 1 ;;
-  esac
+  case "${reply,,}" in y|yes) return 0 ;; *) return 1 ;; esac
 }
 
-need_cmd() {
-  command -v "$1" >/dev/null 2>&1 || die "Missing required command: $1"
-}
+need_cmd() { command -v "$1" >/dev/null 2>&1 || die "Missing required command: $1"; }
 
 port_in_use() {
   local port="$1"
@@ -150,136 +145,171 @@ port_in_use() {
   if command -v lsof >/dev/null 2>&1; then
     lsof -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1 && return 0
   fi
-  if command -v netstat >/dev/null 2>&1; then
-    netstat -ltn 2>/dev/null | grep -Eq "[:.]$port[[:space:]]" && return 0
-  fi
-  # Fallback: try binding briefly via bash /dev/tcp (detection only)
-  if (echo >/dev/tcp/127.0.0.1/"$port") >/dev/null 2>&1; then
-    return 0
-  fi
   return 1
 }
 
 http_ok() {
   local url="$1"
-  if command -v curl >/dev/null 2>&1; then
-    curl -fsS --max-time 2 "$url" >/dev/null 2>&1
-  elif command -v wget >/dev/null 2>&1; then
-    wget -q -T 2 -O /dev/null "$url" 2>/dev/null
-  else
-    return 1
-  fi
+  curl -fsS --max-time 2 "$url" >/dev/null 2>&1
 }
 
 detect_gpu() {
   if command -v nvidia-smi >/dev/null 2>&1 && nvidia-smi >/dev/null 2>&1; then
     nvidia-smi --query-gpu=name,memory.total --format=csv,noheader 2>/dev/null | head -n1
   elif [[ -e /dev/nvidia0 ]]; then
-    echo "NVIDIA device present (/dev/nvidia0)"
+    echo "NVIDIA device present"
   else
     echo ""
   fi
 }
 
-# --- Banner -----------------------------------------------------------------
 clear_banner() {
   cat <<EOF
 
-${BOLD}${CYN}PersonAI OS${RST} â€” Privacy-First Life Management Suite
-${DIM}Local-first Â· SQLite Â· Ollama Â· Docker${RST}
+${BOLD}${CYN}PersonAI OS${RST} — Privacy-First Life Management Suite
+${DIM}install · update · local-first · Docker · Ollama${RST}
 
 EOF
 }
 
-# --- Discovery --------------------------------------------------------------
+# --- Existing install detection ---------------------------------------------
+
+candidate_dirs() {
+  local -a dirs=()
+  [[ -n "${INSTALL_DIR}" ]] && dirs+=("$INSTALL_DIR")
+  dirs+=("$DEFAULT_DIR" "$HOME/personai-os" "$HOME/personai" "/opt/personai" "$(pwd)")
+  local d
+  for d in "${dirs[@]}"; do
+    [[ -n "$d" ]] && printf '%s\n' "$d"
+  done | awk '!seen[$0]++'
+}
+
+is_personai_root() {
+  local d="$1"
+  [[ -f "$d/docker-compose.yml" || -f "$d/docker-compose.prod.yml" ]] \
+    && [[ -f "$d/package.json" || -d "$d/apps/server" || -f "$d/$STATE_FILE_NAME" ]]
+}
+
+load_env_defaults() {
+  local env_file="$1"
+  [[ -f "$env_file" ]] || return 0
+  # shellcheck disable=SC1090
+  set -a
+  # Only import known keys (avoid eval surprises)
+  while IFS='=' read -r key val; do
+    [[ "$key" =~ ^[A-Z0-9_]+$ ]] || continue
+    val="${val%$'\r'}"
+    case "$key" in
+      DATA_DIR) DATA_DIR="${DATA_DIR:-$val}" ;;
+      PORT) API_PORT="${API_PORT:-$val}" ;;
+      OLLAMA_HOST) ;; # compose-internal; use public below
+      OLLAMA_PUBLIC_HOST) OLLAMA_HOST="${OLLAMA_HOST:-$val}" ;;
+      LICENSE_TIER) LICENSE_TIER="${LICENSE_TIER:-$val}" ;;
+      PERSONAI_WEB_PORT) APP_PORT="${APP_PORT:-$val}" ;;
+      PERSONAI_DOMAIN) DOMAIN="${DOMAIN:-$val}" ;;
+      PERSONAI_TLS) ENABLE_TLS="${ENABLE_TLS:-$val}" ;;
+      PERSONAI_OLLAMA_MODE) OLLAMA_MODE="${OLLAMA_MODE:-$val}" ;;
+    esac
+  done < <(grep -E '^[A-Z0-9_]+=' "$env_file" || true)
+  set +a
+}
+
+detect_install_state() {
+  local d found=""
+  while IFS= read -r d; do
+    if is_personai_root "$d"; then
+      found="$d"
+      break
+    fi
+  done < <(candidate_dirs)
+
+  # Also: running compose project named personai*
+  if [[ -z "$found" ]] && command -v docker >/dev/null 2>&1; then
+    local proj
+    proj="$(docker compose ls --format json 2>/dev/null | grep -oiE '"Name"\s*:\s*"[^"]*personai[^"]*"' | head -n1 || true)"
+    if [[ -n "$proj" ]]; then
+      warn "Found a Docker Compose project mentioning personai, but no install dir yet."
+    fi
+  fi
+
+  if [[ -n "$found" ]]; then
+    INSTALL_DIR="$found"
+    IS_UPDATE=1
+    load_env_defaults "$INSTALL_DIR/.env"
+    if [[ -f "$INSTALL_DIR/$STATE_FILE_NAME" ]]; then
+      # shellcheck disable=SC1090
+      source "$INSTALL_DIR/$STATE_FILE_NAME" 2>/dev/null || true
+    fi
+    if [[ -d "$INSTALL_DIR/.git" ]]; then
+      PREV_COMMIT="$(git -C "$INSTALL_DIR" rev-parse --short HEAD 2>/dev/null || true)"
+    fi
+    DATA_DIR="${DATA_DIR:-$INSTALL_DIR/data}"
+  fi
+
+  if [[ "$FORCE_MODE" == "install" ]]; then
+    IS_UPDATE=0
+  elif [[ "$FORCE_MODE" == "update" ]]; then
+    [[ $IS_UPDATE -eq 1 ]] || die "--update set but no PersonAI install found. Pass --dir PATH."
+    IS_UPDATE=1
+  fi
+}
+
+write_state_file() {
+  cat >"$INSTALL_DIR/$STATE_FILE_NAME" <<EOF
+# PersonAI install metadata — managed by install.sh
+PERSONAI_INSTALLED_AT="${PERSONAI_INSTALLED_AT:-$(date -Iseconds 2>/dev/null || date)}"
+PERSONAI_UPDATED_AT="$(date -Iseconds 2>/dev/null || date)"
+PERSONAI_COMMIT="$(git -C "$INSTALL_DIR" rev-parse HEAD 2>/dev/null || echo unknown)"
+PERSONAI_VERSION_TAG="$(git -C "$INSTALL_DIR" describe --tags --always 2>/dev/null || echo unknown)"
+PERSONAI_OLLAMA_MODE="${OLLAMA_MODE}"
+PERSONAI_BRANCH="${BRANCH}"
+EOF
+}
+
+# --- Ollama discovery -------------------------------------------------------
+
 declare -a FOUND_NATIVE=()
 declare -a FOUND_DOCKER=()
 declare -a FOUND_PORTS=()
 declare -a FOUND_HTTP=()
 
 discover_ollama() {
-  info "Scanning for existing Ollama / AI runtimesâ€¦"
-
-  # Processes (name heuristics)
+  info "Scanning for existing Ollama / AI runtimes…"
   if command -v ps >/dev/null 2>&1; then
     while IFS= read -r line; do
       FOUND_NATIVE+=("process: $line")
     done < <(ps -eo pid,comm,args 2>/dev/null | grep -Ei 'ollama|open-webui|llama\.cpp|lmstudio|localai|gpt4all' | grep -v grep || true)
   fi
-  if command -v pgrep >/dev/null 2>&1; then
-    if pgrep -af 'ollama' >/dev/null 2>&1; then
-      :
-    fi
-  fi
   if command -v ollama >/dev/null 2>&1; then
     FOUND_NATIVE+=("binary: $(command -v ollama) ($(ollama --version 2>/dev/null | head -n1 || echo present))")
   fi
-
-  # Docker containers / images
   if command -v docker >/dev/null 2>&1; then
     while IFS= read -r line; do
       [[ -n "$line" ]] && FOUND_DOCKER+=("container: $line")
     done < <(docker ps -a --format '{{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}' 2>/dev/null \
-      | grep -Ei 'ollama|open-webui|localai|text-generation|llama|vllm|openai-compatible' || true)
-
+      | grep -Ei 'ollama|open-webui|localai|text-generation|llama|vllm' || true)
     while IFS= read -r line; do
       [[ -n "$line" ]] && FOUND_DOCKER+=("image: $line")
     done < <(docker images --format '{{.Repository}}:{{.Tag}}' 2>/dev/null \
       | grep -Ei 'ollama|open-webui|localai|vllm' || true)
-
-    # Compose projects mentioning ollama
-    if docker compose ls 2>/dev/null | grep -Eiq 'ollama|personai|ai'; then
-      while IFS= read -r line; do
-        FOUND_DOCKER+=("compose: $line")
-      done < <(docker compose ls 2>/dev/null | grep -Ei 'ollama|personai|ai' || true)
-    fi
   fi
-
-  # Common ports
   local p
   for p in 11434 11435 8080 3001 5000 1234 8081; do
-    if port_in_use "$p"; then
-      FOUND_PORTS+=("$p")
-    fi
+    port_in_use "$p" && FOUND_PORTS+=("$p")
   done
-
-  # HTTP probes
   local url
-  for url in \
-    "http://127.0.0.1:11434/api/tags" \
-    "http://localhost:11434/api/tags" \
-    "http://127.0.0.1:11435/api/tags"; do
-    if http_ok "$url"; then
-      FOUND_HTTP+=("$url")
-    fi
+  for url in "http://127.0.0.1:11434/api/tags" "http://localhost:11434/api/tags" "http://127.0.0.1:11435/api/tags"; do
+    http_ok "$url" && FOUND_HTTP+=("$url")
   done
 }
 
 print_discovery() {
   local any=0
-  if ((${#FOUND_NATIVE[@]})); then
-    any=1
-    log "${BOLD}Native / process matches${RST}"
-    printf '  %s\n' "${FOUND_NATIVE[@]}"
-  fi
-  if ((${#FOUND_DOCKER[@]})); then
-    any=1
-    log "${BOLD}Docker matches${RST}"
-    printf '  %s\n' "${FOUND_DOCKER[@]}"
-  fi
-  if ((${#FOUND_PORTS[@]})); then
-    any=1
-    log "${BOLD}Listening ports of interest${RST}"
-    printf '  %s\n' "${FOUND_PORTS[@]}"
-  fi
-  if ((${#FOUND_HTTP[@]})); then
-    any=1
-    log "${BOLD}Live Ollama HTTP endpoints${RST}"
-    printf '  %s\n' "${FOUND_HTTP[@]}"
-  fi
-  if [[ $any -eq 0 ]]; then
-    warn "No Ollama-like runtime detected on this host."
-  fi
+  ((${#FOUND_NATIVE[@]})) && { any=1; log "${BOLD}Native / process matches${RST}"; printf '  %s\n' "${FOUND_NATIVE[@]}"; }
+  ((${#FOUND_DOCKER[@]})) && { any=1; log "${BOLD}Docker matches${RST}"; printf '  %s\n' "${FOUND_DOCKER[@]}"; }
+  ((${#FOUND_PORTS[@]})) && { any=1; log "${BOLD}Listening ports of interest${RST}"; printf '  %s\n' "${FOUND_PORTS[@]}"; }
+  ((${#FOUND_HTTP[@]})) && { any=1; log "${BOLD}Live Ollama HTTP endpoints${RST}"; printf '  %s\n' "${FOUND_HTTP[@]}"; }
+  [[ $any -eq 0 ]] && warn "No Ollama-like runtime detected on this host."
   log ""
 }
 
@@ -293,20 +323,26 @@ choose_ollama() {
     return
   fi
 
+  # On update, keep previous mode unless user wants to change
+  if [[ $IS_UPDATE -eq 1 && -n "${PERSONAI_OLLAMA_MODE:-}" ]]; then
+    if ask_yn "Keep current Ollama mode (${PERSONAI_OLLAMA_MODE})?" "y"; then
+      OLLAMA_MODE="$PERSONAI_OLLAMA_MODE"
+      return
+    fi
+  fi
+
   log "${BOLD}Ollama setup${RST}"
-  log "  1) Use existing Ollama instance (native binary / host service)"
-  log "  2) Use existing Ollama instance (Docker container)"
-  log "  3) Start a new Ollama instance via Docker (recommended if none found)"
-  log "  4) Skip AI for now (Core tier features only)"
+  log "  1) Use existing Ollama instance (native)"
+  log "  2) Use existing Ollama instance (Docker)"
+  log "  3) Start a new Ollama instance via Docker"
+  log "  4) Skip AI for now (Core tier)"
   log ""
 
   local default="3"
   if ((${#FOUND_HTTP[@]})); then
     if ((${#FOUND_DOCKER[@]})); then default="2"; else default="1"; fi
-  elif ((${#FOUND_DOCKER[@]})); then
-    default="2"
-  elif ((${#FOUND_NATIVE[@]})); then
-    default="1"
+  elif ((${#FOUND_DOCKER[@]})); then default="2"
+  elif ((${#FOUND_NATIVE[@]})); then default="1"
   fi
 
   local choice
@@ -321,22 +357,18 @@ choose_ollama() {
 
   if [[ "$OLLAMA_MODE" == "existing-native" || "$OLLAMA_MODE" == "existing-docker" ]]; then
     local suggested="http://127.0.0.1:11434"
-    if ((${#FOUND_HTTP[@]})); then
-      suggested="${FOUND_HTTP[0]%'/api/tags'}"
-    fi
+    ((${#FOUND_HTTP[@]})) && suggested="${FOUND_HTTP[0]%'/api/tags'}"
     OLLAMA_HOST="$(ask "Ollama base URL" "$suggested")"
-    if ! http_ok "${OLLAMA_HOST%/}/api/tags"; then
-      warn "Could not reach ${OLLAMA_HOST%/}/api/tags â€” continuing anyway (you can fix .env later)."
-    else
+    if http_ok "${OLLAMA_HOST%/}/api/tags"; then
       ok "Reached Ollama at $OLLAMA_HOST"
+    else
+      warn "Could not reach ${OLLAMA_HOST%/}/api/tags — continuing anyway."
     fi
   elif [[ "$OLLAMA_MODE" == "new-docker" ]]; then
     OLLAMA_HOST="http://127.0.0.1:11434"
-    if port_in_use 11434; then
+    if port_in_use 11434 && [[ $IS_UPDATE -eq 0 ]]; then
       warn "Port 11434 is already in use."
-      if ask_yn "Still create a new Docker Ollama (may conflict)?" "n"; then
-        :
-      else
+      if ! ask_yn "Still create a new Docker Ollama (may conflict)?" "n"; then
         OLLAMA_MODE="existing-docker"
         OLLAMA_HOST="$(ask "Ollama base URL" "http://127.0.0.1:11434")"
       fi
@@ -345,11 +377,19 @@ choose_ollama() {
 }
 
 choose_paths_and_ports() {
+  if [[ $IS_UPDATE -eq 1 ]]; then
+    ok "Existing install detected at $INSTALL_DIR (commit ${PREV_COMMIT:-unknown})"
+    DATA_DIR="${DATA_DIR:-$INSTALL_DIR/data}"
+    info "Preserving data dir: $DATA_DIR"
+    info "Preserving .env values where possible (ports/tier/domain)."
+    return
+  fi
+
   INSTALL_DIR="${INSTALL_DIR:-$(ask "Install directory" "$DEFAULT_DIR")}"
   DATA_DIR="${DATA_DIR:-$(ask "Data directory (SQLite, uploads, exports)" "$INSTALL_DIR/data")}"
 
   log ""
-  info "Checking application portsâ€¦"
+  info "Checking application ports…"
   if port_in_use "$API_PORT"; then
     warn "API port $API_PORT is in use."
     API_PORT="$(ask "Choose API port" "4001")"
@@ -358,7 +398,6 @@ choose_paths_and_ports() {
     warn "Web port $APP_PORT is in use."
     APP_PORT="$(ask "Choose web port" "3001")"
   fi
-
   API_PORT="$(ask "API listen port" "$API_PORT")"
   APP_PORT="$(ask "Web listen port" "$APP_PORT")"
 }
@@ -366,22 +405,35 @@ choose_paths_and_ports() {
 choose_product_options() {
   log ""
   log "${BOLD}Product options${RST}"
-  local tier_default="$LICENSE_TIER"
-  LICENSE_TIER="$(ask "License tier (core|pro)" "$tier_default")"
-  case "$LICENSE_TIER" in
-    core|pro) ;;
-    *) warn "Unknown tier '$LICENSE_TIER' â€” using pro"; LICENSE_TIER="pro" ;;
-  esac
+
+  if [[ $IS_UPDATE -eq 1 ]]; then
+    # Minimal prompts on update
+    if [[ "$PULL_MODELS" == "ask" ]]; then
+      if ask_yn "Pull/refresh AI models after update?" "n"; then
+        PULL_MODELS="yes"
+      else
+        PULL_MODELS="no"
+      fi
+    fi
+    if [[ "$START_NOW" == "ask" ]]; then
+      if ask_yn "Rebuild and restart stack after update?" "y"; then
+        START_NOW="yes"
+      else
+        START_NOW="no"
+      fi
+    fi
+    CREATE_SYSTEMD="no"
+    [[ "$ENABLE_TLS" == "ask" ]] && ENABLE_TLS="no"
+    return
+  fi
+
+  LICENSE_TIER="$(ask "License tier (core|pro)" "$LICENSE_TIER")"
+  case "$LICENSE_TIER" in core|pro) ;; *) LICENSE_TIER="pro" ;; esac
 
   DOMAIN="${DOMAIN:-$(ask "Public domain for reverse proxy (blank = localhost only)" "")}"
-
   if [[ -n "$DOMAIN" ]]; then
     if [[ "$ENABLE_TLS" == "ask" ]]; then
-      if ask_yn "Enable HTTPS via Caddy (Let's Encrypt) for $DOMAIN?" "y"; then
-        ENABLE_TLS="yes"
-      else
-        ENABLE_TLS="no"
-      fi
+      if ask_yn "Enable HTTPS via Caddy for $DOMAIN?" "y"; then ENABLE_TLS="yes"; else ENABLE_TLS="no"; fi
     fi
   else
     ENABLE_TLS="no"
@@ -390,7 +442,7 @@ choose_product_options() {
   if [[ "$PULL_MODELS" == "ask" ]]; then
     if [[ "$OLLAMA_MODE" == "skip" ]]; then
       PULL_MODELS="no"
-    elif ask_yn "Pull AI models now (LightOnOCR-2 + deepseek-r1:8b, large download)?" "y"; then
+    elif ask_yn "Pull AI models now (LightOnOCR-2 + deepseek-r1:8b)?" "y"; then
       PULL_MODELS="yes"
     else
       PULL_MODELS="no"
@@ -398,11 +450,7 @@ choose_product_options() {
   fi
 
   if [[ "$START_NOW" == "ask" ]]; then
-    if ask_yn "Start PersonAI stack after install?" "y"; then
-      START_NOW="yes"
-    else
-      START_NOW="no"
-    fi
+    if ask_yn "Start PersonAI stack after install?" "y"; then START_NOW="yes"; else START_NOW="no"; fi
   fi
 
   if [[ "$CREATE_SYSTEMD" == "ask" ]]; then
@@ -421,36 +469,39 @@ choose_product_options() {
 ensure_prereqs() {
   need_cmd curl
   need_cmd git
-
   if ! command -v docker >/dev/null 2>&1; then
     warn "Docker not found."
     if ask_yn "Install Docker via get.docker.com now?" "y"; then
       curl -fsSL https://get.docker.com | sh
       if [[ "$(id -u)" -ne 0 ]]; then
-        if ask_yn "Add $USER to docker group (requires re-login)?" "y"; then
-          sudo usermod -aG docker "$USER" || warn "Could not add user to docker group."
-        fi
+        ask_yn "Add $USER to docker group (requires re-login)?" "y" && sudo usermod -aG docker "$USER" || true
       fi
     else
       die "Docker is required for the recommended install path."
     fi
   fi
-
-  if ! docker compose version >/dev/null 2>&1; then
-    die "Docker Compose plugin required (docker compose)."
-  fi
-
+  docker compose version >/dev/null 2>&1 || die "Docker Compose plugin required (docker compose)."
   local gpu
   gpu="$(detect_gpu)"
   if [[ -n "$gpu" ]]; then
     ok "GPU detected: $gpu"
-    info "Compose will attempt NVIDIA GPU passthrough when available."
   else
-    warn "No NVIDIA GPU detected â€” Ollama will run on CPU (slower)."
+    warn "No NVIDIA GPU detected — Ollama will run on CPU (slower)."
   fi
 }
 
-clone_or_update() {
+backup_config() {
+  local stamp
+  stamp="$(date +%Y%m%d-%H%M%S)"
+  local bak="$INSTALL_DIR/.personai-backups/$stamp"
+  mkdir -p "$bak"
+  for f in .env docker-compose.override.yml Caddyfile "$STATE_FILE_NAME"; do
+    [[ -f "$INSTALL_DIR/$f" ]] && cp -a "$INSTALL_DIR/$f" "$bak/"
+  done
+  ok "Config backup → $bak"
+}
+
+clone_or_update_repo() {
   if [[ $SKIP_CLONE -eq 1 ]]; then
     INSTALL_DIR="$(pwd)"
     ok "Using current directory: $INSTALL_DIR"
@@ -459,13 +510,39 @@ clone_or_update() {
 
   mkdir -p "$(dirname "$INSTALL_DIR")"
   if [[ -d "$INSTALL_DIR/.git" ]]; then
-    info "Updating existing clone at $INSTALL_DIR"
-    git -C "$INSTALL_DIR" fetch --depth 1 origin "$BRANCH"
-    git -C "$INSTALL_DIR" checkout "$BRANCH"
-    git -C "$INSTALL_DIR" pull --ff-only origin "$BRANCH" || true
+    info "Fetching latest from origin/$BRANCH…"
+    git -C "$INSTALL_DIR" remote set-url origin "$REPO_URL" 2>/dev/null || true
+    git -C "$INSTALL_DIR" fetch --tags --force origin "$BRANCH"
+
+    local local_sha remote_sha
+    local_sha="$(git -C "$INSTALL_DIR" rev-parse HEAD)"
+    remote_sha="$(git -C "$INSTALL_DIR" rev-parse "FETCH_HEAD")"
+    PREV_COMMIT="$(git -C "$INSTALL_DIR" rev-parse --short HEAD)"
+
+    if [[ "$local_sha" == "$remote_sha" ]]; then
+      ok "Already up to date ($PREV_COMMIT)."
+      NEW_COMMIT="$PREV_COMMIT"
+    else
+      info "Updating $PREV_COMMIT → $(git -C "$INSTALL_DIR" rev-parse --short FETCH_HEAD)"
+      # Preserve local override files; reset tracked tree to origin
+      git -C "$INSTALL_DIR" checkout "$BRANCH" 2>/dev/null || git -C "$INSTALL_DIR" checkout -B "$BRANCH" "origin/$BRANCH"
+      if ! git -C "$INSTALL_DIR" merge --ff-only "origin/$BRANCH" 2>/dev/null; then
+        warn "Fast-forward failed — resetting tracked files to origin/$BRANCH (data/ and .env kept)."
+        git -C "$INSTALL_DIR" reset --hard "origin/$BRANCH"
+      fi
+      NEW_COMMIT="$(git -C "$INSTALL_DIR" rev-parse --short HEAD)"
+      ok "Code updated to $NEW_COMMIT"
+      # Show brief changelog
+      if [[ -n "$PREV_COMMIT" && "$PREV_COMMIT" != "$NEW_COMMIT" ]]; then
+        log "${BOLD}Changes since last install${RST}"
+        git -C "$INSTALL_DIR" log --oneline "${PREV_COMMIT}..${NEW_COMMIT}" 2>/dev/null | head -n 20 || true
+        log ""
+      fi
+    fi
   else
-    info "Cloning $REPO_URL â†’ $INSTALL_DIR"
+    info "Cloning $REPO_URL → $INSTALL_DIR"
     git clone --depth 1 --branch "$BRANCH" "$REPO_URL" "$INSTALL_DIR"
+    NEW_COMMIT="$(git -C "$INSTALL_DIR" rev-parse --short HEAD)"
   fi
 }
 
@@ -473,21 +550,43 @@ write_env() {
   mkdir -p "$DATA_DIR"
   local env_file="$INSTALL_DIR/.env"
   local public_api="http://localhost:${API_PORT}"
-  local public_web="http://localhost:${APP_PORT}"
-  if [[ -n "$DOMAIN" ]]; then
-    if [[ "$ENABLE_TLS" == "yes" ]]; then
-      public_api="https://api.${DOMAIN}"
-      public_web="https://${DOMAIN}"
-    else
-      public_api="http://api.${DOMAIN}"
-      public_web="http://${DOMAIN}"
-    fi
+  if [[ -n "$DOMAIN" && "$ENABLE_TLS" == "yes" ]]; then
+    public_api="https://api.${DOMAIN}"
+  elif [[ -n "$DOMAIN" ]]; then
+    public_api="http://api.${DOMAIN}"
   fi
 
-  # When Ollama runs in the same compose stack, containers talk via service name.
   local compose_ollama_host="$OLLAMA_HOST"
-  if [[ "$OLLAMA_MODE" == "new-docker" ]]; then
-    compose_ollama_host="http://ollama:11434"
+  [[ "$OLLAMA_MODE" == "new-docker" ]] && compose_ollama_host="http://ollama:11434"
+
+  # On update: merge into existing .env instead of clobbering unknown keys
+  if [[ $IS_UPDATE -eq 1 && -f "$env_file" ]]; then
+    local tmp
+    tmp="$(mktemp)"
+    cp "$env_file" "$tmp"
+    set_kv() {
+      local k="$1" v="$2"
+      if grep -qE "^${k}=" "$tmp"; then
+        # portable-ish in-place replace
+        awk -v k="$k" -v v="$v" 'BEGIN{FS=OFS="="} $1==k{$0=k"="v} {print}' "$tmp" >"${tmp}.new"
+        mv "${tmp}.new" "$tmp"
+      else
+        printf '%s=%s\n' "$k" "$v" >>"$tmp"
+      fi
+    }
+    set_kv DATA_DIR "$DATA_DIR"
+    set_kv PORT "$API_PORT"
+    set_kv OLLAMA_HOST "$compose_ollama_host"
+    set_kv OLLAMA_PUBLIC_HOST "$OLLAMA_HOST"
+    set_kv LICENSE_TIER "$LICENSE_TIER"
+    set_kv NEXT_PUBLIC_API_URL "$public_api"
+    set_kv PERSONAI_WEB_PORT "$APP_PORT"
+    set_kv PERSONAI_DOMAIN "$DOMAIN"
+    set_kv PERSONAI_TLS "$ENABLE_TLS"
+    set_kv PERSONAI_OLLAMA_MODE "$OLLAMA_MODE"
+    mv "$tmp" "$env_file"
+    ok "Merged settings into existing .env (data preserved)"
+    return
   fi
 
   cat >"$env_file" <<EOF
@@ -503,6 +602,7 @@ LICENSE_TIER=${LICENSE_TIER}
 PERSONAI_WEB_PORT=${APP_PORT}
 PERSONAI_DOMAIN=${DOMAIN}
 PERSONAI_TLS=${ENABLE_TLS}
+PERSONAI_OLLAMA_MODE=${OLLAMA_MODE}
 DATABASE_URL=file:${DATA_DIR}/profiles/bootstrap/personai.db
 EOF
   ok "Wrote $env_file"
@@ -542,7 +642,6 @@ write_compose_override() {
   if [[ "$OLLAMA_MODE" == "new-docker" ]]; then
     ollama_env_host="http://ollama:11434"
   elif [[ "$OLLAMA_HOST" == *"127.0.0.1"* || "$OLLAMA_HOST" == *"localhost"* ]]; then
-    # Containers reach host Ollama via Docker's host gateway
     ollama_env_host="http://host.docker.internal:11434"
   else
     ollama_env_host="$OLLAMA_HOST"
@@ -555,19 +654,15 @@ write_compose_override() {
     web_api_url="http://api.${DOMAIN}"
   fi
 
-  cat >"$override" <<YAML
-# Generated by PersonAI install.sh â€” local port / Ollama wiring
-services:
-YAML
-
-  if [[ "$OLLAMA_MODE" == "new-docker" ]]; then
-    cat >>"$override" <<YAML
-  ollama:
-    ports:
-      - "11434:11434"
-YAML
-    if [[ -n "$(detect_gpu)" ]]; then
-      cat >>"$override" <<'YAML'
+  {
+    echo "# Generated by PersonAI install.sh — local port / Ollama wiring"
+    echo "services:"
+    if [[ "$OLLAMA_MODE" == "new-docker" ]]; then
+      echo "  ollama:"
+      echo "    ports:"
+      echo "      - \"11434:11434\""
+      if [[ -n "$(detect_gpu)" ]]; then
+        cat <<'YAML'
     deploy:
       resources:
         reservations:
@@ -576,15 +671,14 @@ YAML
               count: 1
               capabilities: [gpu]
 YAML
-    fi
-  else
-    cat >>"$override" <<'YAML'
+      fi
+    else
+      cat <<'YAML'
   ollama:
     profiles: ["bundled-ollama-disabled"]
 YAML
-  fi
-
-  cat >>"$override" <<YAML
+    fi
+    cat <<YAML
   api:
     ports:
       - "${API_PORT}:4000"
@@ -603,45 +697,50 @@ YAML
       args:
         NEXT_PUBLIC_API_URL: ${web_api_url}
 YAML
-
+  } >"$override"
   ok "Wrote docker-compose.override.yml"
+}
+
+compose_files() {
+  local files=()
+  if [[ -n "$DOMAIN" && -f "$INSTALL_DIR/docker-compose.prod.yml" ]]; then
+    files+=(-f docker-compose.prod.yml)
+  else
+    files+=(-f docker-compose.yml)
+  fi
+  [[ -f "$INSTALL_DIR/docker-compose.override.yml" ]] && files+=(-f docker-compose.override.yml)
+  printf '%s\n' "${files[@]}"
 }
 
 start_stack() {
   cd "$INSTALL_DIR"
-  local files=(-f docker-compose.yml)
-  if [[ -n "$DOMAIN" ]]; then
-    files=(-f docker-compose.prod.yml)
-  fi
-  if [[ -f docker-compose.override.yml ]]; then
-    files+=(-f docker-compose.override.yml)
-  fi
-
-  info "Building and starting containersâ€¦"
+  local -a files=()
+  while IFS= read -r line; do files+=("$line"); done < <(compose_files)
+  info "Building and starting containers…"
   docker compose "${files[@]}" up -d --build
   ok "Stack started"
 }
 
 pull_models() {
   [[ "$PULL_MODELS" != "yes" ]] && return
-  info "Pulling models (this can take a while)â€¦"
+  info "Pulling models (this can take a while)…"
+  cd "$INSTALL_DIR"
   if [[ "$OLLAMA_MODE" == "new-docker" ]]; then
-    docker compose -f docker-compose.yml -f docker-compose.override.yml exec -T ollama ollama pull maternion/LightOnOCR-2 || \
-      docker compose exec -T ollama ollama pull maternion/LightOnOCR-2 || true
-    docker compose -f docker-compose.yml -f docker-compose.override.yml exec -T ollama ollama pull deepseek-r1:8b || \
-      docker compose exec -T ollama ollama pull deepseek-r1:8b || true
+    local -a files=()
+    while IFS= read -r line; do files+=("$line"); done < <(compose_files)
+    docker compose "${files[@]}" exec -T ollama ollama pull maternion/LightOnOCR-2 || true
+    docker compose "${files[@]}" exec -T ollama ollama pull deepseek-r1:8b || true
   elif command -v ollama >/dev/null 2>&1; then
     ollama pull maternion/LightOnOCR-2 || true
     ollama pull deepseek-r1:8b || true
   else
-    # Hit Docker container by name heuristic
     local cid
     cid="$(docker ps --format '{{.ID}} {{.Names}}' | grep -Ei 'ollama' | awk '{print $1}' | head -n1 || true)"
     if [[ -n "$cid" ]]; then
       docker exec -i "$cid" ollama pull maternion/LightOnOCR-2 || true
       docker exec -i "$cid" ollama pull deepseek-r1:8b || true
     else
-      warn "No ollama CLI/container found to pull models â€” run scripts/pull-models.sh later."
+      warn "No ollama CLI/container found to pull models."
     fi
   fi
   ok "Model pull attempted"
@@ -651,8 +750,7 @@ install_systemd_user() {
   [[ "$CREATE_SYSTEMD" != "yes" ]] && return
   local unit_dir="$HOME/.config/systemd/user"
   mkdir -p "$unit_dir"
-  local unit="$unit_dir/personai.service"
-  cat >"$unit" <<EOF
+  cat >"$unit_dir/personai.service" <<EOF
 [Unit]
 Description=PersonAI OS (Docker Compose)
 After=network-online.target docker.service
@@ -672,42 +770,77 @@ EOF
   systemctl --user daemon-reload
   systemctl --user enable --now personai.service
   ok "Enabled systemd user unit: personai.service"
-  info "Linger tip: sudo loginctl enable-linger $USER  # keep running after logout"
+  info "Linger tip: sudo loginctl enable-linger $USER"
 }
 
 print_summary() {
   local web_url="http://localhost:${APP_PORT}"
   local api_url="http://localhost:${API_PORT}"
   if [[ -n "$DOMAIN" && "$ENABLE_TLS" == "yes" ]]; then
-    web_url="https://${DOMAIN}"
-    api_url="https://api.${DOMAIN}"
+    web_url="https://${DOMAIN}"; api_url="https://api.${DOMAIN}"
   elif [[ -n "$DOMAIN" ]]; then
-    web_url="http://${DOMAIN}"
-    api_url="http://api.${DOMAIN}"
+    web_url="http://${DOMAIN}"; api_url="http://api.${DOMAIN}"
   fi
+
+  local action="install"
+  [[ $IS_UPDATE -eq 1 ]] && action="update"
 
   cat <<EOF
 
-${BOLD}${GRN}PersonAI OS install complete${RST}
+${BOLD}${GRN}PersonAI OS ${action} complete${RST}
 
   Install dir : ${INSTALL_DIR}
-  Data dir    : ${DATA_DIR}
+  Data dir    : ${DATA_DIR}  ${DIM}(never wiped by installer)${RST}
+  Commit      : ${NEW_COMMIT:-$(git -C "$INSTALL_DIR" rev-parse --short HEAD 2>/dev/null || echo n/a)}
   Web UI      : ${web_url}
   API         : ${api_url}/health
-  Ollama      : ${OLLAMA_MODE} â†’ ${OLLAMA_HOST}
+  Ollama      : ${OLLAMA_MODE} → ${OLLAMA_HOST}
   Tier        : ${LICENSE_TIER}
 
-Useful commands:
-  cd ${INSTALL_DIR}
-  docker compose -f docker-compose.yml -f docker-compose.override.yml ps
-  docker compose -f docker-compose.yml -f docker-compose.override.yml logs -f api
-  ./scripts/pull-models.sh
+Update anytime with the same command:
+  curl -fsSL https://raw.githubusercontent.com/danielrlutz/personai/main/install.sh | bash
 
 EOF
 }
 
-main() {
-  clear_banner
+run_update() {
+  log "${BOLD}${CYN}Update mode${RST} — existing PersonAI install found"
+  log "  ${INSTALL_DIR}"
+  log ""
+
+  ensure_prereqs
+  # Light discovery only if ollama mode unknown
+  if [[ -z "$OLLAMA_MODE" ]]; then
+    discover_ollama
+    print_discovery
+  fi
+  choose_ollama
+  choose_paths_and_ports
+  choose_product_options
+
+  if ! ask_yn "Proceed with update? (code refresh + optional rebuild; data kept)" "y"; then
+    die "Aborted."
+  fi
+
+  backup_config
+  clone_or_update_repo
+  write_env
+  write_caddy_if_needed
+  write_compose_override
+  write_state_file
+
+  if [[ "$START_NOW" == "yes" ]]; then
+    start_stack
+    pull_models
+  else
+    info "Skipping restart. Run compose up --build when ready."
+  fi
+  print_summary
+}
+
+run_install() {
+  log "${BOLD}${CYN}Fresh install mode${RST}"
+  log ""
   ensure_prereqs
   discover_ollama
   print_discovery
@@ -722,26 +855,37 @@ main() {
   log "  ollama=$OLLAMA_MODE ($OLLAMA_HOST)"
   log "  ports web=$APP_PORT api=$API_PORT"
   log "  tier=$LICENSE_TIER domain=${DOMAIN:-none} tls=$ENABLE_TLS"
-  log "  pull_models=$PULL_MODELS start=$START_NOW systemd=$CREATE_SYSTEMD"
   log ""
   if ! ask_yn "Proceed with installation?" "y"; then
     die "Aborted by user."
   fi
 
-  clone_or_update
+  clone_or_update_repo
   write_env
   write_caddy_if_needed
   write_compose_override
+  write_state_file
 
   if [[ "$START_NOW" == "yes" ]]; then
     start_stack
     pull_models
   else
-    info "Skipping start. Later: cd $INSTALL_DIR && docker compose -f docker-compose.yml -f docker-compose.override.yml up -d --build"
+    info "Skipping start. Later: cd $INSTALL_DIR && docker compose up -d --build"
   fi
 
   install_systemd_user
   print_summary
+}
+
+main() {
+  clear_banner
+  detect_install_state
+
+  if [[ $IS_UPDATE -eq 1 ]]; then
+    run_update
+  else
+    run_install
+  fi
 }
 
 main "$@"
