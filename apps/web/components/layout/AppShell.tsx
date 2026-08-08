@@ -11,12 +11,12 @@ import { logoutToProfiles, requireProfile } from "@/lib/session";
 import { cn } from "@/lib/utils";
 
 const commandItems = [
-  { label: "Dashboard", href: "/dashboard", keys: "G D" },
-  { label: "Life / Personal", href: "/life", keys: "G E" },
-  { label: "Ingest documents", href: "/ingest", keys: "G I" },
+  { label: "Home", href: "/dashboard", keys: "G D" },
+  { label: "Pocket team", href: "/team", keys: "G T" },
+  { label: "Archive documents", href: "/ingest", keys: "G A" },
   { label: "Finance overview", href: "/finance", keys: "G F" },
-  { label: "Transactions", href: "/finance/transactions", keys: "G T" },
-  { label: "Advisor chat", href: "/finance/advisor", keys: "G A" },
+  { label: "Transactions", href: "/finance/transactions", keys: "G X" },
+  { label: "CFO mode", href: "/team?specialist=cfo", keys: "G C" },
   { label: "Legal tasks", href: "/legal", keys: "G L" },
   { label: "Medical log", href: "/medical", keys: "G M" },
   { label: "Settings", href: "/settings", keys: "G S" },
@@ -101,37 +101,37 @@ export function AppShell({ children }: AppShellProps) {
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background pt-[env(safe-area-inset-top)]">
+    <div className="flex h-dvh max-h-dvh overflow-hidden bg-background pt-[env(safe-area-inset-top)]">
       <div className="hidden h-full shrink-0 md:block">
         <Sidebar collapsed={collapsed} onToggle={() => setCollapsed((v) => !v)} />
       </div>
 
-      <div className="flex flex-1 flex-col overflow-hidden">
-        <header className="surface-panel flex h-[var(--header-height)] shrink-0 items-center justify-between border-b px-4 sm:px-6">
-          <div className="flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-primary-foreground md:hidden">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        <header className="surface-panel flex h-[var(--header-height)] shrink-0 items-center justify-between gap-3 border-b px-4 sm:px-6">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground md:hidden">
               <span className="text-sm font-medium">P</span>
             </div>
             <button
               type="button"
               onClick={() => setPaletteOpen(true)}
-              className="flex h-10 items-center gap-2 rounded-full border border-border bg-surface-container px-4 text-sm text-muted-foreground transition-colors duration-md ease-md hover:bg-surface-container-high hover:text-foreground"
+              className="flex h-10 min-w-0 max-w-full items-center gap-2 rounded-full border border-border bg-surface-container px-3 text-sm text-muted-foreground transition-colors duration-md ease-md hover:bg-surface-container-high hover:text-foreground sm:px-4"
             >
-              <Search className="h-4 w-4" />
-              <span className="hidden sm:inline">Search</span>
-              <kbd className="ml-2 hidden rounded border border-border bg-background px-1.5 py-0.5 text-[10px] text-muted-foreground sm:inline">
+              <Search className="h-4 w-4 shrink-0" />
+              <span className="hidden truncate sm:inline">Search</span>
+              <kbd className="ml-1 hidden shrink-0 rounded border border-border bg-background px-1.5 py-0.5 text-[10px] text-muted-foreground sm:inline">
                 ⌘K
               </kbd>
             </button>
           </div>
-          <div className="w-40 sm:w-52">
+          <div className="w-36 shrink-0 sm:w-52">
             {gate === "allowed" ? <ProfileSwitcher /> : null}
           </div>
         </header>
 
         <main
           className={cn(
-            "flex-1 overflow-y-auto p-4 sm:p-6",
+            "min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6",
             "pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:pb-6",
           )}
         >
@@ -153,29 +153,29 @@ export function AppShell({ children }: AppShellProps) {
             className="fixed inset-0 z-50 bg-black/50"
             onClick={() => setPaletteOpen(false)}
           />
-          <div className="fixed left-1/2 top-[18%] z-50 w-full max-w-lg -translate-x-1/2 animate-in overflow-hidden rounded-xl border border-border bg-card shadow-elev-3">
+          <div className="fixed left-1/2 top-[max(1rem,12%)] z-50 w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 animate-in overflow-hidden rounded-xl border border-border bg-card shadow-elev-3">
             <div className="border-b border-border/80 p-3">
               <div className="flex items-center gap-2 rounded-md bg-surface-container px-3">
-                <Search className="h-4 w-4 text-muted-foreground" />
+                <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
                 <input
                   autoFocus
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   placeholder="Search commands..."
-                  className="h-11 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+                  className="h-11 min-w-0 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
                 />
               </div>
             </div>
-            <ul className="max-h-72 overflow-y-auto py-1">
+            <ul className="max-h-[min(18rem,50dvh)] overflow-y-auto py-1">
               {filtered.map((item) => (
                 <li key={item.href}>
                   <button
                     type="button"
                     onClick={() => navigate(item.href)}
-                    className="md-list-row w-full justify-between text-left text-sm hover:bg-surface-container-high"
+                    className="md-list-row w-full justify-between gap-3 text-left text-sm hover:bg-surface-container-high"
                   >
-                    <span>{item.label}</span>
-                    <span className="text-xs text-muted-foreground">{item.keys}</span>
+                    <span className="min-w-0 truncate">{item.label}</span>
+                    <span className="shrink-0 text-xs text-muted-foreground">{item.keys}</span>
                   </button>
                 </li>
               ))}

@@ -83,18 +83,18 @@ export default function ProfilesPage() {
                     onClick={() => void selectProfile(profile)}
                     className="md-list-row w-full justify-between text-left disabled:pointer-events-none disabled:opacity-60"
                   >
-                    <span className="flex items-center gap-3">
-                      <span className="flex h-10 w-10 items-center justify-center rounded-full bg-primary-container">
+                    <span className="flex min-w-0 items-center gap-3">
+                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary-container">
                         <User className="h-5 w-5 text-primary-on-container" />
                       </span>
-                      <span>
-                        <span className="block md-label-large">{profile.name}</span>
+                      <span className="min-w-0">
+                        <span className="block truncate md-label-large">{profile.name}</span>
                         <span className="block text-xs text-muted-foreground">
                           Created {new Date(profile.createdAt).toLocaleDateString("de-CH")}
                         </span>
                       </span>
                     </span>
-                    <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                    <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground" />
                   </button>
                 </li>
               ))}

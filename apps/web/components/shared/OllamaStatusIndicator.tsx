@@ -61,9 +61,11 @@ export function OllamaStatusIndicator({ className }: { className?: string }) {
   const title = titleParts.join(" · ");
 
   return (
-    <div className={cn("flex items-center gap-2 text-xs", className)} title={title}>
-      <Cpu className={cn("h-3.5 w-3.5", ok ? "text-primary" : "text-destructive")} />
-      <span className={ok ? "text-muted-foreground" : "text-destructive"}>{label}</span>
+    <div className={cn("flex min-w-0 items-center gap-2 text-xs", className)} title={title}>
+      <Cpu className={cn("h-3.5 w-3.5 shrink-0", ok ? "text-primary" : "text-destructive")} />
+      <span className={cn("min-w-0 truncate", ok ? "text-muted-foreground" : "text-destructive")}>
+        {label}
+      </span>
       {ok && hostShort ? (
         <span className="hidden max-w-[8rem] truncate font-mono text-[10px] text-muted-foreground sm:inline">
           {hostShort}
@@ -71,7 +73,7 @@ export function OllamaStatusIndicator({ className }: { className?: string }) {
       ) : null}
       <span
         className={cn(
-          "h-1.5 w-1.5 rounded-full",
+          "h-1.5 w-1.5 shrink-0 rounded-full",
           ok ? (locked ? "bg-warning" : "bg-success") : "bg-destructive",
         )}
       />

@@ -17,6 +17,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 
 function runtimeBadge(runtime?: OllamaHealth["runtime"]): string {
   switch (runtime) {
@@ -133,10 +134,10 @@ export default function SettingsPage() {
             ) : null}
           </div>
           {ollama?.host ? (
-            <p className="text-sm text-muted-foreground">
+            <p className="break-all text-sm text-muted-foreground">
               Active: <span className="font-mono text-foreground">{ollama.host}</span>
               {ollama.configuredHost && ollama.configuredHost !== ollama.host ? (
-                <span className="ml-2 text-xs">
+                <span className="ml-2 break-all text-xs">
                   (configured {ollama.configuredHost})
                 </span>
               ) : null}
@@ -145,10 +146,17 @@ export default function SettingsPage() {
           {ollama?.candidateStatus?.length ? (
             <ul className="space-y-1 text-xs text-muted-foreground">
               {ollama.candidateStatus.map((c) => (
-                <li key={c.host} className="flex items-center gap-2 font-mono">
+                <li key={c.host} className="flex min-w-0 items-center gap-2 font-mono">
                   <span className={c.up ? "text-success" : "text-destructive"}>{c.up ? "●" : "○"}</span>
-                  <span className={c.host === ollama.host ? "text-foreground" : undefined}>{c.host}</span>
-                  <span className="text-muted-foreground">({runtimeBadge(c.runtime)})</span>
+                  <span
+                    className={cn(
+                      "min-w-0 truncate",
+                      c.host === ollama.host ? "text-foreground" : undefined,
+                    )}
+                  >
+                    {c.host}
+                  </span>
+                  <span className="shrink-0 text-muted-foreground">({runtimeBadge(c.runtime)})</span>
                 </li>
               ))}
             </ul>
@@ -186,12 +194,12 @@ export default function SettingsPage() {
             Active Profile
           </CardTitle>
         </CardHeader>
-        <CardContent className="flex items-center justify-between">
-          <div>
-            <p className="font-medium">{profileName}</p>
-            <p className="text-xs text-muted-foreground font-mono">{getStoredProfileId()}</p>
+        <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <p className="truncate font-medium">{profileName}</p>
+            <p className="truncate font-mono text-xs text-muted-foreground">{getStoredProfileId()}</p>
           </div>
-          <Button variant="outline" onClick={() => logoutToProfiles()}>
+          <Button variant="outline" className="shrink-0" onClick={() => logoutToProfiles()}>
             Switch profile
           </Button>
         </CardContent>

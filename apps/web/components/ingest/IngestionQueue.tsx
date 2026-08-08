@@ -114,22 +114,29 @@ export function IngestionQueue({ refreshKey }: IngestionQueueProps) {
                 const config = statusConfig[job.status];
                 const Icon = config.icon;
                 return (
-                  <li key={job.id} className="md-list-row justify-between px-0 py-2.5">
+                  <li
+                    key={job.id}
+                    className="md-list-row flex-col items-stretch justify-between gap-2 px-0 py-2.5 sm:flex-row sm:items-center"
+                  >
                     <div className="flex min-w-0 items-center gap-3">
                       <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface-container-high">
                         <FileText className="h-4 w-4 text-muted-foreground" />
                       </div>
                       <div className="min-w-0">
-                        <p className="md-label-large truncate">{job.document.filename}</p>
+                        <p className="md-label-large truncate" title={job.document.filename}>
+                          {job.document.filename}
+                        </p>
                         <p className="text-xs text-muted-foreground">
                           {(job.document.fileSize / 1024).toFixed(1)} KB · {formatRelative(job.createdAt)}
                         </p>
                         {job.errorMessage && (
-                          <p className="mt-0.5 text-xs text-destructive">{job.errorMessage}</p>
+                          <p className="mt-0.5 break-words text-xs text-destructive">
+                            {job.errorMessage}
+                          </p>
                         )}
                       </div>
                     </div>
-                    <Badge variant={config.variant} className="shrink-0 gap-1">
+                    <Badge variant={config.variant} className="w-fit shrink-0 gap-1">
                       <Icon className={`h-3 w-3 ${job.status === "PROCESSING" ? "animate-spin" : ""}`} />
                       {config.label}
                     </Badge>

@@ -11,11 +11,14 @@
 
   html {
     @apply antialiased;
+    overflow-x: clip;
   }
 
   body {
     @apply bg-background text-foreground font-sans;
-    min-height: 100vh;
+    min-height: 100dvh;
+    max-width: 100%;
+    overflow-x: clip;
   }
 
   ::selection {

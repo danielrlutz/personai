@@ -40,6 +40,7 @@ export function QRBillList() {
   }, [load]);
 
   const markPaid = async (id: string) => {
+    // Creates a pending confirmation (ledger write) — resolve on Home/Archive ConfirmGate.
     await apiPatch(`/finance/qr-bills/${id}`, { status: "PAID" });
     await load();
   };
@@ -58,17 +59,20 @@ export function QRBillList() {
           <EmptyState
             icon={Receipt}
             title="No QR bills yet"
-            description="Nothing pending — upload a Swiss QR invoice under Ingest, or add one manually when available."
+            description="Nothing pending — upload a Swiss QR invoice under Archive, then confirm the ledger write."
             action={
               <Button variant="tonal" size="sm" asChild>
-                <Link href="/ingest">Go to Ingest</Link>
+                <Link href="/ingest">Go to Archive</Link>
               </Button>
             }
           />
         ) : (
           <ul>
             {bills.map((bill) => (
-              <li key={bill.id} className="md-list-row justify-between px-0">
+              <li
+                key={bill.id}
+                className="md-list-row flex-col items-stretch justify-between gap-2 px-0 sm:flex-row sm:items-center"
+              >
                 <div className="min-w-0">
                   <p className="md-label-large truncate">{bill.creditorName}</p>
                   <p className="text-xs text-muted-foreground">
@@ -81,12 +85,12 @@ export function QRBillList() {
                     </p>
                   )}
                 </div>
-                <div className="flex shrink-0 items-center gap-2">
+                <div className="flex shrink-0 flex-wrap items-center gap-2">
                   <Badge variant={statusVariant[bill.status]}>{bill.status}</Badge>
                   {bill.status === "PENDING" && (
                     <Button size="sm" variant="outline" onClick={() => void markPaid(bill.id)}>
                       <Check className="mr-1 h-3 w-3" />
-                      Paid
+                      Request paid
                     </Button>
                   )}
                 </div>

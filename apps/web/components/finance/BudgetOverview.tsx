@@ -131,10 +131,11 @@ export function BudgetOverview() {
               description="Category limits are empty templates until transactions are ingested or logged."
             />
           ) : (
-            <ResponsiveContainer width="100%" height={240}>
+            <div className="h-[240px] w-full min-w-0">
+            <ResponsiveContainer width="100%" height="100%">
               <BarChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-                <XAxis dataKey="name" tick={{ fill: "#bdc1c6", fontSize: 12 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fill: "#bdc1c6", fontSize: 12 }} axisLine={false} tickLine={false} />
+                <XAxis dataKey="name" tick={{ fill: "#bdc1c6", fontSize: 12 }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
+                <YAxis tick={{ fill: "#bdc1c6", fontSize: 12 }} axisLine={false} tickLine={false} width={48} />
                 <Tooltip
                   contentStyle={{
                     background: "#303134",
@@ -151,6 +152,7 @@ export function BudgetOverview() {
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
+            </div>
           )}
         </CardContent>
       </Card>

@@ -88,9 +88,11 @@ export function BriefingSnapshotCards({ snapshot }: BriefingSnapshotCardsProps) 
             </CardHeader>
             <CardContent className="space-y-1.5">
               {items.map((item) => (
-                <div key={item.label} className="flex items-center justify-between gap-2 text-sm">
-                  <span className="text-muted-foreground">{item.label}</span>
-                  <span className="text-right font-medium tabular-nums">{item.value}</span>
+                <div key={item.label} className="flex min-w-0 items-center justify-between gap-2 text-sm">
+                  <span className="shrink-0 text-muted-foreground">{item.label}</span>
+                  <span className="min-w-0 truncate text-right font-medium tabular-nums" title={item.value}>
+                    {item.value}
+                  </span>
                 </div>
               ))}
             </CardContent>

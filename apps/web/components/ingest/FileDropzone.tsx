@@ -50,7 +50,7 @@ export function FileDropzone({ onUploaded }: FileDropzoneProps) {
       onDragLeave={() => setDragging(false)}
       onDrop={onDrop}
       className={cn(
-        "surface-card relative flex flex-col items-center justify-center border-2 border-dashed p-12 transition-colors duration-md ease-md",
+        "surface-card relative flex flex-col items-center justify-center border-2 border-dashed p-6 text-center transition-colors duration-md ease-md sm:p-12",
         dragging ? "border-primary bg-primary-container/40" : "border-border hover:border-primary/50",
         uploading && "pointer-events-none opacity-60",
       )}

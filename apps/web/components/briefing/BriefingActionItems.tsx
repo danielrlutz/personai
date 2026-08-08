@@ -75,7 +75,7 @@ export function BriefingActionItems({ snapshot }: BriefingActionItemsProps) {
               )}
               <span className="truncate text-sm">{action.label}</span>
             </div>
-            <Button variant="ghost" size="sm" asChild>
+            <Button variant="ghost" size="sm" asChild className="shrink-0">
               <Link href={action.href}>
                 Go <ArrowRight className="ml-1 h-3 w-3" />
               </Link>

@@ -62,15 +62,15 @@ export function TransactionTable() {
             description="Transactions from ingested documents or manual entries appear here."
           />
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+          <div className="min-w-0 overflow-x-auto">
+            <table className="w-full min-w-[36rem] table-fixed text-sm">
               <thead>
                 <tr className="border-b border-border text-left text-muted-foreground">
-                  <th className="pb-3 font-medium">Date</th>
+                  <th className="w-28 pb-3 font-medium">Date</th>
                   <th className="pb-3 font-medium">Description</th>
-                  <th className="pb-3 font-medium">Category</th>
-                  <th className="pb-3 font-medium">Type</th>
-                  <th className="pb-3 text-right font-medium">Amount</th>
+                  <th className="w-32 pb-3 font-medium">Category</th>
+                  <th className="w-28 pb-3 font-medium">Type</th>
+                  <th className="w-28 pb-3 text-right font-medium">Amount</th>
                 </tr>
               </thead>
               <tbody>
@@ -78,22 +78,30 @@ export function TransactionTable() {
                   const Icon = typeIcons[tx.type];
                   return (
                     <tr key={tx.id} className="border-b border-border/50 last:border-0">
-                      <td className="py-3 text-muted-foreground">{formatDate(tx.date)}</td>
-                      <td className="py-3">{tx.description}</td>
+                      <td className="whitespace-nowrap py-3 text-muted-foreground">
+                        {formatDate(tx.date)}
+                      </td>
+                      <td className="max-w-0 truncate py-3" title={tx.description}>
+                        {tx.description}
+                      </td>
                       <td className="py-3">
                         {tx.category ? (
-                          <Badge variant="secondary">{tx.category.name}</Badge>
+                          <Badge variant="secondary" className="max-w-full truncate">
+                            {tx.category.name}
+                          </Badge>
                         ) : (
                           "—"
                         )}
                       </td>
                       <td className="py-3">
                         <span className={`inline-flex items-center gap-1 ${typeColors[tx.type]}`}>
-                          <Icon className="h-3.5 w-3.5" />
+                          <Icon className="h-3.5 w-3.5 shrink-0" />
                           {tx.type}
                         </span>
                       </td>
-                      <td className={`py-3 text-right font-medium ${typeColors[tx.type]}`}>
+                      <td
+                        className={`whitespace-nowrap py-3 text-right font-medium ${typeColors[tx.type]}`}
+                      >
                         {tx.type === "EXPENSE" ? "−" : tx.type === "INCOME" ? "+" : ""}
                         {formatCHF(tx.amount, tx.currency)}
                       </td>

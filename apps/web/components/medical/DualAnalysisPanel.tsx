@@ -68,7 +68,9 @@ export function DualAnalysisPanel() {
         <CardContent>
           {western ? (
             <>
-              <p className="whitespace-pre-wrap text-sm text-muted-foreground">{western.result}</p>
+              <p className="whitespace-pre-wrap break-words text-sm text-muted-foreground [overflow-wrap:anywhere]">
+                {western.result}
+              </p>
               <p className="mt-4 text-xs text-amber-400/80">{western.disclaimer}</p>
             </>
           ) : (
@@ -86,7 +88,9 @@ export function DualAnalysisPanel() {
         <CardContent>
           {eastern ? (
             <>
-              <p className="whitespace-pre-wrap text-sm text-muted-foreground">{eastern.result}</p>
+              <p className="whitespace-pre-wrap break-words text-sm text-muted-foreground [overflow-wrap:anywhere]">
+                {eastern.result}
+              </p>
               <p className="mt-4 text-xs text-amber-400/80">{eastern.disclaimer}</p>
             </>
           ) : (

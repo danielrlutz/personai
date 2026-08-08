@@ -2,14 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Upload, Wallet, Scale, HeartPulse } from "lucide-react";
+import { LayoutDashboard, Users, Upload, Wallet, HeartPulse } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const items = [
   { href: "/dashboard", label: "Home", icon: LayoutDashboard },
-  { href: "/ingest", label: "Ingest", icon: Upload },
+  { href: "/team", label: "Team", icon: Users },
+  { href: "/ingest", label: "Archive", icon: Upload },
   { href: "/finance", label: "Finance", icon: Wallet },
-  { href: "/legal", label: "Legal", icon: Scale },
   { href: "/medical", label: "Medical", icon: HeartPulse },
 ];
 
@@ -29,19 +29,19 @@ export function MobileNav() {
               <Link
                 href={href}
                 className={cn(
-                  "flex flex-col items-center gap-1 px-1 py-1.5 md-label-medium transition-colors duration-md ease-md",
+                  "flex min-w-0 flex-col items-center gap-1 px-0.5 py-1.5 md-label-medium transition-colors duration-md ease-md",
                   active ? "text-primary" : "text-muted-foreground",
                 )}
               >
                 <span
                   className={cn(
-                    "flex h-8 w-14 items-center justify-center rounded-full transition-colors duration-md ease-md",
+                    "flex h-8 w-12 items-center justify-center rounded-full transition-colors duration-md ease-md sm:w-14",
                     active && "bg-secondary",
                   )}
                 >
                   <Icon className="h-5 w-5" />
                 </span>
-                {label}
+                <span className="max-w-full truncate px-0.5">{label}</span>
               </Link>
             </li>
           );
