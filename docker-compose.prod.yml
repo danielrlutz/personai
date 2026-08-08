@@ -1,0 +1,62 @@
+services:
+  ollama:
+    image: ollama/ollama:latest
+    volumes:
+      - ollama_data:/root/.ollama
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    volumes:
+      - personai_data:/app/data
+    environment:
+      PORT: "4000"
+      DATA_DIR: /app/data
+      OLLAMA_HOST: http://ollama:11434
+      OLLAMA_VISION_MODEL: maternion/LightOnOCR-2
+      OLLAMA_REASONING_MODEL: deepseek-r1:8b
+      LICENSE_TIER: ${LICENSE_TIER:-pro}
+      NODE_ENV: production
+      DATABASE_URL: file:/app/data/profiles/bootstrap/personai.db
+    depends_on:
+      ollama:
+        condition: service_healthy
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://api.localhost}
+    restart: unless-stopped
+    depends_on:
+      - api
+
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - web
+      - api
+    restart: unless-stopped
+
+volumes:
+  ollama_data:
+  personai_data:
+  caddy_data:
+  caddy_config:

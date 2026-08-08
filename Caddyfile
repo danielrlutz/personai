@@ -1,0 +1,11 @@
+{
+  email admin@example.com
+}
+
+app.localhost {
+  reverse_proxy web:80
+}
+
+api.localhost {
+  reverse_proxy api:4000
+}

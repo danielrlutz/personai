@@ -1,0 +1,58 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { Cpu, Loader2 } from "lucide-react";
+import { apiGet, type OllamaHealth } from "@/lib/api-client";
+import { cn } from "@/lib/utils";
+
+export function OllamaStatusIndicator({ className }: { className?: string }) {
+  const [health, setHealth] = useState<OllamaHealth | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let mounted = true;
+    const poll = async () => {
+      try {
+        const data = await apiGet<OllamaHealth>("/ollama/health");
+        if (mounted) setHealth(data);
+      } catch {
+        if (mounted) setHealth({ ok: false });
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+    void poll();
+    const interval = setInterval(poll, 15000);
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+    };
+  }, []);
+
+  if (loading) {
+    return (
+      <div className={cn("flex items-center gap-2 text-xs text-muted-foreground", className)}>
+        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+        <span>Ollama</span>
+      </div>
+    );
+  }
+
+  const locked = Boolean(health?.vram?.holder);
+  const ok = health?.ok;
+
+  return (
+    <div className={cn("flex items-center gap-2 text-xs", className)}>
+      <Cpu className={cn("h-3.5 w-3.5", ok ? "text-teal-400" : "text-red-400")} />
+      <span className={ok ? "text-muted-foreground" : "text-red-400"}>
+        {ok ? (locked ? "VRAM busy" : "Ollama ready") : "Ollama offline"}
+      </span>
+      <span
+        className={cn(
+          "h-1.5 w-1.5 rounded-full",
+          ok ? (locked ? "bg-amber-400" : "bg-teal-400") : "bg-red-400",
+        )}
+      />
+    </div>
+  );
+}

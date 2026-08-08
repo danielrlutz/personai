@@ -1,0 +1,94 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { ArrowDownLeft, ArrowUpRight, ArrowLeftRight } from "lucide-react";
+import { apiGet, type Transaction } from "@/lib/api-client";
+import { formatCHF, formatDate } from "@/lib/utils";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { EmptyState } from "@/components/shared/EmptyState";
+
+const typeIcons = {
+  INCOME: ArrowDownLeft,
+  EXPENSE: ArrowUpRight,
+  TRANSFER: ArrowLeftRight,
+};
+
+const typeColors = {
+  INCOME: "text-emerald-400",
+  EXPENSE: "text-red-400",
+  TRANSFER: "text-blue-400",
+};
+
+export function TransactionTable() {
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    void apiGet<{ transactions: Transaction[] }>("/finance/transactions")
+      .then((data) => setTransactions(data.transactions))
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) return <Skeleton className="h-96 rounded-lg" />;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Transactions</CardTitle>
+      </CardHeader>
+      <CardContent>
+        {transactions.length === 0 ? (
+          <EmptyState
+            icon={ArrowLeftRight}
+            title="No transactions"
+            description="Transactions from ingested documents or manual entries appear here."
+          />
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border text-left text-muted-foreground">
+                  <th className="pb-3 font-medium">Date</th>
+                  <th className="pb-3 font-medium">Description</th>
+                  <th className="pb-3 font-medium">Category</th>
+                  <th className="pb-3 font-medium">Type</th>
+                  <th className="pb-3 text-right font-medium">Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                {transactions.map((tx) => {
+                  const Icon = typeIcons[tx.type];
+                  return (
+                    <tr key={tx.id} className="border-b border-border/50 last:border-0">
+                      <td className="py-3 text-muted-foreground">{formatDate(tx.date)}</td>
+                      <td className="py-3">{tx.description}</td>
+                      <td className="py-3">
+                        {tx.category ? (
+                          <Badge variant="secondary">{tx.category.name}</Badge>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
+                      <td className="py-3">
+                        <span className={`inline-flex items-center gap-1 ${typeColors[tx.type]}`}>
+                          <Icon className="h-3.5 w-3.5" />
+                          {tx.type}
+                        </span>
+                      </td>
+                      <td className={`py-3 text-right font-medium ${typeColors[tx.type]}`}>
+                        {tx.type === "EXPENSE" ? "−" : tx.type === "INCOME" ? "+" : ""}
+                        {formatCHF(tx.amount, tx.currency)}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}

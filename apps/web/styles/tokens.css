@@ -1,0 +1,20 @@
+:root {
+  --background: 240 6% 6%;
+  --foreground: 0 0% 98%;
+  --card: 240 5% 10%;
+  --card-foreground: 0 0% 98%;
+  --muted: 240 4% 16%;
+  --muted-foreground: 240 5% 65%;
+  --accent: 173 80% 40%;
+  --accent-foreground: 0 0% 100%;
+  --border: 240 4% 18%;
+  --input: 240 4% 18%;
+  --ring: 173 80% 40%;
+  --radius: 0.75rem;
+
+  --glass-bg: rgba(24, 24, 27, 0.72);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --teal-glow: rgba(20, 184, 166, 0.25);
+  --sidebar-width: 16rem;
+  --header-height: 3.5rem;
+}
