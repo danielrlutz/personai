@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 
 const commandItems = [
   { label: "Home", href: "/dashboard", keys: "G D" },
+  { label: "Life / Personal", href: "/life", keys: "G E" },
   { label: "Pocket team", href: "/team", keys: "G T" },
   { label: "Archive documents", href: "/ingest", keys: "G A" },
   { label: "Finance overview", href: "/finance", keys: "G F" },

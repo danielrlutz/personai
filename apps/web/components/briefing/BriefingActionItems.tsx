@@ -29,6 +29,36 @@ export function BriefingActionItems({ snapshot }: BriefingActionItemsProps) {
     });
   });
 
+  snapshot.personal?.tasksDueToday.forEach((task) => {
+    actions.push({
+      label: task.title,
+      href: "/life",
+      priority: "high",
+    });
+  });
+
+  snapshot.personal?.habitsPending.forEach((habit) => {
+    actions.push({
+      label: `Log habit: ${habit.title}`,
+      href: "/life",
+    });
+  });
+
+  snapshot.personal?.touchpointsDue.forEach((tp) => {
+    actions.push({
+      label: `Reach out to ${tp.contactName}`,
+      href: "/life",
+    });
+  });
+
+  if (snapshot.personal && snapshot.personal.overdueTasks > 0) {
+    actions.push({
+      label: `Resolve ${snapshot.personal.overdueTasks} overdue personal task(s)`,
+      href: "/life",
+      priority: "high",
+    });
+  }
+
   if (snapshot.ingest.queuedJobs > 0) {
     actions.push({
       label: `Review ${snapshot.ingest.queuedJobs} queued ingestion job(s)`,

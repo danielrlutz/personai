@@ -121,6 +121,15 @@ export async function apiPut<T>(path: string, body?: unknown, init?: RequestInit
   return parseResponse<T>(res);
 }
 
+export async function apiDelete<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(`${getApiBaseUrl()}${path}`, {
+    ...init,
+    method: "DELETE",
+    headers: buildHeaders(init?.headers),
+  });
+  return parseResponse<T>(res);
+}
+
 export async function apiUpload<T>(path: string, formData: FormData, init?: RequestInit): Promise<T> {
   const headers = buildHeaders(init?.headers);
   headers.delete("Content-Type");
@@ -221,6 +230,105 @@ export interface ProfileRegistry {
   profiles: Profile[];
 }
 
+export type HabitFrequency = "DAILY" | "WEEKLY" | "CUSTOM";
+export type PersonalGoalStatus = "ACTIVE" | "PAUSED" | "COMPLETED" | "ABANDONED";
+export type PersonalTaskStatus = "TODO" | "IN_PROGRESS" | "DONE" | "CANCELLED";
+export type LifeDomain = "PERSONAL" | "BUSINESS" | "BOTH";
+
+export interface HabitLog {
+  id: string;
+  habitId: string;
+  loggedAt: string;
+  note?: string | null;
+}
+
+export interface Habit {
+  id: string;
+  title: string;
+  description?: string | null;
+  frequency: HabitFrequency;
+  customRule?: string | null;
+  domain: LifeDomain;
+  active: boolean;
+  targetCount: number;
+  createdAt: string;
+  updatedAt: string;
+  logs?: HabitLog[];
+}
+
+export interface PersonalGoal {
+  id: string;
+  title: string;
+  description?: string | null;
+  status: PersonalGoalStatus;
+  domain: LifeDomain;
+  targetDate?: string | null;
+  progress: number;
+  createdAt: string;
+  updatedAt: string;
+  tasks?: PersonalTask[];
+}
+
+export interface PersonalTask {
+  id: string;
+  title: string;
+  description?: string | null;
+  status: PersonalTaskStatus;
+  domain: LifeDomain;
+  dueDate?: string | null;
+  completedAt?: string | null;
+  goalId?: string | null;
+  goal?: PersonalGoal | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RelationshipTouchpoint {
+  id: string;
+  contactName: string;
+  relationship?: string | null;
+  domain: LifeDomain;
+  cadenceDays: number;
+  lastContactedAt?: string | null;
+  nextDueAt?: string | null;
+  notes?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PersonalNote {
+  id: string;
+  title?: string | null;
+  body: string;
+  domain: LifeDomain;
+  pinned: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LifestyleMetric {
+  id: string;
+  key: string;
+  label?: string | null;
+  value: number;
+  unit?: string | null;
+  recordedAt: string;
+  note?: string | null;
+  createdAt: string;
+}
+
+export interface PersonalTodaySummary {
+  habitsDueToday: number;
+  habitsCompletedToday: number;
+  habitsPending: Array<{ id: string; title: string }>;
+  tasksDueToday: Array<{ id: string; title: string }>;
+  overdueTasks: number;
+  touchpointsDue: Array<{ id: string; contactName: string }>;
+  activeGoals: number;
+  recentNotes: number;
+  latestMetrics: Array<{ key: string; value: number; unit: string | null; recordedAt: string }>;
+}
+
 export interface BriefingSnapshot {
   greeting: string;
   finance: {
@@ -247,6 +355,8 @@ export interface BriefingSnapshot {
     queuedJobs: number;
     completedYesterday: number;
   };
+  /** Present after Personal manners roll-out; older snapshots may omit it. */
+  personal?: PersonalTodaySummary;
 }
 
 export interface DailyBriefing {

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
+  Sparkles,
   Upload,
   Wallet,
   Scale,
@@ -19,6 +20,7 @@ import { OllamaStatusIndicator } from "@/components/shared/OllamaStatusIndicator
 
 const navItems = [
   { href: "/dashboard", label: "Home", icon: LayoutDashboard },
+  { href: "/life", label: "Life", icon: Sparkles },
   { href: "/team", label: "Team", icon: Users },
   { href: "/ingest", label: "Archive", icon: Upload },
   { href: "/finance", label: "Finance", icon: Wallet },
