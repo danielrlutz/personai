@@ -118,6 +118,18 @@ fn mark_adopted(state: &SidecarState, adopted: bool) {
     }
 }
 
+/// Hide the Node console on Windows (CREATE_NO_WINDOW). Users must not see or
+/// babysit a sidecar terminal — closing it would kill the API.
+fn apply_no_console(cmd: &mut Command) {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    let _ = cmd;
+}
+
 /// Attach to an already-running PersonAI API if it answers /health.
 pub fn adopt_existing_api(state: &SidecarState, port: u16) -> bool {
     if !health_ok(port) {
@@ -159,14 +171,12 @@ pub fn spawn_sidecar(state: &SidecarState, data_dir: PathBuf) -> Result<u16, Str
         .env("PORT", port.to_string())
         .env("DATA_DIR", &data_dir)
         .env("OLLAMA_HOST", "http://127.0.0.1:11434")
-        .stdout(Stdio::null());
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
 
-    // Surface sidecar boot errors in desktop logs during debug builds.
-    if cfg!(debug_assertions) {
-        cmd.stderr(Stdio::inherit());
-    } else {
-        cmd.stderr(Stdio::null());
-    }
+    // Never allocate a visible console for the API process (prod + tauri:dev:fast).
+    apply_no_console(&mut cmd);
 
     let mut child = cmd
         .spawn()

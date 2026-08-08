@@ -140,6 +140,14 @@ Edit `Caddyfile` hostnames before production TLS.
 .\setup.ps1 -Mode desktop          # Windows
 ```
 
+The desktop shell runs as a normal app with a **system tray** icon (bottom-right on Windows). The Node API sidecar is spawned **without a console window** — do not look for a terminal to babysit, and do not close a console to stop the app.
+
+- **Start:** installer shortcut / `pnpm tauri:dev:fast` (dev) / packaged MSI·NSIS app
+- **Hide:** close the window → app stays in the tray; API keeps running
+- **Show:** tray icon click, or tray menu → Open PersonAI OS
+- **Quit:** tray menu → Quit (gracefully stops the sidecar we started)
+- Single-instance: a second launch focuses the existing window instead of orphaning another API
+
 ### Fastest startup (recommended for day-to-day)
 
 Skips the Next.js cold start by serving the static export (`apps/web/out`) and reuses `apps/server/dist` when present:
@@ -151,12 +159,22 @@ pnpm tauri:dev:fast
 - Rebuild web export when UI changed: `FORCE_WEB_BUILD=1 pnpm tauri:dev:fast` (or `pnpm build:web` then `PERSONAI_DEV_STATIC=1 pnpm tauri:dev`)
 - Rebuild server only when API code changed: `pnpm build:server` (sidecar loads `dist/`, not TypeScript sources)
 - First Rust compile is slow; later `cargo tauri dev` uses incremental builds
+- Your own terminal for `pnpm tauri:dev*` is fine for developers; the **Node sidecar** still runs headless (no extra console)
 
 ### Full Next.js HMR (slower first paint)
 
 ```bash
 pnpm build:server   # once, or after server changes
 pnpm tauri:dev      # starts Next via beforeDevCommand
+```
+
+### Verify tray / headless sidecar
+
+```bash
+pnpm build:server
+cd src-tauri && cargo check   # compile shell + tray + CREATE_NO_WINDOW spawn
+# or: pnpm tauri:dev:fast     # confirm tray icon, close→hide, Quit stops API
+# packaging (v0.5.x): pnpm tauri:build  # MSI/NSIS still use bundle.resources + release windows_subsystem
 ```
 
 ## Profiles

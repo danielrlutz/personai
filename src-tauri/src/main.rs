@@ -4,7 +4,11 @@ mod sidecar;
 
 use sidecar::{kill_sidecar, spawn_sidecar, SidecarState};
 use std::path::PathBuf;
-use tauri::{AppHandle, Manager, RunEvent, State};
+use tauri::{
+    menu::{Menu, MenuItem},
+    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
+    AppHandle, Manager, RunEvent, State, WindowEvent,
+};
 
 #[tauri::command]
 fn get_api_base_url(state: State<'_, SidecarState>) -> Result<String, String> {
@@ -68,12 +72,65 @@ fn open_data_folder(app: AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+fn show_main_window(app: &AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.unminimize();
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
+}
+
+fn setup_tray(app: &tauri::App) -> tauri::Result<()> {
+    let show_i = MenuItem::with_id(app, "show", "Open PersonAI OS", true, None::<&str>)?;
+    let quit_i = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
+    let menu = Menu::with_items(app, &[&show_i, &quit_i])?;
+
+    let icon = app
+        .default_window_icon()
+        .cloned()
+        .ok_or_else(|| tauri::Error::WindowNotFound)?;
+
+    let _tray = TrayIconBuilder::with_id("personai-tray")
+        .icon(icon)
+        .menu(&menu)
+        .tooltip("PersonAI OS")
+        // Left-click restores the window; right-click shows the menu (Windows tray UX).
+        .show_menu_on_left_click(false)
+        .on_menu_event(|app, event| match event.id.as_ref() {
+            "show" => show_main_window(app),
+            "quit" => {
+                // Graceful exit path: RunEvent::Exit* kills the sidecar we spawned.
+                app.exit(0);
+            }
+            _ => {}
+        })
+        .on_tray_icon_event(|tray, event| {
+            if let TrayIconEvent::Click {
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Up,
+                ..
+            } = event
+            {
+                show_main_window(tray.app_handle());
+            }
+        })
+        .build(app)?;
+
+    Ok(())
+}
+
 fn main() {
     let app = tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            // Second launch: surface the existing window instead of spawning another shell/API.
+            show_main_window(app);
+        }))
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
         .manage(SidecarState::default())
         .setup(|app| {
+            setup_tray(app)?;
+
             let handle = app.handle().clone();
             let data_dir = app
                 .path()
@@ -117,6 +174,15 @@ fn main() {
     };
 
     app.run(|app_handle, event| match event {
+        RunEvent::WindowEvent { label, event, .. } if label == "main" => {
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                // Close → hide to tray (keep API alive). Quit from tray exits cleanly.
+                api.prevent_close();
+                if let Some(window) = app_handle.get_webview_window("main") {
+                    let _ = window.hide();
+                }
+            }
+        }
         RunEvent::ExitRequested { .. } | RunEvent::Exit => {
             let state = app_handle.state::<SidecarState>();
             kill_sidecar(&state);
