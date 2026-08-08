@@ -1,0 +1,24 @@
+{
+  "name": "personai-os",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@9.15.0",
+  "scripts": {
+    "dev": "pnpm --parallel --filter @personai/server --filter @personai/web dev",
+    "dev:server": "pnpm --filter @personai/server dev",
+    "dev:web": "pnpm --filter @personai/web dev",
+    "build": "pnpm --filter @personai/server build && pnpm --filter @personai/web build",
+    "build:server": "pnpm --filter @personai/server build",
+    "build:web": "pnpm --filter @personai/web build",
+    "db:generate": "pnpm --filter @personai/server db:generate",
+    "db:push": "pnpm --filter @personai/server db:push",
+    "lint": "pnpm -r lint",
+    "pull-models": "bash scripts/pull-models.sh",
+    "pull-models:win": "powershell -File scripts/pull-models.ps1",
+    "tauri:dev": "cargo tauri dev --manifest-path src-tauri/Cargo.toml",
+    "tauri:build": "cargo tauri build --manifest-path src-tauri/Cargo.toml"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
