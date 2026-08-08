@@ -60,16 +60,38 @@ function Invoke-WithSpinner {
   & $Script
 }
 
+function Get-TermCols {
+  $cols = $Host.UI.RawUI.WindowSize.Width
+  if (-not $cols -or $cols -lt 48) { $cols = 80 }
+  if ($cols -gt 100) { $cols = 100 }
+  return $cols
+}
+
+function Write-HRule {
+  $n = [Math]::Min(64, [Math]::Max(24, (Get-TermCols) - 4))
+  Write-Host (('─' * $n)) -ForegroundColor DarkGray
+}
+
+function Write-MenuRow {
+  param([string]$Num, [string]$Label, [string]$Desc)
+  $pad = if ($Label.Length -ge 24) { $Label } else { $Label.PadRight(24) }
+  Write-Host "  $Num) " -ForegroundColor Cyan -NoNewline
+  Write-Host "$pad  " -NoNewline
+  Write-Host $Desc -ForegroundColor DarkGray
+}
+
 function Show-Banner {
+  # Inner width 42; 3-space indent after left border → pad content to 39.
+  $inner = 39
   Write-Host ""
   Write-Host "  +==========================================+" -ForegroundColor Cyan
   Write-Host "  |                                          |" -ForegroundColor Cyan
   Write-Host "  |   " -ForegroundColor Cyan -NoNewline
-  Write-Host "PersonAI OS" -ForegroundColor White -NoNewline
-  Write-Host "  .  Setup Wizard          |" -ForegroundColor Cyan
+  Write-Host ("PersonAI OS  ·  Setup Wizard".PadRight($inner)) -ForegroundColor White -NoNewline
+  Write-Host "|" -ForegroundColor Cyan
   Write-Host "  |   " -ForegroundColor Cyan -NoNewline
-  Write-Host "desktop . tauri . docker . ollama" -ForegroundColor DarkGray -NoNewline
-  Write-Host "      |" -ForegroundColor Cyan
+  Write-Host ("desktop · tauri · docker · ollama".PadRight($inner)) -ForegroundColor DarkGray -NoNewline
+  Write-Host "|" -ForegroundColor Cyan
   Write-Host "  |                                          |" -ForegroundColor Cyan
   Write-Host "  +==========================================+" -ForegroundColor Cyan
   Write-Host ""
@@ -83,7 +105,7 @@ function Write-Step {
   Write-Host ""
   Write-Host "[$($script:StepCurrent)/$($script:StepTotal)] " -ForegroundColor Blue -NoNewline
   Write-Host $Title -ForegroundColor White
-  Write-Host ("-" * 48) -ForegroundColor DarkGray
+  Write-HRule
 }
 
 function Read-Answer {
@@ -842,10 +864,10 @@ function Choose-Mode {
 
   Write-Host 'What would you like to do?' -ForegroundColor White
   Write-Host ''
-  Write-Host '  1) ' -ForegroundColor Cyan -NoNewline; Write-Host 'Install desktop deps     ' -NoNewline; Write-Host 'Node, pnpm, Rust, Tauri, MSVC, WebView2' -ForegroundColor DarkGray
-  Write-Host '  2) ' -ForegroundColor Cyan -NoNewline; Write-Host 'Install VPS Docker stack ' -NoNewline; Write-Host 'delegates to install.sh (WSL/bash; Docker only)' -ForegroundColor DarkGray
-  Write-Host '  3) ' -ForegroundColor Cyan -NoNewline; Write-Host 'Full setup               ' -NoNewline; Write-Host 'desktop + Docker + build server + models' -ForegroundColor DarkGray
-  Write-Host '  4) ' -ForegroundColor Cyan -NoNewline; Write-Host 'Check-only               ' -NoNewline; Write-Host 'detect toolchain, install nothing' -ForegroundColor DarkGray
+  Write-MenuRow '1' 'Install desktop deps' 'Node, pnpm, Rust, Tauri, MSVC, WebView2'
+  Write-MenuRow '2' 'Install VPS Docker stack' 'delegates to install.sh (WSL/bash; Docker only)'
+  Write-MenuRow '3' 'Full setup' 'desktop + Docker + build server + models'
+  Write-MenuRow '4' 'Check-only' 'detect toolchain, install nothing'
   Write-Host ''
 
   $choice = Read-Answer 'Select option' '1'

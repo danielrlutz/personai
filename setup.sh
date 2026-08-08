@@ -42,11 +42,37 @@ SPINNER_PID=""
 SPIN_CHARS='⠋⠙⠹⠸⠴⠦⠧⠇⠏'
 
 log()  { printf '%s\n' "$*"; }
-info() { printf '%s›%s %s\n' "$CYN" "$RST" "$*"; }
-ok()   { printf '%s✓%s %s\n' "$GRN" "$RST" "$*"; }
-warn() { printf '%s!%s %s\n' "$YLW" "$RST" "$*"; }
-err()  { printf '%s✗%s %s\n' "$RED" "$RST" "$*" >&2; }
+# Fixed-width status column (Unicode glyphs vary in cell width across terminals).
+info() { printf '  %s›%s  %s\n' "$CYN" "$RST" "$*"; }
+ok()   { printf '  %s✓%s  %s\n' "$GRN" "$RST" "$*"; }
+warn() { printf '  %s!%s  %s\n' "$YLW" "$RST" "$*"; }
+err()  { printf '  %s✗%s  %s\n' "$RED" "$RST" "$*" >&2; }
 die()  { stop_spinner; err "$*"; exit 1; }
+
+term_cols() {
+  local cols="${COLUMNS:-}"
+  if [[ -z "$cols" || "$cols" -lt 1 ]] 2>/dev/null; then
+    cols="$(stty size </dev/tty 2>/dev/null | awk '{print $2}')"
+  fi
+  cols="${cols:-80}"
+  if [[ "$cols" -lt 48 ]]; then cols=48; fi
+  if [[ "$cols" -gt 100 ]]; then cols=100; fi
+  printf '%s' "$cols"
+}
+
+hrule() {
+  local n=$(( $(term_cols) - 4 )) i line=""
+  if [[ "$n" -lt 24 ]]; then n=24; fi
+  if [[ "$n" -gt 64 ]]; then n=64; fi
+  for ((i = 0; i < n; i++)); do line+="─"; done
+  log "${DIM}${line}${RST}"
+}
+
+# Aligned menu row: "  N) <label padded>  <dim description>"
+menu_row() {
+  local num="$1" label="$2" desc="$3"
+  printf '  %s%s)%s %-24s  %s%s%s\n' "$CYN" "$num" "$RST" "$label" "$DIM" "$desc" "$RST"
+}
 
 # Prefer real TTY even when piped (curl | bash)
 if [[ -r /dev/tty ]]; then
@@ -182,21 +208,21 @@ step() {
   local title="$1"
   log ""
   log "${BOLD}${BLU}[$STEP_CURRENT/$STEP_TOTAL]${RST} ${WHT}${title}${RST}"
-  log "${DIM}$(printf '─%.0s' {1..48})${RST}"
+  hrule
 }
 
 print_banner() {
-  cat <<EOF
-
-${CYN}${BOLD}
-  ╔══════════════════════════════════════════╗
-  ║                                          ║
-  ║   ${WHT}PersonAI OS${CYN}  ·  Setup Wizard          ║
-  ║   ${DIM}desktop · tauri · docker · ollama${CYN}      ║
-  ║                                          ║
-  ╚══════════════════════════════════════════╝
-${RST}
-EOF
+  # Inner width 42; 3-space indent after left border → pad content to 39.
+  # Color codes sit outside the padded field so borders stay column-aligned.
+  local w=39
+  log ""
+  log "${CYN}${BOLD}  ╔══════════════════════════════════════════╗${RST}"
+  log "${CYN}${BOLD}  ║                                          ║${RST}"
+  printf '  %s%s║   %s%-*s%s%s║%s\n' "$CYN" "$BOLD" "$WHT" "$w" "PersonAI OS  ·  Setup Wizard" "$CYN" "$BOLD" "$RST"
+  printf '  %s%s║   %s%-*s%s%s║%s\n' "$CYN" "$BOLD" "$DIM" "$w" "desktop · tauri · docker · ollama" "$CYN" "$BOLD" "$RST"
+  log "${CYN}${BOLD}  ║                                          ║${RST}"
+  log "${CYN}${BOLD}  ╚══════════════════════════════════════════╝${RST}"
+  log ""
 }
 
 detect_os() {
@@ -317,10 +343,10 @@ choose_mode() {
     log "${DIM}Recommended: option 2 — Docker Compose via install.sh. Rust/Tauri are not required on a VPS.${RST}"
   fi
   log ""
-  log "  ${CYN}1)${RST} Install desktop deps     ${DIM}Node, pnpm, Rust, Tauri, OS build tools${RST}"
-  log "  ${CYN}2)${RST} Install VPS Docker stack ${DIM}delegates to install.sh (Docker only)${RST}"
-  log "  ${CYN}3)${RST} Full setup               ${DIM}desktop + Docker + build server + models${RST}"
-  log "  ${CYN}4)${RST} Check-only               ${DIM}detect toolchain, install nothing${RST}"
+  menu_row "1" "Install desktop deps" "Node, pnpm, Rust, Tauri, OS build tools"
+  menu_row "2" "Install VPS Docker stack" "delegates to install.sh (Docker only)"
+  menu_row "3" "Full setup" "desktop + Docker + build server + models"
+  menu_row "4" "Check-only" "detect toolchain, install nothing"
   log ""
 
   local choice
