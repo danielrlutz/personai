@@ -2,6 +2,7 @@ import type { PrismaClient } from "@prisma/client";
 import { config } from "../config.js";
 import { resolveOllamaHost, streamChat } from "../ollama/client.js";
 import { vramLock } from "../ollama/vram-lock.js";
+import { buildPersonalTodaySummary, type PersonalTodaySummary } from "../life/life-service.js";
 
 export type BriefingSnapshot = {
   greeting: string;
@@ -30,6 +31,8 @@ export type BriefingSnapshot = {
     queuedJobs: number;
     completedYesterday: number;
   };
+  /** Personal manners / Life pillar — habits, goals, touchpoints (honest empty when unused). */
+  personal: PersonalTodaySummary;
 };
 
 function startOfDay(d = new Date()): Date {
@@ -141,6 +144,8 @@ export async function buildSnapshot(prisma: PrismaClient): Promise<BriefingSnaps
     },
   });
 
+  const personal = await buildPersonalTodaySummary(prisma);
+
   return {
     greeting: greetingForNow(),
     finance: {
@@ -169,14 +174,16 @@ export async function buildSnapshot(prisma: PrismaClient): Promise<BriefingSnaps
       queuedJobs,
       completedYesterday,
     },
+    personal,
   };
 }
 
 function snapshotNeedsRefresh(raw: string): boolean {
   try {
     const parsed = JSON.parse(raw) as Partial<BriefingSnapshot>;
-    // Refresh cached snapshots that still expose template limits as "remaining".
-    return parsed.finance?.budgetIsTemplateOnly === undefined;
+    // Refresh cached snapshots that still expose template limits as "remaining",
+    // or that predate the Personal manners pillar.
+    return parsed.finance?.budgetIsTemplateOnly === undefined || !parsed.personal;
   } catch {
     return true;
   }
@@ -245,7 +252,9 @@ export async function* streamBriefingNarrative(
     const system = `Du bist ein persönlicher Assistent für Schweizer Freelancer.
 Schreibe eine kurze, klare Tagesbriefing-Zusammenfassung auf Deutsch (de-CH).
 Maximal 3 Absätze. Sei konkret und handlungsorientiert. Keine medizinische Diagnose.
-Wenn budgetIsTemplateOnly true ist, erwähne kein verfügbares Budget / Restbudget — die Kategorie-Limits sind nur Vorlagen.`;
+Decke sowohl Business (Finanzen, Legal, Ingest) als auch Personal manners / Life (Habits, Tasks, Touchpoints, Goals) ab — nur mit Daten aus dem Snapshot, nichts erfinden.
+Wenn budgetIsTemplateOnly true ist, erwähne kein verfügbares Budget / Restbudget — die Kategorie-Limits sind nur Vorlagen.
+Wenn personal-Felder leer/null/0 sind, sage ehrlich, dass dort noch nichts erfasst ist.`;
 
     for await (const token of streamChat({
       host,
@@ -254,7 +263,7 @@ Wenn budgetIsTemplateOnly true ist, erwähne kein verfügbares Budget / Restbudg
         { role: "system", content: system },
         {
           role: "user",
-          content: `Erstelle das Tagesbriefing aus diesem Snapshot:\n${briefing.snapshot}`,
+          content: `Erstelle das Tagesbriefing (Business + Personal) aus diesem Snapshot:\n${briefing.snapshot}`,
         },
       ],
       signal,

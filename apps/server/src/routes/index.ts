@@ -25,8 +25,11 @@ import {
 import { MedicalReportDocument } from "../export/medical-report.js";
 import { getPrisma } from "../db/prisma-singleton.js";
 import { sendError, sseWrite, withPrisma, getProfileId } from "./helpers.js";
+import { registerLifeRoutes } from "./life.js";
 
 export async function registerRoutes(app: FastifyInstance): Promise<void> {
+  await registerLifeRoutes(app);
+
   app.get("/health", async () => ({
     ok: true,
     service: "personai-server",
