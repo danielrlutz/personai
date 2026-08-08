@@ -25,25 +25,38 @@ These are **separate deployments** of the same UI — decentralized by design.
 
 ## Setup wizard (desktop + VPS)
 
-Cross-platform wizard that detects/installs Node (≥20), pnpm, Rust, Tauri CLI v2, and OS build tools (MSVC + WebView2 on Windows, Xcode CLT on macOS, webkit2gtk etc. on Linux). Modes: **desktop deps**, **VPS Docker stack** (delegates to `install.sh`), **full setup**, or **check-only**.
+Cross-platform wizard with modes: **desktop deps**, **VPS Docker stack** (delegates to `install.sh`), **full setup**, or **check-only**.
+
+| Goal | What you need | Recommended command |
+|------|---------------|---------------------|
+| **VPS / PWA** | Docker + Compose only (no Rust/Tauri) | `install.sh` or `./setup.sh` → option **2** |
+| **Desktop / Tauri** | Node, pnpm, Rust, Tauri, OS build tools | `./setup.sh` → option **1** (or `setup.ps1` on Windows) |
+
+Check-only detects the toolchain and **installs nothing**, then offers a next-step menu (VPS deps, desktop deps, run `install.sh`, or exit). On headless Linux it recommends the VPS path and does not treat missing Rust/Tauri as a failure.
 
 ### One-liners
 
-```powershell
-# Windows (PowerShell)
-irm https://raw.githubusercontent.com/danielrlutz/personai/main/setup.ps1 | iex
+```bash
+# Linux VPS (recommended — Docker Compose stack)
+curl -fsSL https://raw.githubusercontent.com/danielrlutz/personai/main/install.sh | bash
 ```
 
 ```bash
-# macOS / Linux
+# macOS / Linux desktop (or interactive wizard that also offers VPS)
 curl -fsSL https://raw.githubusercontent.com/danielrlutz/personai/main/setup.sh | bash
+```
+
+```powershell
+# Windows desktop (PowerShell)
+irm https://raw.githubusercontent.com/danielrlutz/personai/main/setup.ps1 | iex
 ```
 
 ### From a local checkout
 
 ```bash
 # macOS / Linux
-./setup.sh                 # interactive menu
+./setup.sh                 # interactive menu (defaults to VPS on headless hosts)
+./setup.sh --mode=vps      # Docker stack via install.sh
 ./scripts/setup --mode=check
 ./setup.sh --yes --mode=desktop
 ./setup.sh --yes --mode=full --docker=yes --pull-models=no
@@ -61,7 +74,7 @@ Non-interactive: pass `--yes` / `-Yes`. When piped (`curl | bash`), prompts stil
 
 ## One-line install **or update** (Linux / VPS)
 
-Prefer the wizard’s **VPS** mode, or call the Docker installer directly:
+On a Debian/Ubuntu VPS you only need Docker. Prefer the installer directly (or the wizard’s **VPS** mode):
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/danielrlutz/personai/main/install.sh | bash

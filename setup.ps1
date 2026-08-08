@@ -564,15 +564,65 @@ function Show-CheckReport {
   Write-Host 'Toolchain check' -ForegroundColor White -NoNewline
   Write-Host '  (windows)' -ForegroundColor DarkGray
   Write-Host ""
+  Write-Host 'Desktop / Tauri' -ForegroundColor White
   [void](Test-NodeOk)
   [void](Test-PnpmOk)
   [void](Test-RustOk)
   [void](Test-TauriCliOk)
   [void](Test-MsvcOk)
   [void](Test-WebView2Ok)
+  Write-Host ""
+  Write-Host 'Optional / VPS' -ForegroundColor White
+  Write-Info 'VPS Docker stack needs Docker (via WSL/bash install.sh) — Rust/Tauri are desktop-only'
   [void](Test-OllamaOk)
   [void](Test-DockerOk)
   Write-Host ""
+}
+
+function Show-CheckSummary {
+  Write-Host 'Check-only installs nothing.' -ForegroundColor White
+  Write-Host 'For a VPS on Linux: run install.sh (or setup.sh --mode=vps). Docker Compose is enough.'
+  Write-Host '  Desktop next: .\setup.ps1 -Mode desktop'
+  Write-Host '  VPS next:     .\setup.ps1 -Mode vps   # or install.sh on the server'
+  Write-Host ""
+}
+
+function Show-PostCheckMenu {
+  if ($Yes) {
+    Show-CheckSummary
+    return $false
+  }
+
+  Write-Host 'What next?' -ForegroundColor White
+  Write-Host ''
+  Write-Host '  1) ' -ForegroundColor Cyan -NoNewline
+  Write-Host 'Install missing deps for VPS/Docker'
+  Write-Host '     ' -NoNewline
+  Write-Host 'Docker Desktop guidance; Node/pnpm optional — Rust/Tauri not installed' -ForegroundColor DarkGray
+  Write-Host '  2) ' -ForegroundColor Cyan -NoNewline
+  Write-Host 'Install missing deps for Desktop/Tauri'
+  Write-Host '     ' -NoNewline
+  Write-Host 'Node, pnpm, Rust, Tauri, MSVC, WebView2' -ForegroundColor DarkGray
+  Write-Host '  3) ' -ForegroundColor Cyan -NoNewline
+  Write-Host 'Run VPS install now'
+  Write-Host '     ' -NoNewline
+  Write-Host 'delegates to install.sh (WSL/bash)' -ForegroundColor DarkGray
+  Write-Host '  4) ' -ForegroundColor Cyan -NoNewline
+  Write-Host 'Exit'
+  Write-Host ''
+  Show-CheckSummary
+
+  $choice = Read-Answer 'Select option' '2'
+  switch -Regex ($choice) {
+    '^(1|vps-deps|deps)$' { $script:SelectedMode = 'vps-deps'; return $true }
+    '^(2|desktop)$'       { $script:SelectedMode = 'desktop'; return $true }
+    '^(3|vps|install)$'   { $script:SelectedMode = 'vps'; return $true }
+    '^(4|exit|q|quit)$'   {
+      Write-Info 'Exiting - no changes made.'
+      exit 0
+    }
+    default { throw "Invalid choice: $choice" }
+  }
 }
 
 function Invoke-CheckMode {
@@ -580,6 +630,36 @@ function Invoke-CheckMode {
   Write-Step 'Detect installed toolchain'
   Show-CheckReport
   Write-Ok 'Check complete - no changes made'
+}
+
+function Invoke-VpsDepsMode {
+  Initialize-Steps 2
+  Write-Step 'Ensure Docker (VPS path)'
+  Write-Info 'VPS deploy uses docker compose — host Rust/Tauri are not required.'
+  if (-not (Test-DockerOk)) {
+    if ($Yes -or (Read-YesNo 'Open Docker Desktop install guidance?' 'y')) {
+      Install-DockerWin
+    } else {
+      Write-Warn 'Docker is required for the VPS path on this machine (or run install.sh on a Linux VPS).'
+    }
+  }
+
+  Write-Step 'Optional host Node / pnpm'
+  Write-Info 'Only needed if you build or develop outside Docker on this machine.'
+  if ($Yes) {
+    Write-Info 'Skipping optional Node/pnpm (-Yes defaults to Docker-focused VPS deps)'
+  } elseif (Read-YesNo 'Also install Node.js >=20 and pnpm on the host?' 'n') {
+    if (-not (Test-NodeOk)) { Install-NodeWin }
+    if (-not (Test-PnpmOk)) { Install-PnpmWin }
+  } else {
+    Write-Ok 'Skipping host Node/pnpm — docker compose / install.sh is enough'
+  }
+
+  Write-Host ""
+  Write-Ok 'VPS host deps guidance complete'
+  Write-Host 'On a Linux VPS prefer: curl -fsSL .../install.sh | bash'
+  Write-Host 'Or choose Run VPS install in the next menu (WSL/bash).'
+  Write-Host ""
 }
 
 function Invoke-DesktopMode {
@@ -763,7 +843,7 @@ function Choose-Mode {
   Write-Host 'What would you like to do?' -ForegroundColor White
   Write-Host ''
   Write-Host '  1) ' -ForegroundColor Cyan -NoNewline; Write-Host 'Install desktop deps     ' -NoNewline; Write-Host 'Node, pnpm, Rust, Tauri, MSVC, WebView2' -ForegroundColor DarkGray
-  Write-Host '  2) ' -ForegroundColor Cyan -NoNewline; Write-Host 'Install VPS Docker stack ' -NoNewline; Write-Host 'delegates to install.sh (WSL/bash)' -ForegroundColor DarkGray
+  Write-Host '  2) ' -ForegroundColor Cyan -NoNewline; Write-Host 'Install VPS Docker stack ' -NoNewline; Write-Host 'delegates to install.sh (WSL/bash; Docker only)' -ForegroundColor DarkGray
   Write-Host '  3) ' -ForegroundColor Cyan -NoNewline; Write-Host 'Full setup               ' -NoNewline; Write-Host 'desktop + Docker + build server + models' -ForegroundColor DarkGray
   Write-Host '  4) ' -ForegroundColor Cyan -NoNewline; Write-Host 'Check-only               ' -NoNewline; Write-Host 'detect toolchain, install nothing' -ForegroundColor DarkGray
   Write-Host ''
@@ -780,15 +860,37 @@ function Choose-Mode {
 
 try {
   Show-Banner
-  Choose-Mode
-  Write-Info "Mode: $($script:SelectedMode)"
 
-  switch ($script:SelectedMode) {
-    'check'   { Invoke-CheckMode }
-    'vps'     { Invoke-VpsMode }
-    'desktop' { Invoke-DesktopMode }
-    'full'    { Invoke-DesktopMode }
-    default   { throw "Unknown mode: $($script:SelectedMode)" }
+  $done = $false
+  while (-not $done) {
+    Choose-Mode
+    Write-Info "Mode: $($script:SelectedMode)"
+
+    switch ($script:SelectedMode) {
+      'check' {
+        Invoke-CheckMode
+        $script:SelectedMode = ''
+        if (-not (Show-PostCheckMenu)) { $done = $true }
+      }
+      'vps-deps' {
+        Invoke-VpsDepsMode
+        $script:SelectedMode = ''
+        if (-not (Show-PostCheckMenu)) { $done = $true }
+      }
+      'vps' {
+        Invoke-VpsMode
+        $done = $true
+      }
+      'desktop' {
+        Invoke-DesktopMode
+        $done = $true
+      }
+      'full' {
+        Invoke-DesktopMode
+        $done = $true
+      }
+      default { throw "Unknown mode: $($script:SelectedMode)" }
+    }
   }
 } catch {
   Write-Err $_.Exception.Message

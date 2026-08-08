@@ -67,9 +67,9 @@ Usage:
 
 Modes (menu if omitted):
   --mode desktop   Install Node/pnpm/Rust/Tauri + platform build deps
-  --mode vps       Delegate to install.sh (Docker Compose stack)
+  --mode vps       Delegate to install.sh (Docker Compose stack; Docker only)
   --mode full      Desktop deps + optional Docker + build server + models
-  --mode check     Detect toolchain only (no installs)
+  --mode check     Detect toolchain only (no installs; then next-step menu)
 
 Options:
   --dir PATH         Repo / install directory (default: ~/personai or cwd)
@@ -218,6 +218,24 @@ detect_linux_distro() {
   fi
 }
 
+# Headless / server heuristic: no GUI display, or Docker present without Tauri webkit.
+is_vps_like_host() {
+  [[ "$(detect_os)" == "linux" ]] || return 1
+  if [[ -z "${DISPLAY:-}" && -z "${WAYLAND_DISPLAY:-}" ]]; then
+    return 0
+  fi
+  if have_cmd docker; then
+    if ! pkg-config --exists webkit2gtk-4.1 2>/dev/null && ! pkg-config --exists webkit2gtk-4.0 2>/dev/null; then
+      return 0
+    fi
+  fi
+  return 1
+}
+
+docker_ok_quiet() {
+  have_cmd docker && docker compose version >/dev/null 2>&1
+}
+
 is_personai_root() {
   local d="$1"
   [[ -f "$d/package.json" ]] && { [[ -d "$d/src-tauri" ]] || [[ -d "$d/apps/server" ]]; }
@@ -276,26 +294,37 @@ resolve_repo_dir() {
 choose_mode() {
   if [[ -n "$MODE" ]]; then
     case "$MODE" in
-      desktop|vps|full|check) return ;;
+      desktop|vps|full|check|vps-deps) return ;;
       *) die "Invalid --mode: $MODE (desktop|vps|full|check)" ;;
     esac
   fi
 
   if [[ $ASSUME_YES -eq 1 ]]; then
-    MODE="desktop"
+    if is_vps_like_host; then
+      MODE="vps"
+    else
+      MODE="desktop"
+    fi
     return
   fi
 
+  local default_choice="1"
   log "${BOLD}What would you like to do?${RST}"
+  if is_vps_like_host; then
+    default_choice="2"
+    log ""
+    log "${YLW}${BOLD}VPS / headless host detected${RST} ${DIM}(no GUI display, or Docker without Tauri webkit)${RST}"
+    log "${DIM}Recommended: option 2 — Docker Compose via install.sh. Rust/Tauri are not required on a VPS.${RST}"
+  fi
   log ""
   log "  ${CYN}1)${RST} Install desktop deps     ${DIM}Node, pnpm, Rust, Tauri, OS build tools${RST}"
-  log "  ${CYN}2)${RST} Install VPS Docker stack ${DIM}delegates to install.sh${RST}"
+  log "  ${CYN}2)${RST} Install VPS Docker stack ${DIM}delegates to install.sh (Docker only)${RST}"
   log "  ${CYN}3)${RST} Full setup               ${DIM}desktop + Docker + build server + models${RST}"
   log "  ${CYN}4)${RST} Check-only               ${DIM}detect toolchain, install nothing${RST}"
   log ""
 
   local choice
-  choice="$(ask "Select option" "1")"
+  choice="$(ask "Select option" "$default_choice")"
   case "$choice" in
     1|desktop) MODE="desktop" ;;
     2|vps)     MODE="vps" ;;
@@ -705,24 +734,117 @@ maybe_pull_models() {
 # --- Modes ------------------------------------------------------------------
 
 print_check_report() {
-  local os
+  local os vps_like=0
   os="$(detect_os)"
   local extra=""
   [[ "$os" == "linux" ]] && extra=" · $(detect_linux_distro)"
+  is_vps_like_host && vps_like=1
+
   log ""
-  log "${BOLD}${WHT}Toolchain check${RST}  ${DIM}($os${extra})${RST}"
+  if [[ $vps_like -eq 1 ]]; then
+    log "${BOLD}${WHT}Toolchain check${RST}  ${DIM}($os${extra} · VPS / server)${RST}"
+    log ""
+    log "${YLW}Recommended path: VPS Docker stack${RST} ${DIM}(install.sh / docker compose)${RST}"
+    log "${DIM}Rust, Tauri, and webkit are desktop-only — missing them is fine on a VPS.${RST}"
+    log ""
+    log "${BOLD}VPS / Docker${RST}"
+    check_docker || true
+    check_ollama || true
+    log ""
+    log "${BOLD}Optional host tools${RST} ${DIM}(only if building outside Docker)${RST}"
+    if have_cmd node; then
+      check_node || true
+    else
+      info "Node.js — optional for VPS (docker compose builds without host Node)"
+    fi
+    if have_cmd pnpm; then
+      check_pnpm || true
+    else
+      info "pnpm — optional for VPS (not required for docker compose)"
+    fi
+    log ""
+    log "${BOLD}Desktop / Tauri${RST} ${DIM}(not required on this host)${RST}"
+    if have_cmd rustc && have_cmd cargo; then
+      check_rust || true
+    else
+      info "Rust/cargo — not required for VPS (desktop/Tauri only)"
+    fi
+    if have_cmd cargo && cargo tauri --version >/dev/null 2>&1; then
+      check_tauri_cli || true
+    else
+      info "Tauri CLI — not required for VPS (desktop/Tauri only)"
+    fi
+    if [[ "$os" == "linux" ]]; then
+      if pkg-config --exists webkit2gtk-4.1 2>/dev/null || pkg-config --exists webkit2gtk-4.0 2>/dev/null; then
+        check_linux_tauri_deps || true
+      else
+        info "webkit/Tauri Linux packages — not required for VPS (desktop only)"
+      fi
+    fi
+  else
+    log "${BOLD}${WHT}Toolchain check${RST}  ${DIM}($os${extra})${RST}"
+    log ""
+    check_node || true
+    check_pnpm || true
+    check_rust || true
+    check_tauri_cli || true
+    check_ollama || true
+    check_docker || true
+    case "$os" in
+      macos) check_xcode_clt || true ;;
+      linux) check_linux_tauri_deps || true ;;
+    esac
+  fi
   log ""
-  check_node || true
-  check_pnpm || true
-  check_rust || true
-  check_tauri_cli || true
-  check_ollama || true
-  check_docker || true
-  case "$os" in
-    macos) check_xcode_clt || true ;;
-    linux) check_linux_tauri_deps || true ;;
+}
+
+print_check_summary() {
+  log "${BOLD}Check-only installs nothing.${RST}"
+  if is_vps_like_host; then
+    log "For a VPS: pick ${CYN}Run VPS install${RST} next, or run:"
+    log "  ${WHT}./install.sh${RST}"
+    log "  ${DIM}# or: ./setup.sh --mode=vps${RST}"
+    log "Docker Compose is enough — you do not need Rust or Tauri on the server."
+  else
+    log "Next: install desktop deps, run the VPS Docker path, or exit."
+    log "  ${DIM}Desktop: ./setup.sh --mode=desktop${RST}"
+    log "  ${DIM}VPS:     ./setup.sh --mode=vps   # or ./install.sh${RST}"
+  fi
+  log ""
+}
+
+# Interactive follow-up after check-only so the wizard does not feel like a dead end.
+# Sets MODE and returns 0 to continue the main loop, or exits on option 4.
+post_check_menu() {
+  if [[ $ASSUME_YES -eq 1 || $INTERACTIVE_TTY -eq 0 ]]; then
+    print_check_summary
+    return 1
+  fi
+
+  local default_choice="3"
+  is_vps_like_host || default_choice="1"
+
+  log "${BOLD}What next?${RST}"
+  log ""
+  log "  ${CYN}1)${RST} Install missing deps for ${BOLD}VPS/Docker${RST}"
+  log "     ${DIM}Docker + Compose only; Node/pnpm optional — Rust/Tauri not installed${RST}"
+  log "  ${CYN}2)${RST} Install missing deps for ${BOLD}Desktop/Tauri${RST}"
+  log "     ${DIM}Node, pnpm, Rust, Tauri, OS build tools${RST}"
+  log "  ${CYN}3)${RST} Run ${BOLD}VPS install${RST} now ${DIM}(./install.sh — Docker Compose stack)${RST}"
+  log "  ${CYN}4)${RST} Exit"
+  log ""
+  print_check_summary
+
+  local choice
+  choice="$(ask "Select option" "$default_choice")"
+  case "$choice" in
+    1|vps-deps|deps) MODE="vps-deps" ;;
+    2|desktop)       MODE="desktop" ;;
+    3|vps|install)   MODE="vps" ;;
+    4|exit|q|quit)   info "Exiting — no changes made."; exit 0 ;;
+    *) die "Invalid choice: $choice" ;;
   esac
-  log ""
+  return 0
 }
 
 run_check() {
@@ -730,6 +852,45 @@ run_check() {
   step "Detect installed toolchain"
   print_check_report
   ok "Check complete — no changes made"
+}
+
+run_vps_deps() {
+  begin_steps 2
+  step "Ensure Docker + Compose (VPS path)"
+  info "VPS deploy uses docker compose — host Node/pnpm/Rust/Tauri are not required."
+  if docker_ok_quiet; then
+    check_docker || true
+  else
+    if [[ $ASSUME_YES -eq 1 ]] || ask_yn "Install / ensure Docker + Compose?" "y"; then
+      install_docker_unix
+    else
+      warn "Docker is required for the VPS path — install it, then re-run."
+    fi
+  fi
+
+  step "Optional host Node / pnpm"
+  info "Only needed if you build or develop outside Docker on this machine."
+  if [[ $ASSUME_YES -eq 1 ]]; then
+    info "Skipping optional Node/pnpm (--yes defaults to Docker-only VPS deps)"
+  elif ask_yn "Also install Node.js >=20 and pnpm on the host?" "n"; then
+    if ! check_node; then
+      install_node
+    fi
+    if ! check_pnpm; then
+      install_pnpm
+    fi
+  else
+    ok "Skipping host Node/pnpm — docker compose is enough"
+  fi
+
+  log ""
+  ok "VPS host deps ready"
+  if docker_ok_quiet; then
+    log "Continue with: ${WHT}./install.sh${RST}  or choose ${CYN}Run VPS install${RST} in the next menu."
+  else
+    warn "Docker still unavailable in this shell — fix Docker, then run ./install.sh"
+  fi
+  log ""
 }
 
 run_desktop() {
@@ -926,15 +1087,42 @@ run_vps() {
 
 main() {
   print_banner
-  choose_mode
-  info "Mode: ${BOLD}${MODE}${RST}"
 
-  case "$MODE" in
-    check)   run_check ;;
-    vps)     run_vps ;;
-    desktop) run_desktop ;;
-    full)    run_desktop ;;
-  esac
+  # After check-only (and VPS-deps), keep prompting so the session feels continuous.
+  while true; do
+    choose_mode
+    info "Mode: ${BOLD}${MODE}${RST}"
+
+    case "$MODE" in
+      check)
+        run_check
+        MODE=""
+        if post_check_menu; then
+          continue
+        fi
+        break
+        ;;
+      vps-deps)
+        run_vps_deps
+        MODE=""
+        if post_check_menu; then
+          continue
+        fi
+        break
+        ;;
+      vps)
+        run_vps
+        break
+        ;;
+      desktop|full)
+        run_desktop
+        break
+        ;;
+      *)
+        die "Unknown mode: $MODE"
+        ;;
+    esac
+  done
 }
 
 trap stop_spinner EXIT
