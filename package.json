@@ -16,6 +16,7 @@
     "pull-models": "bash scripts/pull-models.sh",
     "pull-models:win": "powershell -File scripts/pull-models.ps1",
     "tauri:dev": "cd src-tauri && cargo tauri dev",
+    "tauri:dev:fast": "node scripts/tauri-dev-fast.mjs",
     "tauri:build": "cd src-tauri && cargo tauri build"
   },
   "engines": {

@@ -12,14 +12,6 @@ import fs from "node:fs";
 async function bootstrap() {
   fs.mkdirSync(config.dataDir, { recursive: true });
 
-  const registry = listProfiles();
-  if (registry.profiles.length === 0) {
-    const profile = await createProfile("Default");
-    console.log(`[personai] Created default profile: ${profile.id}`);
-  } else if (registry.activeProfileId) {
-    await switchProfile(registry.activeProfileId);
-  }
-
   const app = Fastify({ logger: true, bodyLimit: 50 * 1024 * 1024 });
   await app.register(cors, { origin: true });
   await app.register(multipart, { limits: { fileSize: 40 * 1024 * 1024 } });
@@ -34,6 +26,18 @@ async function bootstrap() {
   });
   await registerRoutes(app);
 
+  // Bind early so Tauri health polling (and /health) succeed before profile DB work.
+  await app.listen({ port: config.port, host: "0.0.0.0" });
+  console.log(`[personai] Server listening on http://0.0.0.0:${config.port}`);
+
+  const registry = listProfiles();
+  if (registry.profiles.length === 0) {
+    const profile = await createProfile("Default");
+    console.log(`[personai] Created default profile: ${profile.id}`);
+  } else if (registry.activeProfileId) {
+    await switchProfile(registry.activeProfileId);
+  }
+
   startIngestionWorker();
   startBriefingScheduler();
 
@@ -46,9 +50,6 @@ async function bootstrap() {
   };
   process.on("SIGINT", () => void shutdown());
   process.on("SIGTERM", () => void shutdown());
-
-  await app.listen({ port: config.port, host: "0.0.0.0" });
-  console.log(`[personai] Server listening on http://0.0.0.0:${config.port}`);
 }
 
 bootstrap().catch((err) => {

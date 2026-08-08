@@ -62,8 +62,8 @@ const config: Config = {
         "elev-3": "var(--elevation-3)",
       },
       transitionDuration: {
-        md: "200ms",
-        "md-slow": "300ms",
+        md: "150ms",
+        "md-slow": "240ms",
       },
       transitionTimingFunction: {
         md: "cubic-bezier(0.2, 0, 0, 1)",

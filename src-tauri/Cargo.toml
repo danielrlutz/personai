@@ -20,3 +20,15 @@ reqwest = { version = "0.12", default-features = false, features = ["json", "rus
 [features]
 default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]
+
+# Faster iterative `cargo tauri dev` (incremental is already on by default).
+[profile.dev]
+incremental = true
+
+# Smaller/faster release desktop binaries.
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = 3
+panic = "abort"
+strip = true

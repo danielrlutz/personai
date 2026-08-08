@@ -4,12 +4,13 @@
   "version": "0.1.0",
   "identifier": "com.personai.os",
   "build": {
-    "beforeDevCommand": "pnpm --filter @personai/web dev",
+    "beforeDevCommand": "node scripts/tauri-before-dev.mjs",
     "devUrl": "http://localhost:3000",
-    "beforeBuildCommand": "pnpm --filter @personai/web build",
+    "beforeBuildCommand": "pnpm build:server && pnpm --filter @personai/web build",
     "frontendDist": "../apps/web/out"
   },
   "app": {
+    "withGlobalTauri": true,
     "windows": [
       {
         "title": "PersonAI OS",

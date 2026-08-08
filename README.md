@@ -125,10 +125,25 @@ Edit `Caddyfile` hostnames before production TLS.
 # Install toolchain first (recommended)
 ./setup.sh --mode=desktop          # macOS/Linux
 .\setup.ps1 -Mode desktop          # Windows
+```
 
-pnpm build:server
-pnpm build:web
-pnpm tauri:dev
+### Fastest startup (recommended for day-to-day)
+
+Skips the Next.js cold start by serving the static export (`apps/web/out`) and reuses `apps/server/dist` when present:
+
+```bash
+pnpm tauri:dev:fast
+```
+
+- Rebuild web export when UI changed: `FORCE_WEB_BUILD=1 pnpm tauri:dev:fast` (or `pnpm build:web` then `PERSONAI_DEV_STATIC=1 pnpm tauri:dev`)
+- Rebuild server only when API code changed: `pnpm build:server` (sidecar loads `dist/`, not TypeScript sources)
+- First Rust compile is slow; later `cargo tauri dev` uses incremental builds
+
+### Full Next.js HMR (slower first paint)
+
+```bash
+pnpm build:server   # once, or after server changes
+pnpm tauri:dev      # starts Next via beforeDevCommand
 ```
 
 ## Profiles

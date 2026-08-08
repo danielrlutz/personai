@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
+import { ApiBootstrap } from "@/components/shared/ApiBootstrap";
 import { ServiceWorkerRegister } from "@/components/shared/ServiceWorkerRegister";
 import "@/styles/globals.css";
 
@@ -32,7 +33,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="de-CH" className="dark">
       <body className={`${GeistSans.variable} ${GeistMono.variable} font-sans antialiased`}>
         <ServiceWorkerRegister />
-        {children}
+        <ApiBootstrap>{children}</ApiBootstrap>
       </body>
     </html>
   );

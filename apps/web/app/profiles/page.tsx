@@ -50,7 +50,7 @@ export default function ProfilesPage() {
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-background p-6 pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)]">
-      <div className="w-full max-w-md animate-in">
+      <div className="w-full max-w-md">
         <div className="mb-8 text-center">
           <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-elev-1">
             <span className="text-2xl font-medium">P</span>

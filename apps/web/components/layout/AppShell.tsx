@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Search } from "lucide-react";
 import { Sidebar } from "./Sidebar";
@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 
 const commandItems = [
   { label: "Dashboard", href: "/dashboard", keys: "G D" },
+  { label: "Life / Personal", href: "/life", keys: "G E" },
   { label: "Ingest documents", href: "/ingest", keys: "G I" },
   { label: "Finance overview", href: "/finance", keys: "G F" },
   { label: "Transactions", href: "/finance/transactions", keys: "G T" },
@@ -26,26 +27,34 @@ interface AppShellProps {
   children: React.ReactNode;
 }
 
+type Gate = "pending" | "allowed" | "redirecting";
+
+function readInitialGate(): Gate {
+  if (typeof window === "undefined") return "pending";
+  return requireProfile() ? "allowed" : "pending";
+}
+
 export function AppShell({ children }: AppShellProps) {
   const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const [ready, setReady] = useState(false);
+  const [gate, setGate] = useState<Gate>(readInitialGate);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const profileId = requireProfile();
     if (!profileId) {
+      setGate("redirecting");
       router.replace("/profiles");
       return;
     }
     setProfileId(profileId);
-    setReady(true);
+    setGate("allowed");
 
     const onProfileChanged = (event: Event) => {
       const detail = (event as CustomEvent<{ profileId: string | null }>).detail;
       if (!detail?.profileId) {
-        setReady(false);
+        setGate("redirecting");
         router.replace("/profiles");
       }
     };
@@ -82,7 +91,8 @@ export function AppShell({ children }: AppShellProps) {
     [router],
   );
 
-  if (!ready) {
+  // Show shell chrome immediately; only gate main content (and redirect without chrome flash).
+  if (gate === "redirecting") {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
@@ -115,7 +125,7 @@ export function AppShell({ children }: AppShellProps) {
             </button>
           </div>
           <div className="w-40 sm:w-52">
-            <ProfileSwitcher />
+            {gate === "allowed" ? <ProfileSwitcher /> : null}
           </div>
         </header>
 
@@ -125,13 +135,19 @@ export function AppShell({ children }: AppShellProps) {
             "pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:pb-6",
           )}
         >
-          {children}
+          {gate === "allowed" ? (
+            children
+          ) : (
+            <div className="flex h-40 items-center justify-center">
+              <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+            </div>
+          )}
         </main>
       </div>
 
-      <MobileNav />
+      {gate === "allowed" ? <MobileNav /> : null}
 
-      {paletteOpen && (
+      {paletteOpen && gate === "allowed" && (
         <>
           <div
             className="fixed inset-0 z-50 bg-black/50"
