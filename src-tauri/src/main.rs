@@ -4,7 +4,7 @@ mod sidecar;
 
 use sidecar::{kill_sidecar, spawn_sidecar, SidecarState};
 use std::path::PathBuf;
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Manager, RunEvent, State};
 
 #[tauri::command]
 fn get_api_base_url(state: State<'_, SidecarState>) -> Result<String, String> {
@@ -69,36 +69,36 @@ fn open_data_folder(app: AppHandle) -> Result<(), String> {
 }
 
 fn main() {
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
         .manage(SidecarState::default())
         .setup(|app| {
-            let state = app.state::<SidecarState>();
+            let handle = app.handle().clone();
             let data_dir = app
                 .path()
                 .app_data_dir()
                 .unwrap_or_else(|_| PathBuf::from("./data"));
             std::fs::create_dir_all(&data_dir).ok();
-            match spawn_sidecar(&state, data_dir) {
-                Ok(port) => {
-                    println!("[personai] Sidecar on http://127.0.0.1:{port}");
-                }
-                Err(err) => {
-                    eprintln!("[personai] Sidecar spawn failed: {err}");
-                    // Dev fallback: assume external `pnpm dev:server` on 4000
-                    if let Ok(mut p) = state.port.lock() {
-                        *p = 4000;
+
+            // Off the UI thread: sidecar delays/failures must not block or kill the webview.
+            std::thread::spawn(move || {
+                let state = handle.state::<SidecarState>();
+                match spawn_sidecar(&state, data_dir) {
+                    Ok(port) => {
+                        println!("[personai] Sidecar on http://127.0.0.1:{port}");
+                    }
+                    Err(err) => {
+                        eprintln!("[personai] Sidecar spawn failed (UI keeps running): {err}");
+                        eprintln!("[personai] Dev fallback: expecting API on http://127.0.0.1:4000");
+                        if let Ok(mut p) = state.port.lock() {
+                            *p = 4000;
+                        }
                     }
                 }
-            }
+            });
+
             Ok(())
-        })
-        .on_window_event(|window, event| {
-            if let tauri::WindowEvent::CloseRequested { .. } = event {
-                let state = window.app_handle().state::<SidecarState>();
-                kill_sidecar(&state);
-            }
         })
         .invoke_handler(tauri::generate_handler![
             get_api_base_url,
@@ -106,6 +106,21 @@ fn main() {
             get_sidecar_health,
             open_data_folder
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running PersonAI OS");
+        .build(tauri::generate_context!());
+
+    let app = match app {
+        Ok(app) => app,
+        Err(err) => {
+            eprintln!("[personai] Failed to build PersonAI OS: {err}");
+            std::process::exit(1);
+        }
+    };
+
+    app.run(|app_handle, event| match event {
+        RunEvent::ExitRequested { .. } | RunEvent::Exit => {
+            let state = app_handle.state::<SidecarState>();
+            kill_sidecar(&state);
+        }
+        _ => {}
+    });
 }
