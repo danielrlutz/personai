@@ -1,0 +1,36 @@
+---
+description: Keep the git working tree clean; commit finished work before ending
+alwaysApply: true
+---
+
+# Clean Git Worktree
+
+Agents must leave a clean `git status` when finishing work, unless the user explicitly asks to keep WIP uncommitted.
+
+## Before ending a task
+
+1. Run `git status` and resolve any leftover changes from your work.
+2. Stage and commit completed work in **logical sequential commits** with meaningful messages (why over what).
+3. Do not end with unstaged/untracked files you created or modified as part of the task.
+
+## What to commit vs ignore
+
+- Commit only relevant source, config, and docs for the change.
+- Respect `.gitignore`. Do not leave or commit untracked build artifacts (`dist/`, `target/`, `.next/`, coverage, caches, generated binaries).
+- Never commit secrets (`.env`, credentials, tokens, private keys). Warn if the user asks to commit them.
+
+## Commit hygiene
+
+```text
+# ❌ BAD — finish with dirty tree after implementing a feature
+# (modified files left unstaged / uncommitted)
+
+# ✅ GOOD — stage relevant files, commit, verify clean
+git add <relevant-files>
+git commit -m "feat: describe why this change exists"
+git status  # should be clean (or only unrelated pre-existing dirt)
+```
+
+- Prefer small, sequential commits over one catch-all dump when the work has distinct steps.
+- Do not use `--no-verify` or amend pushed history unless the user explicitly requests it.
+- If the tree was already dirty before your work, do not mix unrelated pre-existing changes into your commits; still commit your own completed work so you do not add more dirt.
