@@ -214,18 +214,20 @@ cd /etc/personaios && git fetch && git reset --hard origin/main
 
 What the script does: sets `NEXT_PUBLIC_API_URL=http://HOST:4000` (no trailing slash), `OLLAMA_HOST=http://host.docker.internal:11434`, clears `COMPOSE_FILE` / `COMPOSE_PROFILES`, rebuilds **api + web**, then health-checks `:4000/health` (and `/health/`) plus `:3000`.
 
+Still recommend baking via `vps-tailscale.sh`. If UI and API share the same MagicDNS hostname, the phone also works without a manual Settings override: when `NEXT_PUBLIC_API_URL` is unset and nothing is stored, the web client defaults to `http://<current-hostname>:4000` (localhost stays for desktop/Tauri).
+
 | Surface | URL |
 |---------|-----|
 | Phone browser / PWA | `http://debi9.tail8175e6.ts.net:3000` |
-| API (Settings override) | `http://debi9.tail8175e6.ts.net:4000` |
+| API (auto / Settings) | `http://debi9.tail8175e6.ts.net:4000` |
 
 **On the phone after rebuild:**
 
 1. Chrome → site settings for that origin → **Delete site data** (clears bad Service Worker / old shell). If installed as PWA, uninstall the shortcut first.
 2. Open `http://debi9.tail8175e6.ts.net:3000`
-3. **Settings → API Server** → set `http://debi9.tail8175e6.ts.net:4000` (**no trailing slash**) → Save & test. This localStorage override wins even if the image was built with `localhost:4000`.
+3. If the app still cannot reach the API, **Settings → API Server** → use **Use this host's API** (or set `http://debi9.tail8175e6.ts.net:4000`, **no trailing slash**) → Save & test. This localStorage override wins even if the image was built with `localhost:4000`.
 
-The web image is a **static Next.js export** — `NEXT_PUBLIC_API_URL` is baked at **image build** time; `.env` alone is not enough without rebuild (or the Settings override above).
+The web image is a **static Next.js export** — `NEXT_PUBLIC_API_URL` is baked at **image build** time; `.env` alone is not enough without rebuild (hostname fallback and Settings override still work without a bake-in).
 
 PersonAI routes are `/`, `/profiles/`, `/dashboard/`, etc. There is **no** `/auth` route. There are **no** SvelteKit `/_app/immutable/...` assets — only Next `/_next/static/...`.
 

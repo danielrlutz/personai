@@ -26,8 +26,24 @@ export class ApiError extends Error {
   }
 }
 
-function resolveEnvApiBase(): string {
-  return normalizeApiBaseUrl(process.env.NEXT_PUBLIC_API_URL ?? "") ?? DEFAULT_API_BASE;
+function isLocalHostname(hostname: string): boolean {
+  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]";
+}
+
+/** Baked NEXT_PUBLIC only — null when unset so callers can fall through. */
+function resolveEnvApiBase(): string | null {
+  return normalizeApiBaseUrl(process.env.NEXT_PUBLIC_API_URL ?? "");
+}
+
+/**
+ * When UI is opened on a remote host (e.g. Tailscale MagicDNS) and nothing is
+ * configured, assume the API shares that hostname on :4000.
+ */
+export function getSuggestedApiBaseUrl(): string | null {
+  if (typeof window === "undefined") return null;
+  const host = window.location.hostname;
+  if (!host || isLocalHostname(host)) return null;
+  return normalizeApiBaseUrl(`http://${host}:4000`);
 }
 
 export function getApiBaseUrl(): string {
@@ -38,7 +54,14 @@ export function getApiBaseUrl(): string {
     const stored = getStoredApiBaseUrl();
     if (stored) return stored;
   }
-  return resolveEnvApiBase();
+
+  const fromEnv = resolveEnvApiBase();
+  if (fromEnv) return fromEnv;
+
+  const suggested = getSuggestedApiBaseUrl();
+  if (suggested) return suggested;
+
+  return DEFAULT_API_BASE;
 }
 
 export function setApiBaseUrl(url: string): void {

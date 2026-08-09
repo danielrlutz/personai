@@ -8,6 +8,7 @@ import {
   apiPost,
   apiPut,
   getApiBaseUrl,
+  getSuggestedApiBaseUrl,
   setApiBaseUrl,
   type CeoProfile,
   type LicenseInfo,
@@ -57,6 +58,7 @@ export default function SettingsPage() {
   const [apiUrl, setApiUrl] = useState("");
   const [apiNote, setApiNote] = useState<string | null>(null);
   const [apiTesting, setApiTesting] = useState(false);
+  const [suggestedApiUrl, setSuggestedApiUrl] = useState<string | null>(null);
   const [license, setLicense] = useState<LicenseInfo | null>(null);
   const [profileName, setProfileName] = useState("");
   const [saved, setSaved] = useState(false);
@@ -107,6 +109,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     setApiUrl(getStoredApiBaseUrl() ?? getApiBaseUrl());
+    setSuggestedApiUrl(getSuggestedApiBaseUrl());
     void apiGet<LicenseInfo>("/license").then(setLicense).catch(() => undefined);
     void apiGet<ProfileRegistry>("/profiles").then((registry) => {
       const id = getActiveProfileId();
@@ -117,8 +120,8 @@ export default function SettingsPage() {
     void refreshMemory();
   }, []);
 
-  const saveApiUrl = async () => {
-    const normalized = normalizeApiBaseUrl(apiUrl);
+  const saveApiUrl = async (urlOverride?: string) => {
+    const normalized = normalizeApiBaseUrl(urlOverride ?? apiUrl);
     if (!normalized) {
       setApiNote("Enter a URL like http://debi9.tail8175e6.ts.net:4000 (no trailing slash).");
       return;
@@ -245,24 +248,43 @@ export default function SettingsPage() {
             API Server
           </CardTitle>
           <CardDescription>
-            Overrides the baked-in build URL (localStorage). Phone via Tailscale:{" "}
-            <span className="font-mono text-foreground">http://debi9.tail8175e6.ts.net:4000</span> — no
-            trailing slash. Takes effect even when NEXT_PUBLIC_API_URL was wrong at image build.
+            Overrides the baked-in build URL (localStorage). On Tailscale, when UI and API share a
+            hostname, the client defaults to{" "}
+            <span className="font-mono text-foreground">http://&lt;host&gt;:4000</span> without a
+            manual override. Takes effect even when NEXT_PUBLIC_API_URL was wrong at image build.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <Input
             value={apiUrl}
             onChange={(e) => setApiUrl(e.target.value)}
-            placeholder="http://debi9.tail8175e6.ts.net:4000"
+            placeholder={suggestedApiUrl ?? "http://debi9.tail8175e6.ts.net:4000"}
             inputMode="url"
             autoCapitalize="none"
             autoCorrect="off"
             spellCheck={false}
           />
-          <Button onClick={() => void saveApiUrl()} disabled={apiTesting || !apiUrl.trim()}>
-            {apiTesting ? "Testing…" : saved ? "Saved!" : "Save & test API URL"}
-          </Button>
+          {suggestedApiUrl ? (
+            <p className="text-xs text-muted-foreground">
+              Detected for this host:{" "}
+              <span className="font-mono text-foreground">{suggestedApiUrl}</span>
+            </p>
+          ) : null}
+          <div className="flex flex-wrap gap-2">
+            {suggestedApiUrl && normalizeApiBaseUrl(apiUrl) !== suggestedApiUrl ? (
+              <Button
+                type="button"
+                variant="outline"
+                disabled={apiTesting}
+                onClick={() => void saveApiUrl(suggestedApiUrl)}
+              >
+                Use this host&apos;s API
+              </Button>
+            ) : null}
+            <Button onClick={() => void saveApiUrl()} disabled={apiTesting || !apiUrl.trim()}>
+              {apiTesting ? "Testing…" : saved ? "Saved!" : "Save & test API URL"}
+            </Button>
+          </div>
           {apiNote ? <p className="text-xs text-muted-foreground">{apiNote}</p> : null}
           <p className="text-xs text-muted-foreground">
             Active: <span className="font-mono text-foreground">{getApiBaseUrl()}</span>

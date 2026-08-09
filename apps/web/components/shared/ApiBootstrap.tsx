@@ -5,7 +5,7 @@ import { isTauriRuntime, syncTauriApiBaseUrl } from "@/lib/tauri";
 
 /**
  * In Tauri, resolve the sidecar API base URL before children fetch.
- * Browser/PWA skips the gate entirely (default localhost:4000).
+ * Browser/PWA skips the gate entirely (localhost:4000, or same-host :4000 on remote).
  */
 export function ApiBootstrap({ children }: { children: React.ReactNode }) {
   const [ready, setReady] = useState(() => {
