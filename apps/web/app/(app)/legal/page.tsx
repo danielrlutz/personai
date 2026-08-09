@@ -12,7 +12,7 @@ export default function LegalPage() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Legal</h1>
         <p className="mt-1 text-muted-foreground">
-          Deadlines (Fristen), filings, and compliance tasks.
+          Deadlines and filings you choose to track — nothing is seeded for you.
         </p>
       </div>
       <div className="grid gap-6 lg:grid-cols-3">

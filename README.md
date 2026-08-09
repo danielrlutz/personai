@@ -1,6 +1,6 @@
 # PersonAI OS
 
-Local-first **pocket team** for Swiss/CH-DE freelancers — twelve specialist modes, archive OCR with confirm gates, finance/legal/medical ops, morning brief, and local Ollama. Data stays on disk (SQLite per profile).
+Local-first **pocket team** for personal life, business ops, or both (Swiss/CH-DE aware) — twelve specialist modes, archive OCR with confirm gates, finance/legal/medical, morning brief, and local Ollama. Data stays on disk (SQLite per profile). New profiles default to **personal** mode (no business/MWST boilerplate).
 
 Inspired by Harmonia Hermes (one orchestration path, confirm before irreversible writes) — implemented **in-app**, not as Telegram bots or n8n.
 

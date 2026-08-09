@@ -15,6 +15,7 @@ import {
   type MemoryFact,
   type OllamaHealth,
   type ProfileRegistry,
+  type UsageMode,
 } from "@/lib/api-client";
 import {
   getStoredProfileId,
@@ -30,6 +31,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { PageEnter } from "@/components/motion/PageEnter";
 import { cn } from "@/lib/utils";
+import {
+  DEFAULT_USAGE_MODE,
+  USAGE_MODE_OPTIONS,
+  normalizeUsageMode,
+  notifyUsageModeChanged,
+} from "@/lib/usage-mode";
 
 function runtimeBadge(runtime?: OllamaHealth["runtime"]): string {
   switch (runtime) {
@@ -47,6 +54,7 @@ function runtimeBadge(runtime?: OllamaHealth["runtime"]): string {
 const emptyCeo: CeoProfile = {
   displayName: null,
   company: null,
+  usageMode: DEFAULT_USAGE_MODE,
   locale: null,
   language: null,
   timezone: null,
@@ -95,6 +103,7 @@ export default function SettingsPage() {
       setCeo({
         displayName: profile.displayName ?? null,
         company: profile.company ?? null,
+        usageMode: normalizeUsageMode(profile.usageMode),
         locale: profile.locale ?? null,
         language: profile.language ?? null,
         timezone: profile.timezone ?? null,
@@ -103,7 +112,7 @@ export default function SettingsPage() {
       });
       setFacts(mem.facts ?? []);
     } catch {
-      setFactNote("Could not load CEO profile / memory.");
+      setFactNote("Could not load profile / memory.");
     }
   };
 
@@ -176,19 +185,24 @@ export default function SettingsPage() {
     setCeoSaving(true);
     setCeoNote(null);
     try {
-      const updated = await apiPut<CeoProfile>("/ceo-profile", ceo);
+      const updated = await apiPut<CeoProfile>("/ceo-profile", {
+        ...ceo,
+        usageMode: normalizeUsageMode(ceo.usageMode),
+      });
       setCeo({
         displayName: updated.displayName ?? null,
         company: updated.company ?? null,
+        usageMode: normalizeUsageMode(updated.usageMode),
         locale: updated.locale ?? null,
         language: updated.language ?? null,
         timezone: updated.timezone ?? null,
         briefHour: updated.briefHour ?? null,
         notes: updated.notes ?? null,
       });
+      notifyUsageModeChanged();
       setCeoNote("Profile saved. Specialists see a short summary of you each turn.");
     } catch (err) {
-      setCeoNote(err instanceof Error ? err.message : "Failed to save CEO profile");
+      setCeoNote(err instanceof Error ? err.message : "Failed to save profile");
     } finally {
       setCeoSaving(false);
     }
@@ -394,24 +408,55 @@ export default function SettingsPage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             <User className="h-4 w-4 text-primary" />
-            CEO profile
+            Your profile
           </CardTitle>
           <CardDescription>
-            Short profile shown to specialists and in the morning brief — not your full chat history.
+            How you use PersonAI, plus a short card for specialists and the morning brief.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-3">
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <p className="text-sm font-medium tracking-tight">I use this for</p>
+            <div className="grid gap-2 sm:grid-cols-3">
+              {USAGE_MODE_OPTIONS.map((opt) => {
+                const active = normalizeUsageMode(ceo.usageMode) === opt.value;
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setCeo((c) => ({ ...c, usageMode: opt.value as UsageMode }))}
+                    className={cn(
+                      "rounded-2xl border px-3 py-3 text-left transition-colors",
+                      active
+                        ? "border-primary bg-primary/5 shadow-elev-1"
+                        : "border-border/70 hover:bg-surface-container-high",
+                    )}
+                  >
+                    <p className="text-sm font-semibold tracking-tight">{opt.label}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">{opt.description}</p>
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              New profiles default to Personal — no MWST or business legal tasks are auto-created.
+              Existing tasks you already added are kept.
+            </p>
+          </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <Input
               value={ceo.displayName ?? ""}
               onChange={(e) => setCeo((c) => ({ ...c, displayName: e.target.value }))}
               placeholder="Display name"
             />
-            <Input
-              value={ceo.company ?? ""}
-              onChange={(e) => setCeo((c) => ({ ...c, company: e.target.value }))}
-              placeholder="Company (optional)"
-            />
+            {(normalizeUsageMode(ceo.usageMode) === "BUSINESS" ||
+              normalizeUsageMode(ceo.usageMode) === "BOTH") && (
+              <Input
+                value={ceo.company ?? ""}
+                onChange={(e) => setCeo((c) => ({ ...c, company: e.target.value }))}
+                placeholder="Company (optional)"
+              />
+            )}
             <Input
               value={ceo.locale ?? ""}
               onChange={(e) => setCeo((c) => ({ ...c, locale: e.target.value }))}
@@ -441,7 +486,7 @@ export default function SettingsPage() {
             className="resize-none"
           />
           <Button onClick={() => void saveCeo()} disabled={ceoSaving}>
-            {ceoSaving ? "Saving…" : "Save CEO profile"}
+            {ceoSaving ? "Saving…" : "Save profile"}
           </Button>
           {ceoNote ? <p className="text-xs text-muted-foreground">{ceoNote}</p> : null}
         </CardContent>

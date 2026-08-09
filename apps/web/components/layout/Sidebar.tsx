@@ -17,6 +17,7 @@ import {
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { OllamaStatusIndicator } from "@/components/shared/OllamaStatusIndicator";
+import { orderPrimaryNav, useUsageMode } from "@/lib/usage-mode";
 
 const primaryNav = [
   { href: "/dashboard/", label: "Home", icon: LayoutDashboard },
@@ -69,6 +70,9 @@ function NavLink({
 }
 
 export function Sidebar({ collapsed, onToggle }: SidebarProps) {
+  const { usageMode } = useUsageMode();
+  const nav = orderPrimaryNav(primaryNav, usageMode);
+
   return (
     <aside
       className={cn(
@@ -92,7 +96,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
 
       <nav className={cn("flex flex-1 flex-col gap-1 overflow-y-auto p-2.5", collapsed && "px-1.5")}>
         <div className="space-y-1">
-          {primaryNav.map((item) => (
+          {nav.map((item) => (
             <NavLink key={item.href} {...item} collapsed={collapsed} />
           ))}
         </div>

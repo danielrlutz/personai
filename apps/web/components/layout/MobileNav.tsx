@@ -11,8 +11,9 @@ import {
   Settings,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { orderMobileNav, useUsageMode } from "@/lib/usage-mode";
 
-/** Primary destinations — Settings is first-class (API / profile / memory). Medical stays in desktop sidebar + ⌘K. */
+/** Primary destinations — Settings is first-class. Medical stays in desktop sidebar + ⌘K. */
 const items = [
   { href: "/dashboard/", label: "Home", icon: LayoutDashboard },
   { href: "/life/", label: "Life", icon: Sparkles },
@@ -24,6 +25,8 @@ const items = [
 
 export function MobileNav() {
   const pathname = usePathname();
+  const { usageMode } = useUsageMode();
+  const nav = orderMobileNav(items, usageMode);
 
   return (
     <nav
@@ -31,7 +34,7 @@ export function MobileNav() {
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
       <ul className="flex items-stretch justify-around px-0.5 pt-1.5">
-        {items.map(({ href, label, icon: Icon }) => {
+        {nav.map(({ href, label, icon: Icon }) => {
           const base = href.replace(/\/+$/, "");
           const active = pathname === href || pathname === base || pathname.startsWith(`${base}/`);
           return (

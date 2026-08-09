@@ -123,6 +123,13 @@ enum LifeDomain {
   BOTH
 }
 
+/** App-wide focus: personal life, business ops, or both. Default PERSONAL (no business boilerplate). */
+enum UsageMode {
+  PERSONAL
+  BUSINESS
+  BOTH
+}
+
 model Setting {
   id        String   @id @default(cuid())
   key       String   @unique
@@ -259,17 +266,19 @@ model ChatSession {
   updatedAt      DateTime @updatedAt
 }
 
-/** Singleton CEO / user card per profile DB (id = "default"). */
+/** Singleton user card per profile DB (id = "default"). */
 model CeoProfile {
-  id          String   @id @default("default")
+  id          String    @id @default("default")
   displayName String?
   company     String?
+  /** personal | business | both — gates defaults and Home/nav emphasis. */
+  usageMode   UsageMode @default(PERSONAL)
   locale      String?
   language    String?
   timezone    String?
   briefHour   String?
   notes       String?
-  updatedAt   DateTime @updatedAt
+  updatedAt   DateTime  @updatedAt
 }
 
 /** Durable user facts for specialists — inject only a recent bounded set. */

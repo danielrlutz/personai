@@ -1,4 +1,4 @@
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, type UsageMode } from "@prisma/client";
 import fs from "node:fs";
 import path from "node:path";
 import { execSync } from "node:child_process";
@@ -58,7 +58,24 @@ export async function getPrisma(profileId: string): Promise<PrismaClient> {
   return activeClient;
 }
 
-/** Settings + empty budget category templates only — never invents user content. */
+/**
+ * Optional empty category shells when the user opts into business/both and has none yet.
+ * Never invents spend, limits, or legal/MWST tasks. Does not delete existing user categories.
+ */
+export async function ensureBusinessCategoryShells(client: PrismaClient): Promise<void> {
+  const catCount = await client.budgetCategory.count();
+  if (catCount > 0) return;
+  await client.budgetCategory.createMany({
+    data: [
+      { name: "Betriebskosten", monthlyLimit: null, color: "#14b8a6" },
+      { name: "Leben", monthlyLimit: null, color: "#6366f1" },
+      { name: "Steuern/AHV", monthlyLimit: null, color: "#f59e0b" },
+      { name: "Gesundheit", monthlyLimit: null, color: "#ef4444" },
+    ],
+  });
+}
+
+/** Settings + empty CeoProfile only — no fake business obligations for new personal profiles. */
 async function seedDefaults(client: PrismaClient): Promise<void> {
   const defaults: Record<string, string> = {
     "ollama.visionModel": "maternion/LightOnOCR-2",
@@ -76,24 +93,35 @@ async function seedDefaults(client: PrismaClient): Promise<void> {
     });
   }
 
-  // Empty category shells (zero spend/transactions). Limits are templates, not fake activity.
-  const catCount = await client.budgetCategory.count();
-  if (catCount === 0) {
-    await client.budgetCategory.createMany({
-      data: [
-        { name: "Betriebskosten", monthlyLimit: 1500, color: "#14b8a6" },
-        { name: "Leben", monthlyLimit: 2000, color: "#6366f1" },
-        { name: "Steuern/AHV", monthlyLimit: 800, color: "#f59e0b" },
-        { name: "Gesundheit", monthlyLimit: 400, color: "#ef4444" },
-      ],
-    });
-  }
-
   await client.ceoProfile.upsert({
     where: { id: "default" },
-    create: { id: "default" },
+    create: { id: "default", usageMode: "PERSONAL" },
     update: {},
   });
+
+  const profile = await client.ceoProfile.findUnique({ where: { id: "default" } });
+  const mode = (profile?.usageMode ?? "PERSONAL") as UsageMode;
+
+  // New PERSONAL profiles: leave budget categories empty (honest empty state).
+  // BUSINESS/BOTH with zero categories: optional empty shells — never MWST/legal tasks.
+  if (mode === "BUSINESS" || mode === "BOTH") {
+    await ensureBusinessCategoryShells(client);
+  }
+
+  // Clear classic seed limits (exact name+amount) that looked like live budget data.
+  // Does not remove categories or any user-edited limits.
+  const seedLimits: Array<{ name: string; monthlyLimit: number }> = [
+    { name: "Betriebskosten", monthlyLimit: 1500 },
+    { name: "Leben", monthlyLimit: 2000 },
+    { name: "Steuern/AHV", monthlyLimit: 800 },
+    { name: "Gesundheit", monthlyLimit: 400 },
+  ];
+  for (const seed of seedLimits) {
+    await client.budgetCategory.updateMany({
+      where: seed,
+      data: { monthlyLimit: null },
+    });
+  }
 }
 
 export function getActiveProfileId(): string | null {

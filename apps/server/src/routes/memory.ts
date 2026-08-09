@@ -1,6 +1,9 @@
 import type { FastifyInstance } from "fastify";
+import { ensureBusinessCategoryShells } from "../db/prisma-singleton.js";
 import { ensureCeoProfile } from "../memory/user-care.js";
 import { sendError, withPrisma } from "./helpers.js";
+
+const USAGE_MODES = new Set(["PERSONAL", "BUSINESS", "BOTH"]);
 
 export async function registerMemoryRoutes(app: FastifyInstance): Promise<void> {
   app.get("/ceo-profile", async (req, reply) => {
@@ -16,6 +19,7 @@ export async function registerMemoryRoutes(app: FastifyInstance): Promise<void> 
     Body: {
       displayName?: string | null;
       company?: string | null;
+      usageMode?: "PERSONAL" | "BUSINESS" | "BOTH";
       locale?: string | null;
       language?: string | null;
       timezone?: string | null;
@@ -27,6 +31,9 @@ export async function registerMemoryRoutes(app: FastifyInstance): Promise<void> 
       const { prisma } = await withPrisma(req);
       await ensureCeoProfile(prisma);
       const body = req.body ?? {};
+      if (body.usageMode !== undefined && !USAGE_MODES.has(body.usageMode)) {
+        return reply.status(400).send({ error: "usageMode must be PERSONAL, BUSINESS, or BOTH" });
+      }
       const trimOrNull = (v: string | null | undefined) => {
         if (v === undefined) return undefined;
         if (v === null) return null;
@@ -38,6 +45,7 @@ export async function registerMemoryRoutes(app: FastifyInstance): Promise<void> 
         data: {
           ...(body.displayName !== undefined ? { displayName: trimOrNull(body.displayName) } : {}),
           ...(body.company !== undefined ? { company: trimOrNull(body.company) } : {}),
+          ...(body.usageMode !== undefined ? { usageMode: body.usageMode } : {}),
           ...(body.locale !== undefined ? { locale: trimOrNull(body.locale) } : {}),
           ...(body.language !== undefined ? { language: trimOrNull(body.language) } : {}),
           ...(body.timezone !== undefined ? { timezone: trimOrNull(body.timezone) } : {}),
@@ -45,6 +53,10 @@ export async function registerMemoryRoutes(app: FastifyInstance): Promise<void> 
           ...(body.notes !== undefined ? { notes: trimOrNull(body.notes) } : {}),
         },
       });
+      // Opt-in only: empty business category shells when user enables business — never legal/MWST tasks.
+      if (updated.usageMode === "BUSINESS" || updated.usageMode === "BOTH") {
+        await ensureBusinessCategoryShells(prisma);
+      }
       return updated;
     } catch (err) {
       return sendError(reply, err);

@@ -6,9 +6,12 @@ export const HISTORY_WINDOW = 20;
 export const SESSION_SUMMARY_EVERY_N = 6;
 export const CEO_PROFILE_ID = "default";
 
+export type UsageMode = "PERSONAL" | "BUSINESS" | "BOTH";
+
 export type CeoProfileCard = {
   displayName: string | null;
   company: string | null;
+  usageMode: UsageMode;
   locale: string | null;
   language: string | null;
   timezone: string | null;
@@ -58,7 +61,7 @@ export type SlimLiveOps = {
 export async function ensureCeoProfile(prisma: PrismaClient) {
   return prisma.ceoProfile.upsert({
     where: { id: CEO_PROFILE_ID },
-    create: { id: CEO_PROFILE_ID },
+    create: { id: CEO_PROFILE_ID, usageMode: "PERSONAL" },
     update: {},
   });
 }
@@ -68,6 +71,7 @@ export async function getCeoProfileCard(prisma: PrismaClient): Promise<CeoProfil
   return {
     displayName: row.displayName,
     company: row.company,
+    usageMode: row.usageMode,
     locale: row.locale,
     language: row.language,
     timezone: row.timezone,
@@ -171,7 +175,7 @@ export async function buildSlimLiveOps(
 }
 
 function compactCeoLine(ceo: CeoProfileCard): string {
-  const parts: string[] = [];
+  const parts: string[] = [`usageMode=${ceo.usageMode}`];
   if (ceo.displayName) parts.push(`name=${ceo.displayName}`);
   if (ceo.company) parts.push(`company=${ceo.company}`);
   if (ceo.locale) parts.push(`locale=${ceo.locale}`);
@@ -179,7 +183,7 @@ function compactCeoLine(ceo: CeoProfileCard): string {
   if (ceo.timezone) parts.push(`timezone=${ceo.timezone}`);
   if (ceo.briefHour) parts.push(`briefHour=${ceo.briefHour}`);
   if (ceo.notes) parts.push(`notes=${ceo.notes.slice(0, 240)}`);
-  return parts.length ? parts.join("; ") : "(not set)";
+  return parts.join("; ");
 }
 
 function compactFactsBlock(facts: MemoryFactCard[]): string {
@@ -195,7 +199,7 @@ export function formatUserCareContext(opts: {
   sessionSummary?: string | null;
 }): string {
   const blocks = [
-    `CEO card: ${compactCeoLine(opts.ceo)}`,
+    `Profile card: ${compactCeoLine(opts.ceo)}`,
     `Memory facts (≤${MEMORY_FACT_INJECT_LIMIT} recent):\n${compactFactsBlock(opts.facts)}`,
     `Live ops (slim JSON):\n${JSON.stringify(opts.liveOps)}`,
   ];
@@ -205,9 +209,9 @@ export function formatUserCareContext(opts: {
   return blocks.join("\n\n");
 }
 
-/** Compact CEO + memory for briefing narrative (no live ops dump). */
+/** Compact profile + memory for briefing narrative (no live ops dump). */
 export function formatBriefingUserCare(ceo: CeoProfileCard, facts: MemoryFactCard[]): string {
-  return `CEO card: ${compactCeoLine(ceo)}\n\nMemory facts (≤${MEMORY_FACT_INJECT_LIMIT} recent):\n${compactFactsBlock(facts)}`;
+  return `Profile card: ${compactCeoLine(ceo)}\n\nMemory facts (≤${MEMORY_FACT_INJECT_LIMIT} recent):\n${compactFactsBlock(facts)}`;
 }
 
 /** Cheap rolling digest — no extra LLM call. */

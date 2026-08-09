@@ -59,7 +59,7 @@ export function LegalTimeline() {
           <EmptyState
             icon={Scale}
             title="No legal tasks"
-            description="Add deadlines (Fristen), filings, and compliance items."
+            description="Add a deadline or filing when you need one — empty by default."
           />
         ) : (
           <div className="relative space-y-0">

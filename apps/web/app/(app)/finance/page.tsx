@@ -26,7 +26,7 @@ export default function FinancePage() {
           <Button size="sm" asChild>
             <Link href="/team/?specialist=cfo">
               <MessageSquare className="mr-1.5 h-4 w-4" />
-              CFO
+              Ask finance
             </Link>
           </Button>
         </div>
