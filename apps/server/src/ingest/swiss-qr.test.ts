@@ -92,7 +92,7 @@ assert.equal(merged.length, 2);
 assert.equal(merged[0]!.endPage, 2);
 assert.equal(merged[1]!.startPage, 3);
 
-// Archive taxonomy: medical → Health, court/official → Official, contracts → Legal
+// Archive taxonomy: medical → Health, Behörden → Official, court/contracts → Legal
 assert.equal(suggestArchiveCategory("MEDICAL_RECORD"), 6);
 assert.equal(suggestArchiveCategory("OFFICIAL"), 1);
 assert.equal(suggestArchiveCategory("LEGAL"), 8);

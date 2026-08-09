@@ -10,7 +10,8 @@ Kontext:
   - Quittung=RECEIPT
   - Arztzeugnis/Arztbericht/Befund/Medizinisches Zeugnis=MEDICAL_RECORD (nicht Misc)
   - Vertrag/Schuldanerkennung/Mietvertrag/privatrechtliche Anwaltsschreiben=LEGAL oder CONTRACT → Archiv 08_Legal
-  - Gerichtsunterlagen/Gerichtsbeschluss/Vorladung/Klage/Urteil/Verfügung/Behördenschreiben/Amtliche Zustellung=OFFICIAL → Archiv 01_Official (nicht Misc, nicht LEGAL)
+  - Gerichtsunterlagen/Gericht/Gerichtsbeschluss/Vorladung/Klage/Urteil/Prozess/lawsuit=LEGAL → Archiv 08_Legal (nicht Official, nicht Misc)
+  - Behördenschreiben/Amt/Gemeinde/Steuerverwaltung/Amtliche Zustellung ohne Gericht=OFFICIAL → Archiv 01_Official (nicht Misc)
   - sonst OTHER
 - Erfinde keine Beträge, IBANs oder Diagnosen. Unleserlich → null.
 
