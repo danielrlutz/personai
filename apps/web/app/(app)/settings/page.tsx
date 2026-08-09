@@ -33,7 +33,10 @@ import {
   apiPost,
   apiPut,
   getApiBaseUrl,
+  getHttpFallbackApiBaseUrl,
+  getHttpFallbackSettingsUrl,
   getSuggestedApiBaseUrl,
+  probeApiHealth,
   setApiBaseUrl,
   type ArchiveRefreshResult,
   type CeoProfile,
@@ -97,6 +100,8 @@ export default function SettingsPage() {
   const [apiNote, setApiNote] = useState<string | null>(null);
   const [apiTesting, setApiTesting] = useState(false);
   const [suggestedApiUrl, setSuggestedApiUrl] = useState<string | null>(null);
+  const [httpFallbackApiUrl, setHttpFallbackApiUrl] = useState<string | null>(null);
+  const [httpFallbackSettingsUrl, setHttpFallbackSettingsUrl] = useState<string | null>(null);
   const [license, setLicense] = useState<LicenseInfo | null>(null);
   const [profileName, setProfileName] = useState("");
   const [saved, setSaved] = useState(false);
@@ -176,8 +181,27 @@ export default function SettingsPage() {
   };
 
   useEffect(() => {
-    setApiUrl(getStoredApiBaseUrl() ?? getApiBaseUrl());
-    setSuggestedApiUrl(getSuggestedApiBaseUrl());
+    const active = getStoredApiBaseUrl() ?? getApiBaseUrl();
+    const suggested = getSuggestedApiBaseUrl();
+    const httpApi = getHttpFallbackApiBaseUrl();
+    const httpSettings = getHttpFallbackSettingsUrl();
+    setApiUrl(active);
+    setSuggestedApiUrl(suggested);
+    setHttpFallbackApiUrl(httpApi);
+    setHttpFallbackSettingsUrl(httpSettings);
+
+    void (async () => {
+      if (!active.startsWith("https:")) return;
+      const probe = await probeApiHealth(active, 3500);
+      if (probe.ok) return;
+      setApiNote(
+        `HTTPS API unreachable (${probe.error ?? "failed"}). Serve :8443 may be down. ` +
+          (httpSettings
+            ? `Temporary Drive setup: open ${httpSettings} with API ${httpApi} (not PWA).`
+            : `Try HTTP API ${httpApi} from http://HOST:3000.`),
+      );
+    })();
+
     void apiGet<LicenseInfo>("/license", { silent: true }).then(setLicense).catch(() => undefined);
     void apiGet<ProfileRegistry>("/profiles", { silent: true }).then((registry) => {
       const id = getActiveProfileId();
@@ -288,7 +312,24 @@ export default function SettingsPage() {
   const saveApiUrl = async (urlOverride?: string) => {
     const normalized = normalizeApiBaseUrl(urlOverride ?? apiUrl);
     if (!normalized) {
-      setApiNote("Enter a URL like http://debi9.tail8175e6.ts.net:4000 (no trailing slash).");
+      setApiNote(
+        "Enter a URL like https://debi9.tail8175e6.ts.net:8443 or http://…:4000 (no trailing slash).",
+      );
+      return;
+    }
+    // Mixed content: HTTPS page cannot call http:// API — send user to HTTP UI instead.
+    if (
+      typeof window !== "undefined" &&
+      window.location.protocol === "https:" &&
+      normalized.startsWith("http:") &&
+      httpFallbackSettingsUrl
+    ) {
+      setApiNote(
+        `Browsers block ${normalized} from this HTTPS page. Opening HTTP Settings for temporary Drive setup…`,
+      );
+      window.setTimeout(() => {
+        window.location.href = httpFallbackSettingsUrl;
+      }, 400);
       return;
     }
     setApiUrl(normalized);
@@ -297,22 +338,24 @@ export default function SettingsPage() {
     setApiNote(null);
     setSaved(false);
     try {
-      const res = await fetch(`${normalized}/health`, { method: "GET" });
-      if (!res.ok) {
-        throw new Error(`Health check returned ${res.status}`);
+      const probe = await probeApiHealth(normalized, 5000);
+      if (!probe.ok) {
+        throw new Error(probe.error ?? `Health check failed`);
       }
-      const body = (await res.json()) as { ok?: boolean };
-      if (!body.ok) throw new Error("Health check did not return ok");
       setSaved(true);
       setApiNote(`Connected to ${normalized}. Reloading so all pages use this API…`);
       window.setTimeout(() => {
         window.location.reload();
       }, 600);
     } catch (err) {
+      const httpsHint =
+        normalized.startsWith("https:") && httpFallbackSettingsUrl
+          ? ` Serve down? Open ${httpFallbackSettingsUrl} + API ${httpFallbackApiUrl} temporarily (not PWA).`
+          : "";
       setApiNote(
         `${err instanceof Error ? err.message : "Failed to fetch"} — URL saved anyway. ` +
-          `On phone use MagicDNS FQDN http://HOST.tailnet.ts.net:4000 (no trailing slash). ` +
-          `Clear site data if the build baked a wrong NEXT_PUBLIC_API_URL.`,
+          `On phone HTTPS: https://HOST:8443; HTTP browse: http://HOST:4000 (no trailing slash). ` +
+          `Clear site data if the build baked a wrong NEXT_PUBLIC_API_URL.${httpsHint}`,
       );
       // Still persist so override wins over a bad baked-in env after reload
       setSaved(true);
@@ -467,17 +510,18 @@ export default function SettingsPage() {
             API Server
           </CardTitle>
           <CardDescription>
-            Overrides the baked-in build URL (localStorage). On Tailscale, when UI and API share a
-            hostname, the client defaults to{" "}
-            <span className="font-mono text-foreground">http://&lt;host&gt;:4000</span> without a
-            manual override. Takes effect even when NEXT_PUBLIC_API_URL was wrong at image build.
+            Overrides the baked-in build URL (localStorage). On HTTPS (PWA) the matching API is{" "}
+            <span className="font-mono text-foreground">https://&lt;host&gt;:8443</span>; on HTTP
+            browse it is{" "}
+            <span className="font-mono text-foreground">http://&lt;host&gt;:4000</span>. Takes
+            effect even when NEXT_PUBLIC_API_URL was wrong at image build.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <Input
             value={apiUrl}
             onChange={(e) => setApiUrl(e.target.value)}
-            placeholder={suggestedApiUrl ?? "http://debi9.tail8175e6.ts.net:4000"}
+            placeholder={suggestedApiUrl ?? "https://debi9.tail8175e6.ts.net:8443"}
             inputMode="url"
             autoCapitalize="none"
             autoCorrect="off"
@@ -498,6 +542,18 @@ export default function SettingsPage() {
                 onClick={() => void saveApiUrl(suggestedApiUrl)}
               >
                 Use this host&apos;s API
+              </Button>
+            ) : null}
+            {httpFallbackApiUrl &&
+            normalizeApiBaseUrl(apiUrl) !== httpFallbackApiUrl &&
+            suggestedApiUrl !== httpFallbackApiUrl ? (
+              <Button
+                type="button"
+                variant="outline"
+                disabled={apiTesting}
+                onClick={() => void saveApiUrl(httpFallbackApiUrl)}
+              >
+                Try HTTP :4000
               </Button>
             ) : null}
             <Button onClick={() => void saveApiUrl()} disabled={apiTesting || !apiUrl.trim()}>

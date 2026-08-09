@@ -64,11 +64,17 @@ let cachedToken: { accessToken: string; expiresAt: number; key: string } | null 
 
 function oauthRedirectUriFromEnv(): string | null {
   const product = resolveProductConfig();
-  const explicit = product.googleOauthRedirectUri;
-  if (explicit) return explicit.replace(/\/$/, "");
-  const publicApi = product.publicApiUrl;
+  const publicApi = product.publicApiUrl?.replace(/\/$/, "") || null;
+  const explicit = product.googleOauthRedirectUri?.replace(/\/$/, "") || null;
+  // HTTPS API (Tailscale Serve :8443) must not keep a stale http://…:4000 redirect —
+  // Google + browsers require an exact match on the HTTPS callback.
+  if (publicApi?.startsWith("https:")) {
+    if (explicit?.startsWith("https:")) return explicit;
+    return `${publicApi}/archive/drive/oauth/callback`;
+  }
+  if (explicit) return explicit;
   if (publicApi) {
-    return `${publicApi.replace(/\/$/, "")}/archive/drive/oauth/callback`;
+    return `${publicApi}/archive/drive/oauth/callback`;
   }
   return `http://127.0.0.1:${process.env.PORT ?? 4000}/archive/drive/oauth/callback`;
 }

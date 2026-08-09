@@ -2,7 +2,17 @@
 
 import { useEffect, useState } from "react";
 import { KeyRound, Shield } from "lucide-react";
-import { apiGet, apiPut } from "@/lib/api-client";
+import {
+  apiGet,
+  apiPut,
+  getApiBaseUrl,
+  getHttpFallbackApiBaseUrl,
+  getHttpFallbackSettingsUrl,
+  getSuggestedApiBaseUrl,
+  preferReachableApiBaseUrl,
+  probeApiHealth,
+  setApiBaseUrl,
+} from "@/lib/api-client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,20 +41,68 @@ type ProductSettings = {
   source: { ollamaHost: string; googleOauth: string };
 };
 
+function httpsOauthRedirect(apiBase: string | null | undefined): string | null {
+  const base = (apiBase ?? "").replace(/\/$/, "");
+  if (!base.startsWith("https:")) return null;
+  return `${base}/archive/drive/oauth/callback`;
+}
+
 /** Settings-first control plane — secrets masked after save; vault wins over .env. */
 export function ProductSettingsCard() {
   const [s, setS] = useState<ProductSettings | null>(null);
   const [oauthSecret, setOauthSecret] = useState("");
   const [premiumKey, setPremiumKey] = useState("");
   const [note, setNote] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [fallbackBusy, setFallbackBusy] = useState(false);
 
-  const load = async () => {
+  const load = async (opts?: { skipPrefer?: boolean }) => {
+    setLoading(true);
+    setLoadError(null);
+    if (!opts?.skipPrefer) setNote(null);
     try {
+      if (!opts?.skipPrefer) {
+        const prefer = await preferReachableApiBaseUrl();
+        if (prefer.switched) {
+          setNote(prefer.reason ?? `Switched API to ${prefer.baseUrl}.`);
+        } else if (prefer.needsHttpUi && prefer.reason) {
+          // Still attempt load (will fail); surface Serve / HTTP UI guidance below.
+          setLoadError(prefer.reason);
+        }
+      }
       const data = await apiGet<ProductSettings>("/settings/product", { silent: true });
+      const httpsRedirect = httpsOauthRedirect(data.publicApiUrl ?? getSuggestedApiBaseUrl());
+      if (
+        httpsRedirect &&
+        (!data.googleOauthRedirectUri || data.googleOauthRedirectUri.startsWith("http:"))
+      ) {
+        data.googleOauthRedirectUri = httpsRedirect;
+      }
       setS(data);
-    } catch {
-      setNote("Could not load product settings vault.");
+      setLoadError(null);
+    } catch (err) {
+      setS(null);
+      const msg = err instanceof Error ? err.message : "Could not load product settings vault.";
+      const active = getApiBaseUrl();
+      const httpFallback = getHttpFallbackApiBaseUrl();
+      const httpSettings = getHttpFallbackSettingsUrl();
+      if (active.startsWith("https:") || httpSettings) {
+        setLoadError(
+          `${msg} Active API ${active} is unreachable — often Tailscale Serve has no config ` +
+            `(\`tailscale serve status\` → No serve config). ` +
+            (httpSettings
+              ? `Switch API URL: open ${httpSettings} and use ${httpFallback} (browse-only, not PWA).`
+              : `Set Settings → API Server to ${httpFallback ?? "http://HOST:4000"}.`),
+        );
+      } else if (httpFallback && active !== httpFallback) {
+        setLoadError(`${msg} Try switching API URL to ${httpFallback}.`);
+      } else {
+        setLoadError(msg);
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -52,11 +110,49 @@ export function ProductSettingsCard() {
     void load();
   }, []);
 
+  const tryHttpFallback = async () => {
+    const httpApi = getHttpFallbackApiBaseUrl();
+    const httpSettings = getHttpFallbackSettingsUrl();
+    if (!httpApi) return;
+    setFallbackBusy(true);
+    setNote(null);
+    try {
+      // From an HTTPS page, browsers block http:// API (mixed content) — navigate to HTTP UI.
+      if (typeof window !== "undefined" && window.location.protocol === "https:" && httpSettings) {
+        setLoadError(
+          `Cannot call ${httpApi} from this HTTPS page (mixed content). Opening HTTP Settings…`,
+        );
+        window.location.href = httpSettings;
+        return;
+      }
+      const probe = await probeApiHealth(httpApi);
+      if (!probe.ok) {
+        setLoadError(
+          `HTTP API ${httpApi} also failed (${probe.error ?? "unreachable"}). Fix Serve or docker compose on the VPS.`,
+        );
+        return;
+      }
+      setApiBaseUrl(httpApi);
+      setLoadError(null);
+      setNote(`Switched API to ${httpApi}. Reloading…`);
+      window.setTimeout(() => window.location.reload(), 400);
+    } finally {
+      setFallbackBusy(false);
+    }
+  };
+
   const save = async () => {
     if (!s) return;
     setSaving(true);
     setNote(null);
     try {
+      const httpsRedirect = httpsOauthRedirect(s.publicApiUrl);
+      const redirectUri =
+        httpsRedirect &&
+        (!s.googleOauthRedirectUri?.trim() || s.googleOauthRedirectUri.startsWith("http:"))
+          ? httpsRedirect
+          : s.googleOauthRedirectUri;
+
       const body: Record<string, unknown> = {
         ollamaHost: s.ollamaHost,
         visionModel: s.visionModel,
@@ -69,7 +165,7 @@ export function ProductSettingsCard() {
         publicWebUrl: s.publicWebUrl,
         publicApiUrl: s.publicApiUrl,
         googleOauthClientId: s.googleOauthClientId,
-        googleOauthRedirectUri: s.googleOauthRedirectUri,
+        googleOauthRedirectUri: redirectUri,
         googleDriveRootFolderId: s.googleDriveRootFolderId,
         premiumMonthlyQuota: s.premiumMonthlyQuota,
       };
@@ -91,13 +187,66 @@ export function ProductSettingsCard() {
     }
   };
 
-  if (!s) {
+  if (loading && !s) {
     return (
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Product vault</CardTitle>
           <CardDescription>Loading encrypted Settings…</CardDescription>
         </CardHeader>
+      </Card>
+    );
+  }
+
+  if (!s) {
+    const httpSettings = getHttpFallbackSettingsUrl();
+    const httpApi = getHttpFallbackApiBaseUrl();
+    const onHttps =
+      typeof window !== "undefined" && window.location.protocol === "https:";
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Shield className="h-4 w-4 text-destructive" />
+            Product vault
+          </CardTitle>
+          <CardDescription>Could not load encrypted Settings</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-sm text-destructive">{loadError ?? "API unreachable."}</p>
+          <p className="text-xs text-muted-foreground">
+            Active API: <span className="font-mono text-foreground">{getApiBaseUrl()}</span>
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="outline" disabled={fallbackBusy} onClick={() => void load()}>
+              Retry
+            </Button>
+            {httpApi ? (
+              <Button
+                type="button"
+                variant="outline"
+                disabled={fallbackBusy}
+                onClick={() => void tryHttpFallback()}
+              >
+                {fallbackBusy
+                  ? "Trying…"
+                  : onHttps
+                    ? "Open HTTP Settings (:3000)"
+                    : `Try HTTP API :4000`}
+              </Button>
+            ) : null}
+          </div>
+          {onHttps && httpSettings ? (
+            <p className="text-xs text-muted-foreground">
+              Workaround (Drive setup only, not Install app):{" "}
+              <a className="font-mono text-primary underline" href={httpSettings}>
+                {httpSettings}
+              </a>{" "}
+              with API{" "}
+              <span className="font-mono text-foreground">{httpApi}</span>.
+            </p>
+          ) : null}
+        </CardContent>
       </Card>
     );
   }
@@ -158,15 +307,23 @@ export function ProductSettingsCard() {
             <Input
               value={s.publicWebUrl ?? ""}
               onChange={(e) => setS({ ...s, publicWebUrl: e.target.value })}
-              placeholder="http://host:3000"
+              placeholder="https://host or http://host:3000"
             />
           </label>
           <label className="space-y-1.5 text-sm text-muted-foreground">
             Public API URL
             <Input
               value={s.publicApiUrl ?? ""}
-              onChange={(e) => setS({ ...s, publicApiUrl: e.target.value })}
-              placeholder="http://host:4000"
+              onChange={(e) => {
+                const publicApiUrl = e.target.value;
+                const httpsRedirect = httpsOauthRedirect(publicApiUrl);
+                setS({
+                  ...s,
+                  publicApiUrl,
+                  ...(httpsRedirect ? { googleOauthRedirectUri: httpsRedirect } : {}),
+                });
+              }}
+              placeholder="https://host:8443 or http://host:4000"
             />
           </label>
         </div>
@@ -196,7 +353,7 @@ export function ProductSettingsCard() {
           <Input
             value={s.googleOauthRedirectUri ?? ""}
             onChange={(e) => setS({ ...s, googleOauthRedirectUri: e.target.value })}
-            placeholder="Redirect URI …/archive/drive/oauth/callback"
+            placeholder="https://HOST:8443/archive/drive/oauth/callback"
             className="font-mono text-sm"
           />
           <div className="flex flex-wrap gap-2">
@@ -205,6 +362,9 @@ export function ProductSettingsCard() {
             ) : (
               <Badge variant="destructive">Secret missing</Badge>
             )}
+            {s.publicApiUrl?.startsWith("https:") ? (
+              <Badge variant="outline">HTTPS redirect required</Badge>
+            ) : null}
           </div>
         </div>
 

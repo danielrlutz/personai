@@ -118,13 +118,34 @@ normalize_host() {
   printf '%s' "$h"
 }
 
+ts_cmd() {
+  # Serve mutate often needs root; use passwordless sudo when available.
+  if [[ "$(id -u)" -eq 0 ]]; then
+    tailscale "$@"
+    return
+  fi
+  if command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
+    sudo tailscale "$@"
+  else
+    tailscale "$@"
+  fi
+}
+
 ts_serve() {
   # Prefer non-interactive; fall back without --yes for older CLI builds.
-  if tailscale serve --help 2>&1 | grep -qE -- '--yes'; then
-    tailscale serve --bg --yes "$@"
+  # Target forms tried by caller: port-only (4000) then http://127.0.0.1:PORT.
+  if ts_cmd serve --help 2>&1 | grep -qE -- '--yes'; then
+    ts_cmd serve --bg --yes "$@"
   else
-    tailscale serve --bg "$@"
+    ts_cmd serve --bg "$@"
   fi
+}
+
+probe_https_url() {
+  local url="$1"
+  local code
+  code="$(curl -sS -o /dev/null -w "%{http_code}" --connect-timeout 4 --max-time 12 "$url" 2>/dev/null || echo 000)"
+  [[ "$code" =~ ^(200|301|302|304)$ ]]
 }
 
 configure_tailscale_https() {
@@ -140,22 +161,72 @@ configure_tailscale_https() {
   echo "  Web  https://${host}       → http://127.0.0.1:3000"
   echo "  API  https://${host}:8443  → http://127.0.0.1:4000"
   echo "  (8443 avoids binding clash with Docker publishing 0.0.0.0:4000)"
+  echo "  CORS: API reflects Origin (https://${host} → :8443 is cross-port; Bearer auth)."
 
   # Clear prior Serve mounts so we own 443 + 8443 predictably.
-  tailscale serve reset >/dev/null 2>&1 || true
+  ts_cmd serve reset >/dev/null 2>&1 || true
 
-  if ! ts_serve --https=443 http://127.0.0.1:3000; then
+  # Prefer modern port-only targets; fall back to explicit loopback URLs.
+  local web_ok=0 api_ok=0
+  local web_target api_target
+  for web_target in "3000" "http://127.0.0.1:3000" "http://localhost:3000"; do
+    echo "  › Serve :443 ← ${web_target}"
+    if ts_serve --https=443 "$web_target"; then
+      web_ok=1
+      break
+    fi
+  done
+  if [[ "$web_ok" -ne 1 ]]; then
     echo "x Failed to bind Tailscale Serve on :443" >&2
     echo "  If prompted about HTTPS, enable certificates in the admin console, then re-run." >&2
     exit 1
   fi
-  if ! ts_serve --https=8443 http://127.0.0.1:4000; then
+
+  for api_target in "4000" "http://127.0.0.1:4000" "http://localhost:4000"; do
+    echo "  › Serve :8443 ← ${api_target}"
+    if ts_serve --https=8443 "$api_target"; then
+      api_ok=1
+      break
+    fi
+  done
+  if [[ "$api_ok" -ne 1 ]]; then
     echo "x Failed to bind Tailscale Serve on :8443" >&2
     exit 1
   fi
 
   echo "› tailscale serve status:"
-  tailscale serve status || true
+  ts_cmd serve status || true
+
+  echo "› Probing Serve from this host (MagicDNS)…"
+  local i probe_web=0 probe_api=0
+  for i in $(seq 1 15); do
+    if probe_https_url "https://${host}/"; then probe_web=1; fi
+    if probe_https_url "https://${host}:8443/health" \
+      || probe_https_url "https://${host}:8443/health/"; then
+      probe_api=1
+    fi
+    if [[ "$probe_web" -eq 1 && "$probe_api" -eq 1 ]]; then
+      break
+    fi
+    sleep 2
+  done
+
+  if [[ "$probe_web" -ne 1 ]]; then
+    echo "x HTTPS web probe failed: https://${host}/" >&2
+    echo "  Check: tailscale serve status; admin DNS → Enable HTTPS certificates" >&2
+    exit 1
+  fi
+  if [[ "$probe_api" -ne 1 ]]; then
+    echo "x HTTPS API probe failed: https://${host}:8443/health" >&2
+    echo "  Loopback API must be up: curl -sS http://127.0.0.1:4000/health" >&2
+    echo "  Recreate Serve:" >&2
+    echo "    sudo tailscale serve reset" >&2
+    echo "    sudo tailscale serve --bg --yes --https=443 3000" >&2
+    echo "    sudo tailscale serve --bg --yes --https=8443 4000" >&2
+    echo "  Temporary Drive setup (not PWA): http://${host}:3000 + API http://${host}:4000" >&2
+    exit 1
+  fi
+  echo "  ✓ https://${host}/ and https://${host}:8443/health OK"
 }
 
 echo "=== PersonAI Tailscale / phone rebuild ==="

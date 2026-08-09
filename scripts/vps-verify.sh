@@ -257,11 +257,18 @@ Authenticated check (after unlock — replace TOKEN):
   curl -sS -H "Authorization: Bearer TOKEN" -H "X-Profile-Id: PROFILE_ID" \\
     http://127.0.0.1:4000/team/specialists | head -c 200; echo
 
-Recovery (PWA):
+Recovery (PWA / Drive when :8443 dead):
   cd $ROOT && git fetch && git reset --hard origin/main
-  ./scripts/vps-verify.sh ${MAGICDNS}
+  curl -sS http://127.0.0.1:4000/health
+  sudo tailscale serve status
+  sudo tailscale serve reset
+  sudo tailscale serve --bg --yes --https=443 3000
+  sudo tailscale serve --bg --yes --https=8443 4000
+  curl -sS https://${MAGICDNS}:8443/health
   HTTPS=1 ./scripts/vps-tailscale.sh ${MAGICDNS}
-  # phone: https://${MAGICDNS} → Install app; Settings API = https://${MAGICDNS}:8443
+  ./scripts/vps-verify.sh ${MAGICDNS}
+  # phone HTTPS: https://${MAGICDNS} → API https://${MAGICDNS}:8443 → Product vault → OAuth → Link Drive
+  # temp Drive (not PWA): http://${MAGICDNS}:3000 + API http://${MAGICDNS}:4000
 EOF
 
 section "Result"

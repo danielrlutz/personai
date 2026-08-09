@@ -281,6 +281,56 @@ https://debi9.tail8175e6.ts.net:8443/archive/drive/oauth/callback
 
 Browse-only HTTP (not installable): `http://debi9.tail8175e6.ts.net:3000` / API `:4000`.
 
+### ralph@debi9 — Serve / Drive recovery
+
+If Settings shows **Loading encrypted Settings…**, Active API `https://…:8443`, and `/ceo-profile` / `/memory-facts` fail, Tailscale Serve for the API is usually broken. Product vault and **Link Google Drive** cannot load until the API answers.
+
+**Immediate workaround (Drive setup only — not PWA Install app):**
+
+```text
+Phone browser → http://debi9.tail8175e6.ts.net:3000
+Settings → API Server → http://debi9.tail8175e6.ts.net:4000 → Save & test
+Unlock → Product vault → OAuth → Link Google Drive
+```
+
+Do **not** stay on `https://…` and point the API at `http://…:4000` — browsers block that as mixed content.
+
+**VPS fix (ralph@debi9):**
+
+```bash
+cd /etc/personaios
+git fetch && git reset --hard origin/main
+
+# 1) Local stack healthy?
+curl -sS http://127.0.0.1:4000/health
+curl -sS -o /dev/null -w 'web %{http_code}\n' http://127.0.0.1:3000/
+
+# 2) Serve status + MagicDNS probes
+sudo tailscale serve status
+curl -sS https://debi9.tail8175e6.ts.net:8443/health
+curl -sS -o /dev/null -w 'https-web %{http_code}\n' https://debi9.tail8175e6.ts.net/
+curl -sS http://debi9.tail8175e6.ts.net:4000/health
+
+# 3) Recreate Serve (ports 443 + 8443 only)
+sudo tailscale serve reset
+sudo tailscale serve --bg --yes --https=443 3000
+sudo tailscale serve --bg --yes --https=8443 4000
+sudo tailscale serve status
+
+# 4) Or full HTTPS rebuild (bake URLs + Serve + probe)
+HTTPS=1 ./scripts/vps-tailscale.sh debi9.tail8175e6.ts.net
+./scripts/vps-verify.sh debi9.tail8175e6.ts.net
+```
+
+**Phone after Serve is healthy:**
+
+1. Open `https://debi9.tail8175e6.ts.net` (clear site data for old HTTP origins if needed).
+2. Unlock → Settings API = `https://debi9.tail8175e6.ts.net:8443` → Save & test.
+3. Product vault → Public API URL + redirect  
+   `https://debi9.tail8175e6.ts.net:8443/archive/drive/oauth/callback` (also in Google Cloud).
+4. **Link Google Drive** → Refresh archive context.
+5. Optional: Chrome → **Install app**.
+
 ---
 
 ## Quick checklist

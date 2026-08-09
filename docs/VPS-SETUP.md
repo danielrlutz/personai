@@ -336,9 +336,15 @@ Manual Serve (if you only need proxy, stack already healthy):
 
 ```bash
 sudo tailscale serve reset
-sudo tailscale serve --bg --https=443 http://127.0.0.1:3000
-sudo tailscale serve --bg --https=8443 http://127.0.0.1:4000
+sudo tailscale serve --bg --yes --https=443 3000
+sudo tailscale serve --bg --yes --https=8443 4000
+# equivalents: http://127.0.0.1:3000 / http://127.0.0.1:4000
+sudo tailscale serve status
+curl -sS https://debi9.tail8175e6.ts.net:8443/health
+curl -sS http://debi9.tail8175e6.ts.net:4000/health
 ```
+
+If `:8443/health` fails but `:4000/health` works, recreate Serve (above) or re-run `HTTPS=1 ./scripts/vps-tailscale.sh …`. Temporary Drive setup: phone → `http://HOST:3000` + API `http://HOST:4000` (not PWA).
 
 Then bake HTTPS URLs + recreate (script does this when `HTTPS=1`):
 

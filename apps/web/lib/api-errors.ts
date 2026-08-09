@@ -31,6 +31,9 @@ export function resolveApiBaseForErrors(explicit?: string): string {
   if (typeof window !== "undefined") {
     const host = window.location.hostname;
     if (host && !isLocalHostname(host)) {
+      if (window.location.protocol === "https:") {
+        return `https://${host}:8443`;
+      }
       return `http://${host}:4000`;
     }
   }
@@ -191,7 +194,8 @@ export function describeApiFailure(
       sticky: true,
       message:
         `Can't reach API at ${base}${pathHint} (${raw}). ` +
-        `Check API is up on :4000, not localhost-only. On phone: Settings → API URL → http://<magicdns>:4000 (no trailing slash). ` +
+        `HTTPS/PWA: https://<magicdns>:8443 (Serve). HTTP browse: http://<magicdns>:4000. ` +
+        `If Serve :8443 is down, open http://HOST:3000 temporarily for Drive setup (not Install app). ` +
         `If health works but chat fails with 401, unlock the profile first.`,
     };
   }

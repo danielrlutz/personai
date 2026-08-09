@@ -38,9 +38,13 @@ async function bootstrap() {
     bodyLimit: 50 * 1024 * 1024,
     ignoreTrailingSlash: true,
   });
-  // Reflect request Origin (Tailscale MagicDNS :3000 → :4000, localhost, etc.)
+  // Reflect request Origin for cross-port clients:
+  // - HTTP:  https?://HOST:3000 → http://HOST:4000
+  // - HTTPS: https://HOST (Serve :443) → https://HOST:8443 (Serve → :4000)
+  // Auth is Bearer (not cookies); credentials:false keeps wildcard-reflect safe.
   await app.register(cors, {
     origin: true,
+    credentials: false,
     methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Accept", "X-Profile-Id", "Authorization"],
     exposedHeaders: ["Content-Type"],

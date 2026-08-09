@@ -71,13 +71,59 @@ function resolveEnvApiBase(): string | null {
 
 /**
  * When UI is opened on a remote host (e.g. Tailscale MagicDNS) and nothing is
- * configured, assume the API shares that hostname on :4000.
+ * configured, assume the matching Serve/Docker API for this page scheme:
+ * - https://HOST        → https://HOST:8443  (Tailscale Serve → :4000)
+ * - http://HOST[:3000]  → http://HOST:4000
  */
 export function getSuggestedApiBaseUrl(): string | null {
   if (typeof window === "undefined") return null;
   const host = window.location.hostname;
   if (!host || isLocalHostname(host)) return null;
+  if (window.location.protocol === "https:") {
+    return normalizeApiBaseUrl(`https://${host}:8443`);
+  }
   return normalizeApiBaseUrl(`http://${host}:4000`);
+}
+
+/** Plain HTTP API for temporary Drive/setup when Serve :8443 is down (browse-only; not PWA). */
+export function getHttpFallbackApiBaseUrl(): string | null {
+  if (typeof window === "undefined") return null;
+  const host = window.location.hostname;
+  if (!host || isLocalHostname(host)) return null;
+  return normalizeApiBaseUrl(`http://${host}:4000`);
+}
+
+/** HTTP Settings origin when HTTPS API/Serve is dead — mixed content blocks http API from https UI. */
+export function getHttpFallbackSettingsUrl(): string | null {
+  if (typeof window === "undefined") return null;
+  const host = window.location.hostname;
+  if (!host || isLocalHostname(host)) return null;
+  return `http://${host}:3000/settings/`;
+}
+
+/** Probe API /health with a short timeout (does not mutate stored base URL). */
+export async function probeApiHealth(
+  baseUrl: string,
+  timeoutMs = 4000,
+): Promise<{ ok: boolean; status?: number; error?: string }> {
+  if (typeof window === "undefined") return { ok: false, error: "Not in browser" };
+  const base = normalizeApiBaseUrl(baseUrl);
+  if (!base) return { ok: false, error: "Invalid API URL" };
+  const ctrl = new AbortController();
+  const timer = window.setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const res = await fetch(`${base}/health`, { method: "GET", signal: ctrl.signal });
+    if (!res.ok) return { ok: false, status: res.status, error: `HTTP ${res.status}` };
+    const body = (await res.json().catch(() => null)) as { ok?: boolean } | null;
+    if (body && body.ok === false) return { ok: false, status: res.status, error: "Health not ok" };
+    return { ok: true, status: res.status };
+  } catch (err) {
+    const name = err instanceof Error ? err.name : "";
+    if (name === "AbortError") return { ok: false, error: "Timed out" };
+    return { ok: false, error: err instanceof Error ? err.message : "Failed to fetch" };
+  } finally {
+    window.clearTimeout(timer);
+  }
 }
 
 export function getApiBaseUrl(): string {
