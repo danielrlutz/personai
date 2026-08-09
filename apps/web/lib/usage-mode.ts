@@ -47,7 +47,7 @@ export const USAGE_MODE_OPTIONS: Array<{
 
 type NavItem = { href: string; label: string; icon: unknown };
 
-/** Desktop primary nav order by usage mode. */
+/** Desktop primary nav order by usage mode (core modules only). */
 export function orderPrimaryNav<T extends NavItem>(items: T[], mode: UsageMode): T[] {
   const byHref = new Map(items.map((i) => [i.href, i]));
   const pick = (hrefs: string[]) =>
@@ -57,22 +57,20 @@ export function orderPrimaryNav<T extends NavItem>(items: T[], mode: UsageMode):
     return pick([
       "/dashboard/",
       "/finance/",
-      "/legal/",
       "/team/",
       "/ingest/",
+      "/activity/",
       "/life/",
-      "/medical/",
     ]);
   }
-  // PERSONAL and BOTH: personal-first
+  // PERSONAL and BOTH: personal-first core
   return pick([
     "/dashboard/",
     "/life/",
-    "/medical/",
     "/team/",
-    "/finance/",
-    "/legal/",
     "/ingest/",
+    "/finance/",
+    "/activity/",
   ]);
 }
 

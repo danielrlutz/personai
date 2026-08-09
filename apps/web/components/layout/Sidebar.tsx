@@ -7,8 +7,6 @@ import {
   Sparkles,
   Upload,
   Wallet,
-  Scale,
-  HeartPulse,
   Settings,
   Users,
   Activity,
@@ -20,14 +18,13 @@ import { Button } from "@/components/ui/button";
 import { OllamaStatusIndicator } from "@/components/shared/OllamaStatusIndicator";
 import { orderPrimaryNav, useUsageMode } from "@/lib/usage-mode";
 
+/** Core destinations only — Legal/Medical live under Settings → Advanced. */
 const primaryNav = [
   { href: "/dashboard/", label: "Home", icon: LayoutDashboard },
   { href: "/life/", label: "Life", icon: Sparkles },
   { href: "/team/", label: "Team", icon: Users },
   { href: "/ingest/", label: "Archive", icon: Upload },
   { href: "/finance/", label: "Finance", icon: Wallet },
-  { href: "/legal/", label: "Legal", icon: Scale },
-  { href: "/medical/", label: "Medical", icon: HeartPulse },
   { href: "/activity/", label: "Activity", icon: Activity },
 ];
 

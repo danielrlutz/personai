@@ -18,6 +18,8 @@ interface ConfirmGateProps {
   refreshKey?: number;
   onResolved?: (decision: "confirm" | "reject") => void;
   compact?: boolean;
+  /** When true, show an honest empty card instead of hiding (Home widget). */
+  showEmpty?: boolean;
 }
 
 type ArchiveDraft = {
@@ -54,7 +56,12 @@ function buildArchiveName(d: ArchiveDraft): string {
   return `${d.date}_${docType}_${entity}.pdf`;
 }
 
-export function ConfirmGate({ refreshKey = 0, onResolved, compact }: ConfirmGateProps) {
+export function ConfirmGate({
+  refreshKey = 0,
+  onResolved,
+  compact,
+  showEmpty = false,
+}: ConfirmGateProps) {
   const [items, setItems] = useState<PendingConfirmation[]>([]);
   const [drafts, setDrafts] = useState<Record<string, ArchiveDraft>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -140,7 +147,24 @@ export function ConfirmGate({ refreshKey = 0, onResolved, compact }: ConfirmGate
     }
   };
 
-  if (items.length === 0 && !error) return null;
+  if (items.length === 0 && !error) {
+    if (!showEmpty) return null;
+    return (
+      <Card className={compact ? "border-primary/30" : undefined}>
+        <CardHeader className="pb-2">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <ShieldCheck className="h-4 w-4 text-primary" />
+            Needs your confirmation
+            <Badge variant="outline">0</Badge>
+          </CardTitle>
+          <CardDescription className="text-xs">
+            Nothing waiting. Archive naming, ledger writes, and similar actions will ask here before
+            they touch external systems.
+          </CardDescription>
+        </CardHeader>
+      </Card>
+    );
+  }
 
   return (
     <Card className={compact ? "border-primary/30" : undefined}>
@@ -152,7 +176,7 @@ export function ConfirmGate({ refreshKey = 0, onResolved, compact }: ConfirmGate
         </CardTitle>
         <CardDescription className="text-xs">
           Edit archive naming before approve. Confirm writes Drive/ledger; Decline leaves external
-          systems unchanged.
+          systems unchanged. Calendar proposes stay local until Google Calendar write is wired.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">

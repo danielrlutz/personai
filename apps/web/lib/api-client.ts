@@ -551,6 +551,8 @@ export interface CeoProfile {
   timezone: string | null;
   briefHour: string | null;
   notes: string | null;
+  /** Optional Home widget layout JSON string (synced from Customize Home). */
+  dashboardLayout?: string | null;
   updatedAt?: string;
 }
 

@@ -2,7 +2,20 @@
 
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Settings, Server, User, Shield, Cpu, Brain, Trash2, HardDrive } from "lucide-react";
+import Link from "next/link";
+import {
+  Settings,
+  Server,
+  User,
+  Shield,
+  Cpu,
+  Brain,
+  Trash2,
+  HardDrive,
+  Scale,
+  HeartPulse,
+  Wand2,
+} from "lucide-react";
 import { ProductSettingsCard } from "@/components/settings/ProductSettingsCard";
 import { InstallAppCard } from "@/components/shared/InstallAppCard";
 import {
@@ -1034,6 +1047,89 @@ export default function SettingsPage() {
           <p className="mt-2 text-sm text-muted-foreground">
             Same UI runs in browser, PWA, and Tauri desktop.
           </p>
+        </CardContent>
+      </Card>
+
+      <Card id="advanced-settings">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Wand2 className="h-4 w-4 text-primary" />
+            Advanced &amp; coming soon
+          </CardTitle>
+          <CardDescription>
+            Secondary modules and honest stubs — not first-class Home destinations. Core work stays
+            on Home (triage, confirms, Fristen), Activity, Archive, Team, Finance, and Life.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-[0.06em] text-foreground/65">
+              Extra modules
+            </p>
+            <ul className="divide-y divide-border/60 rounded-xl border border-border/70">
+              <li>
+                <Link
+                  href="/legal/"
+                  className="md-list-row flex items-center gap-3 px-3.5 py-3 text-sm hover:bg-surface-container-high"
+                >
+                  <Scale className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  <span className="min-w-0">
+                    <span className="font-medium">Legal tasks</span>
+                    <span className="mt-0.5 block text-xs text-muted-foreground">
+                      Deadlines you choose to track — also surfaces on Home Fristen.
+                    </span>
+                  </span>
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/medical/"
+                  className="md-list-row flex items-center gap-3 px-3.5 py-3 text-sm hover:bg-surface-container-high"
+                >
+                  <HeartPulse className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  <span className="min-w-0">
+                    <span className="font-medium">Medical log</span>
+                    <span className="mt-0.5 block text-xs text-muted-foreground">
+                      Symptom log and dual analysis — available, not a primary nav item.
+                    </span>
+                  </span>
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/setup/"
+                  className="md-list-row flex items-center gap-3 px-3.5 py-3 text-sm hover:bg-surface-container-high"
+                >
+                  <Wand2 className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  <span className="min-w-0">
+                    <span className="font-medium">Setup wizard</span>
+                    <span className="mt-0.5 block text-xs text-muted-foreground">
+                      First-run helpers — skip if you already configured Settings.
+                    </span>
+                  </span>
+                </Link>
+              </li>
+            </ul>
+          </div>
+          <div className="space-y-2 rounded-xl border border-dashed border-border/70 bg-surface-container/40 px-3.5 py-3">
+            <p className="text-xs font-semibold uppercase tracking-[0.06em] text-foreground/65">
+              Coming soon / not wired
+            </p>
+            <ul className="space-y-2 text-sm text-muted-foreground">
+              <li>
+                <span className="font-medium text-foreground">Google Calendar write</span> — proposes
+                can be confirmed and staged locally; remote calendar create is not configured.
+              </li>
+              <li>
+                <span className="font-medium text-foreground">Telegram / bot migration</span> — PersonAI
+                is in-app only; there is no Telegram handoff surface here.
+              </li>
+              <li>
+                <span className="font-medium text-foreground">Premium cloud theater</span> — optional
+                key in Product vault above; daily flow uses local Ollama unless you confirm a spend.
+              </li>
+            </ul>
+          </div>
         </CardContent>
       </Card>
       </div>

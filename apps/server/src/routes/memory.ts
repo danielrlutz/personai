@@ -29,6 +29,7 @@ export async function registerMemoryRoutes(app: FastifyInstance): Promise<void> 
       timezone?: string | null;
       briefHour?: string | null;
       notes?: string | null;
+      dashboardLayout?: string | null;
     };
   }>("/ceo-profile", async (req, reply) => {
     try {
@@ -44,6 +45,24 @@ export async function registerMemoryRoutes(app: FastifyInstance): Promise<void> 
         const t = v.trim();
         return t.length ? t : null;
       };
+      let dashboardLayout: string | null | undefined = undefined;
+      if (body.dashboardLayout !== undefined) {
+        if (body.dashboardLayout === null || body.dashboardLayout === "") {
+          dashboardLayout = null;
+        } else if (typeof body.dashboardLayout === "string") {
+          try {
+            const parsed = JSON.parse(body.dashboardLayout) as unknown;
+            if (!parsed || typeof parsed !== "object" || !Array.isArray((parsed as { widgets?: unknown }).widgets)) {
+              return reply.status(400).send({ error: "dashboardLayout must be JSON with widgets[]" });
+            }
+            dashboardLayout = JSON.stringify(parsed);
+          } catch {
+            return reply.status(400).send({ error: "dashboardLayout must be valid JSON" });
+          }
+        } else {
+          return reply.status(400).send({ error: "dashboardLayout must be a JSON string" });
+        }
+      }
       const updated = await prisma.ceoProfile.update({
         where: { id: "default" },
         data: {
@@ -55,6 +74,7 @@ export async function registerMemoryRoutes(app: FastifyInstance): Promise<void> 
           ...(body.timezone !== undefined ? { timezone: trimOrNull(body.timezone) } : {}),
           ...(body.briefHour !== undefined ? { briefHour: trimOrNull(body.briefHour) } : {}),
           ...(body.notes !== undefined ? { notes: trimOrNull(body.notes) } : {}),
+          ...(dashboardLayout !== undefined ? { dashboardLayout } : {}),
         },
       });
       // Opt-in only: empty business category shells when user enables business — never legal/MWST tasks.

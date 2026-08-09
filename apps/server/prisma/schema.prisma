@@ -279,6 +279,8 @@ model CeoProfile {
   timezone    String?
   briefHour   String?
   notes       String?
+  /** Optional Home widget layout JSON (ordered widget ids + sizes). */
+  dashboardLayout String?
   updatedAt   DateTime  @updatedAt
 }
 

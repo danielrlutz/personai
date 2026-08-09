@@ -208,8 +208,12 @@ export function ProductSettingsCard() {
           </div>
         </div>
 
-        <div className="space-y-3 rounded-xl border border-border/70 p-3">
-          <p className="text-sm font-medium">Premium / cloud (optional)</p>
+        <div className="space-y-3 rounded-xl border border-dashed border-border/70 p-3">
+          <p className="text-sm font-medium">Premium / cloud (optional · advanced)</p>
+          <p className="text-xs text-muted-foreground">
+            Not required for daily use. Local Ollama is the default brain — cloud spend only after
+            confirm-gated quota checks. Leave blank if you do not use premium inference.
+          </p>
           <Input
             type="password"
             value={premiumKey}
@@ -217,7 +221,7 @@ export function ProductSettingsCard() {
             placeholder={
               s.premiumApiKeySet
                 ? `Configured ${s.premiumApiKeyMasked ?? "••••"} — paste to rotate`
-                : "Premium API key"
+                : "Premium API key (optional)"
             }
             autoComplete="new-password"
           />
