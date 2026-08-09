@@ -201,6 +201,57 @@ docker compose -f docker-compose.prod.yml -f docker-compose.ollama.yml up -d --b
 
 Edit `Caddyfile` hostnames before production TLS.
 
+### Tailscale / MagicDNS (phone → VPS `:3000`)
+
+The web image is a **static Next.js export**. `NEXT_PUBLIC_API_URL` is baked in at **image build** time — changing `.env` alone is not enough; rebuild `web`.
+
+Prefer the **full MagicDNS FQDN** (Android often cannot resolve short Tailscale names):
+
+```bash
+cd /etc/personaios   # or ~/personai
+# short ok on some clients:  http://debi9:4000
+# prefer FQDN on phones:     http://debi9.tail8175e6.ts.net:4000
+export NEXT_PUBLIC_API_URL=http://debi9.tail8175e6.ts.net:4000
+# persist in .env as well
+grep -q '^NEXT_PUBLIC_API_URL=' .env \
+  && sed -i "s|^NEXT_PUBLIC_API_URL=.*|NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}|" .env \
+  || echo "NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}" >> .env
+
+COMPOSE_FILE= COMPOSE_PROFILES= docker compose up -d --build web
+```
+
+PersonAI routes are `/`, `/profiles/`, `/dashboard/`, etc. There is **no** `/auth` route. There are **no** SvelteKit `/_app/immutable/...` assets — only Next `/_next/static/...`.
+
+### Troubleshooting: `/_app/immutable` 404 or redirect to `/auth`
+
+If nginx/web logs show `/_app/immutable/nodes/...` 404s, or the phone navigates to `/auth?redirect=...`, the browser is almost certainly running a **different app** (or an old Service Worker / site cache) on the same MagicDNS origin — not PersonAI.
+
+1. On the VPS, confirm the web container only has Next `out/` (no `_app`):
+
+```bash
+docker compose exec web ls -la /usr/share/nginx/html
+docker compose exec web ls /usr/share/nginx/html/_next/static 2>/dev/null | head
+docker compose exec web ls /usr/share/nginx/html/_app 2>/dev/null || echo "OK: no _app (expected)"
+```
+
+2. From the VPS, curl should show Next assets OK and foreign prefixes as real 404 (not HTML):
+
+```bash
+curl -sI http://127.0.0.1:3000/ | head -5
+curl -sI http://127.0.0.1:3000/_next/static/ | head -5
+curl -sI http://127.0.0.1:3000/_app/immutable/nodes/51.js | head -8
+curl -sI http://127.0.0.1:3000/api/config | head -8
+# Body of missing /_app or /api must NOT be index.html
+curl -s http://127.0.0.1:3000/_app/version.json | head -c 200; echo
+```
+
+3. On **Android Chrome** for that origin (`http://debi9….ts.net:3000`):
+   - Menu → **Delete site data** / clear storage for that site, **or**
+   - `chrome://serviceworker-internals` → unregister workers for that origin, then hard refresh
+   - If installed as PWA: uninstall the shortcut, clear site data, reopen the URL
+
+4. Rebuild web with MagicDNS API URL (section above), then reopen the site.
+
 ## Desktop (Tauri)
 
 ### Windows download (v0.5.1)

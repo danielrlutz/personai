@@ -1,5 +1,5 @@
 /* PersonAI OS service worker — cache static shell, network-first for API */
-const CACHE = "personai-shell-v1";
+const CACHE = "personai-shell-v2";
 const SHELL = ["/", "/profiles/", "/dashboard/", "/manifest.json", "/icon-192.png", "/icon-512.png"];
 
 self.addEventListener("install", (event) => {

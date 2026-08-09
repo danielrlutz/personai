@@ -26,6 +26,7 @@ services:
       context: .
       dockerfile: Dockerfile.web
       args:
+        # Build-time bake-in. Tailscale/phone: http://<host>.<tailnet>.ts.net:4000
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://api.localhost}
     restart: unless-stopped
     depends_on:

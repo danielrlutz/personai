@@ -27,7 +27,11 @@ services:
       context: .
       dockerfile: Dockerfile.web
       args:
-        NEXT_PUBLIC_API_URL: http://localhost:4000
+        # Baked into the static export at build time. For Tailscale/phone use the
+        # MagicDNS FQDN the phone can reach, e.g.:
+        #   NEXT_PUBLIC_API_URL=http://debi9.tail8175e6.ts.net:4000
+        # Short hostname (http://debi9:4000) often fails on Android; prefer FQDN.
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000}
     ports:
       - "3000:80"
     depends_on:
