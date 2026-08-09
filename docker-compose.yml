@@ -1,22 +1,4 @@
 services:
-  # Optional bundled Ollama. Off by default so host/native Ollama on :11434 is not conflicted.
-  # Enable with: docker compose --profile bundled-ollama up -d
-  #   (or set COMPOSE_PROFILES=bundled-ollama and OLLAMA_HOST=http://ollama:11434)
-  ollama:
-    profiles: ["bundled-ollama"]
-    image: ollama/ollama:latest
-    ports:
-      - "11434:11434"
-    volumes:
-      - ollama_data:/root/.ollama
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "ollama list || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 20s
-
   api:
     build:
       context: .
@@ -29,7 +11,7 @@ services:
       PORT: "4000"
       DATA_DIR: /app/data
       # Default: reach Ollama on the Docker host (native install).
-      # Bundled profile: OLLAMA_HOST=http://ollama:11434
+      # Bundled Docker Ollama: use -f docker-compose.ollama.yml and OLLAMA_HOST=http://ollama:11434
       OLLAMA_HOST: ${OLLAMA_HOST:-http://host.docker.internal:11434}
       OLLAMA_VISION_MODEL: maternion/LightOnOCR-2
       OLLAMA_REASONING_MODEL: deepseek-r1:8b
@@ -38,7 +20,6 @@ services:
       PERSONAI_IN_DOCKER: "1"
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    # No hard depends_on ollama — service is profile-gated (bundled-ollama).
     restart: unless-stopped
 
   web:
@@ -52,6 +33,3 @@ services:
     depends_on:
       - api
     restart: unless-stopped
-
-volumes:
-  ollama_data:

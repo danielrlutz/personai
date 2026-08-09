@@ -772,10 +772,13 @@ maybe_pull_models() {
     fi
     "$cli" pull maternion/LightOnOCR-2 || true
     "$cli" pull deepseek-r1:8b || true
-  elif have_cmd docker && docker compose ps ollama >/dev/null 2>&1; then
-    info "Pulling models via docker compose ollama…"
-    docker compose exec -T ollama ollama pull maternion/LightOnOCR-2 || true
-    docker compose exec -T ollama ollama pull deepseek-r1:8b || true
+  elif have_cmd docker && docker compose -f docker-compose.yml -f docker-compose.ollama.yml \
+      ps --status running ollama 2>/dev/null | grep -q ollama; then
+    info "Pulling models via docker compose ollama overlay…"
+    docker compose -f docker-compose.yml -f docker-compose.ollama.yml \
+      exec -T ollama ollama pull maternion/LightOnOCR-2 || true
+    docker compose -f docker-compose.yml -f docker-compose.ollama.yml \
+      exec -T ollama ollama pull deepseek-r1:8b || true
   else
     warn "Neither native ollama CLI nor compose ollama service available — skip model pull"
     return 0
