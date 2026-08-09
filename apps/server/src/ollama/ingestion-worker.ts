@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { randomUUID } from "node:crypto";
 import { EventEmitter } from "node:events";
 import { getPrisma, getActiveProfileId } from "../db/prisma-singleton.js";
 import { config, profileUploadsDir } from "../config.js";
@@ -10,42 +11,296 @@ import {
   suggestArchiveCategory,
   suggestArchiveName,
 } from "../specialists/roster.js";
+import { prepareDocumentForOcr, prepareWarning } from "../ingest/pdf-prepare.js";
+import {
+  expandSegmentsForPhoneScanner,
+  mergeContinuationGroups,
+  mergePageExtractions,
+  segmentBulkPages,
+  type PageSegment,
+  type PreparedPage,
+} from "../ingest/bulk-split.js";
+import { OCR_PROMPT, parseStructured } from "../ingest/ocr-prompt.js";
+import {
+  findSwissQrInPng,
+  isLikelySwissIban,
+  type SwissQrBill,
+} from "../ingest/swiss-qr.js";
 
 export const ingestionEvents = new EventEmitter();
 
 let running = false;
 let timer: NodeJS.Timeout | null = null;
 
-const OCR_PROMPT = `Extract structured data from this document image/PDF page.
-Return ONLY valid JSON with these fields when applicable:
-{
-  "documentType": "BILL|MEDICAL_RECORD|LEGAL|CONTRACT|RECEIPT|OTHER",
-  "vendor": string|null,
-  "amount": number|null,
-  "currency": "CHF"|string|null,
-  "date": "YYYY-MM-DD"|null,
-  "category": string|null,
-  "vatAmount": number|null,
-  "invoiceNumber": string|null,
-  "iban": string|null,
-  "reference": string|null,
-  "creditorName": string|null,
-  "dueDate": "YYYY-MM-DD"|null,
-  "provider": string|null,
-  "diagnosis": string|null,
-  "medications": string[]|null,
-  "parties": string[]|null,
-  "summary": string
-}`;
+const DOC_TYPES = ["BILL", "MEDICAL_RECORD", "LEGAL", "CONTRACT", "RECEIPT", "OTHER"] as const;
+type DocType = (typeof DOC_TYPES)[number];
 
-function parseStructured(raw: string): Record<string, unknown> {
-  try {
-    const match = raw.match(/\{[\s\S]*\}/);
-    if (!match) return { summary: raw, documentType: "OTHER" };
-    return JSON.parse(match[0]) as Record<string, unknown>;
-  } catch {
-    return { summary: raw, documentType: "OTHER" };
+type PageOcr = {
+  page: PreparedPage;
+  raw: string;
+  structured: Record<string, unknown>;
+  qr: SwissQrBill | null;
+};
+
+function asDocType(value: unknown): DocType {
+  const s = String(value ?? "OTHER");
+  return (DOC_TYPES as readonly string[]).includes(s) ? (s as DocType) : "OTHER";
+}
+
+function applySwissQr(structured: Record<string, unknown>, qr: SwissQrBill | null): Record<string, unknown> {
+  if (!qr) return structured;
+  const next = { ...structured };
+  next.hasSwissQrBill = true;
+  next.qrPayload = qr.payload;
+  next.iban = qr.iban;
+  next.creditorName = qr.creditorName || next.creditorName;
+  next.creditorAddress = qr.creditorAddress ?? next.creditorAddress;
+  next.currency = qr.currency || next.currency || "CHF";
+  next.reference = qr.reference ?? next.reference;
+  next.referenceType = qr.referenceType ?? next.referenceType;
+  if (qr.amount != null) next.amount = qr.amount;
+  if (!next.documentType || next.documentType === "OTHER") next.documentType = "BILL";
+  if (!next.vendor) next.vendor = qr.creditorName;
+  return next;
+}
+
+async function ocrPage(opts: { host: string; page: PreparedPage }): Promise<PageOcr> {
+  let qr: SwissQrBill | null = null;
+  if (opts.page.path.toLowerCase().endsWith(".png")) {
+    qr = await findSwissQrInPng(opts.page.path);
   }
+
+  const fileBuf = await fs.readFile(opts.page.path);
+  const raw = await visionExtract({
+    host: opts.host,
+    model: config.visionModel,
+    imageBase64: fileBuf.toString("base64"),
+    prompt: OCR_PROMPT,
+  });
+  return {
+    page: opts.page,
+    raw,
+    structured: applySwissQr(parseStructured(raw), qr),
+    qr,
+  };
+}
+
+function combinePageOcrs(pages: PageOcr[]): {
+  raw: string;
+  structured: Record<string, unknown>;
+  qr: SwissQrBill | null;
+} {
+  const qr = pages.find((p) => p.qr)?.qr ?? null;
+  const structured = applySwissQr(
+    mergePageExtractions(pages.map((p) => p.structured)),
+    qr,
+  );
+  const raw = JSON.stringify({
+    pages: pages.map((p) => ({
+      page: p.page.pageNumber,
+      raw: p.raw,
+      swissQr: p.qr,
+    })),
+  });
+  return { raw, structured, qr };
+}
+
+async function createConfirmForExtraction(opts: {
+  prisma: Awaited<ReturnType<typeof getPrisma>>;
+  documentId: string;
+  structured: Record<string, unknown>;
+  archiveName: string;
+  archiveCategory: number;
+  deadline: Date | null;
+}): Promise<void> {
+  const { prisma, documentId, structured, archiveName, archiveCategory, deadline } = opts;
+  const entity = String(
+    structured.creditorName ?? structured.vendor ?? structured.provider ?? "Unknown",
+  );
+  const iban = structured.iban ? String(structured.iban) : "";
+  const hasQr =
+    Boolean(structured.hasSwissQrBill) ||
+    Boolean(structured.qrPayload) ||
+    (Boolean(structured.amount) && isLikelySwissIban(iban));
+
+  if (hasQr && iban) {
+    const amountNum = structured.amount != null ? Number(structured.amount) : null;
+    await createConfirmation(prisma, {
+      action: "ledger.write",
+      summary: `Save QR bill ${entity} · ${amountNum ?? "open amount"} ${structured.currency ?? "CHF"} · file as ${archiveName}`,
+      entity: "Document",
+      entityId: documentId,
+      payload: {
+        kind: "qr_bill",
+        documentId,
+        creditorName: entity,
+        creditorAddress: structured.creditorAddress ? String(structured.creditorAddress) : null,
+        iban,
+        amount: amountNum ?? 0,
+        currency: String(structured.currency ?? "CHF"),
+        reference: structured.reference ? String(structured.reference) : null,
+        referenceType: structured.referenceType ? String(structured.referenceType) : null,
+        dueDate: structured.dueDate ? String(structured.dueDate) : null,
+        qrPayload: structured.qrPayload ? String(structured.qrPayload) : null,
+        archiveName,
+        archiveCategory,
+        openAmount: amountNum == null,
+      },
+    });
+    return;
+  }
+
+  if (structured.amount && structured.vendor) {
+    await createConfirmation(prisma, {
+      action: "ledger.write",
+      summary: `Save expense ${entity} · ${structured.amount} ${structured.currency ?? "CHF"} · file as ${archiveName}`,
+      entity: "Document",
+      entityId: documentId,
+      payload: {
+        kind: "transaction",
+        documentId,
+        type: "EXPENSE",
+        amount: Number(structured.amount),
+        currency: String(structured.currency ?? "CHF"),
+        description: entity,
+        date: structured.date ? String(structured.date) : new Date().toISOString(),
+        archiveName,
+        archiveCategory,
+      },
+    });
+    return;
+  }
+
+  await createConfirmation(prisma, {
+    action: "archive.commit",
+    summary: `File as ${archiveName} (folder ${archiveCategory})${deadline ? ` · deadline (Frist) ${deadline.toISOString().slice(0, 10)}` : ""}`,
+    entity: "Document",
+    entityId: documentId,
+    payload: {
+      documentId,
+      archiveName,
+      archiveCategory,
+      deadline: deadline ? deadline.toISOString() : null,
+      createFristenTask: Boolean(deadline),
+    },
+  });
+}
+
+async function persistExtraction(opts: {
+  prisma: Awaited<ReturnType<typeof getPrisma>>;
+  documentId: string;
+  jobId: string | null;
+  raw: string;
+  structured: Record<string, unknown>;
+  confidence: number;
+  extension: string;
+}): Promise<void> {
+  const { prisma, documentId, jobId, raw, structured, confidence, extension } = opts;
+  await prisma.documentExtraction.create({
+    data: {
+      documentId,
+      jobId,
+      rawJson: raw,
+      structured: JSON.stringify(structured),
+      confidence,
+    },
+  });
+
+  const docType = asDocType(structured.documentType);
+  const entity = String(
+    structured.creditorName ?? structured.vendor ?? structured.provider ?? "Unknown",
+  );
+  const archiveName = suggestArchiveName({
+    date: structured.date ? String(structured.date) : null,
+    documentType: docType,
+    entity,
+    extension,
+  });
+  const archiveCategory = suggestArchiveCategory(docType);
+  const deadline = structured.dueDate ? new Date(String(structured.dueDate)) : null;
+
+  await prisma.document.update({
+    where: { id: documentId },
+    data: {
+      documentType: docType,
+      archiveName,
+      archiveCategory,
+      deadline,
+    },
+  });
+
+  await createConfirmForExtraction({
+    prisma,
+    documentId,
+    structured,
+    archiveName,
+    archiveCategory,
+    deadline,
+  });
+}
+
+async function spawnChildDocument(opts: {
+  prisma: Awaited<ReturnType<typeof getPrisma>>;
+  profileId: string;
+  parent: { id: string; filename: string };
+  segment: PageSegment;
+  pageOcrs: PageOcr[];
+}): Promise<void> {
+  const documentId = randomUUID();
+  const dir = path.join(profileUploadsDir(opts.profileId), documentId);
+  await fs.mkdir(dir, { recursive: true });
+  const pagesDir = path.join(dir, "pages");
+  await fs.mkdir(pagesDir, { recursive: true });
+
+  for (const page of opts.segment.pages) {
+    await fs.copyFile(page.path, path.join(pagesDir, page.file));
+  }
+  const primary = opts.segment.pages[0]!;
+  const storagePath = path.join(dir, `original${path.extname(primary.file) || ".png"}`);
+  await fs.copyFile(primary.path, storagePath);
+
+  const range =
+    opts.segment.startPage === opts.segment.endPage
+      ? `p${opts.segment.startPage}`
+      : `p${opts.segment.startPage}-${opts.segment.endPage}`;
+  const filename = `${path.parse(opts.parent.filename).name}_${range}.png`;
+
+  await opts.prisma.document.create({
+    data: {
+      id: documentId,
+      filename,
+      mimeType: "image/png",
+      storagePath,
+      fileSize: (await fs.stat(storagePath)).size,
+    },
+  });
+
+  const combined = combinePageOcrs(opts.pageOcrs);
+  await persistExtraction({
+    prisma: opts.prisma,
+    documentId,
+    jobId: null,
+    raw: combined.raw,
+    structured: {
+      ...combined.structured,
+      sourcePages: [opts.segment.startPage, opts.segment.endPage],
+      parentDocumentId: opts.parent.id,
+    },
+    confidence: combined.qr ? 0.95 : 0.8,
+    extension: ".png",
+  });
+
+  await opts.prisma.auditLog.create({
+    data: {
+      action: "document.split_from_bulk",
+      entity: "Document",
+      entityId: documentId,
+      metadata: JSON.stringify({
+        parentDocumentId: opts.parent.id,
+        pages: [opts.segment.startPage, opts.segment.endPage],
+      }),
+    },
+  });
 }
 
 async function processJob(profileId: string, jobId: string): Promise<void> {
@@ -77,109 +332,82 @@ async function processJob(profileId: string, jobId: string): Promise<void> {
     ingestionEvents.emit("queue", { profileId });
 
     const host = await resolveOllamaHost();
-    const fileBuf = await fs.readFile(job.document.storagePath);
-    const imageBase64 = fileBuf.toString("base64");
+    const workDir = path.join(path.dirname(job.document.storagePath), "ocr-pages");
+    await fs.rm(workDir, { recursive: true, force: true }).catch(() => undefined);
 
-    const raw = await visionExtract({
-      host,
-      model: config.visionModel,
-      imageBase64,
-      prompt: OCR_PROMPT,
+    const prepared = await prepareDocumentForOcr({
+      storagePath: job.document.storagePath,
+      workDir,
+      mimeType: job.document.mimeType,
     });
+    const warning = prepareWarning(prepared);
 
-    const structured = parseStructured(raw);
+    // Blank-page split → phone-scanner per-page expansion
+    let leafPages = expandSegmentsForPhoneScanner(segmentBulkPages(prepared.pages), {
+      pageCount: prepared.manifest?.pageCount ?? prepared.pages.length,
+      creator: prepared.creator,
+    }).flatMap((s) => s.pages);
 
-    await prisma.documentExtraction.create({
-      data: {
-        documentId: job.documentId,
-        jobId: job.id,
-        rawJson: raw,
-        structured: JSON.stringify(structured),
-        confidence: 0.8,
-      },
-    });
-
-    const docType = String(structured.documentType ?? "OTHER");
-    const entity = String(
-      structured.creditorName ?? structured.vendor ?? structured.provider ?? "Unknown",
-    );
-    const archiveName = suggestArchiveName({
-      date: structured.date ? String(structured.date) : null,
-      documentType: docType,
-      entity,
-    });
-    const archiveCategory = suggestArchiveCategory(docType);
-    const deadline = structured.dueDate ? new Date(String(structured.dueDate)) : null;
-
-    const docUpdate: {
-      documentType?: "BILL" | "MEDICAL_RECORD" | "LEGAL" | "CONTRACT" | "RECEIPT" | "OTHER";
-      archiveName: string;
-      archiveCategory: number;
-      deadline: Date | null;
-    } = { archiveName, archiveCategory, deadline };
-    if (["BILL", "MEDICAL_RECORD", "LEGAL", "CONTRACT", "RECEIPT", "OTHER"].includes(docType)) {
-      docUpdate.documentType = docType as
-        | "BILL"
-        | "MEDICAL_RECORD"
-        | "LEGAL"
-        | "CONTRACT"
-        | "RECEIPT"
-        | "OTHER";
+    if (leafPages.length === 0) {
+      leafPages = prepared.pages.filter((p) => !p.blank);
     }
-    await prisma.document.update({
-      where: { id: job.documentId },
-      data: docUpdate,
+    if (leafPages.length === 0) throw new Error("No pages to OCR");
+
+    // OCR every leaf page while holding the VISION lock (no interleaved reasoning)
+    const pageOcrs: PageOcr[] = [];
+    for (const page of leafPages) {
+      pageOcrs.push(await ocrPage({ host, page }));
+    }
+
+    // Re-merge "Seite 1 von N" continuations after OCR
+    const finalSegments = mergeContinuationGroups(
+      leafPages,
+      pageOcrs.map((p) => p.structured),
+    );
+
+    const ocrByPage = new Map(pageOcrs.map((p) => [p.page.pageNumber, p]));
+    const [firstSeg, ...restSegs] = finalSegments;
+    if (!firstSeg) throw new Error("No segments after OCR");
+
+    const firstOcrs = firstSeg.pages.map((p) => ocrByPage.get(p.pageNumber)!);
+    const primary = combinePageOcrs(firstOcrs);
+    if (warning) primary.structured.ingestWarning = warning;
+    primary.structured.bulkSegments = finalSegments.length;
+    primary.structured.sourcePages = [firstSeg.startPage, firstSeg.endPage];
+
+    const ext = path.extname(job.document.filename) || path.extname(job.document.storagePath) || ".pdf";
+    await persistExtraction({
+      prisma,
+      documentId: job.documentId,
+      jobId: job.id,
+      raw: primary.raw,
+      structured: primary.structured,
+      confidence: primary.qr ? 0.95 : prepared.kind === "raw" ? 0.5 : 0.8,
+      extension: ext,
     });
 
-    if (structured.amount && structured.iban) {
-      await createConfirmation(prisma, {
-        action: "ledger.write",
-        summary: `Save QR bill ${entity} · ${structured.amount} ${structured.currency ?? "CHF"} · file as ${archiveName}`,
-        entity: "Document",
-        entityId: job.documentId,
-        payload: {
-          kind: "qr_bill",
-          documentId: job.documentId,
-          creditorName: entity,
-          iban: String(structured.iban),
-          amount: Number(structured.amount),
-          currency: String(structured.currency ?? "CHF"),
-          reference: structured.reference ? String(structured.reference) : null,
-          dueDate: structured.dueDate ? String(structured.dueDate) : null,
-          archiveName,
-          archiveCategory,
-        },
+    for (const segment of restSegs) {
+      const segOcrs = segment.pages.map((p) => ocrByPage.get(p.pageNumber)!);
+      await spawnChildDocument({
+        prisma,
+        profileId,
+        parent: job.document,
+        segment,
+        pageOcrs: segOcrs,
       });
-    } else if (structured.amount && structured.vendor) {
-      await createConfirmation(prisma, {
-        action: "ledger.write",
-        summary: `Save expense ${entity} · ${structured.amount} ${structured.currency ?? "CHF"} · file as ${archiveName}`,
-        entity: "Document",
-        entityId: job.documentId,
-        payload: {
-          kind: "transaction",
-          documentId: job.documentId,
-          type: "EXPENSE",
-          amount: Number(structured.amount),
-          currency: String(structured.currency ?? "CHF"),
-          description: entity,
-          date: structured.date ? String(structured.date) : new Date().toISOString(),
-          archiveName,
-          archiveCategory,
-        },
-      });
-    } else {
-      await createConfirmation(prisma, {
-        action: "archive.commit",
-        summary: `File as ${archiveName} (folder ${archiveCategory})${deadline ? ` · deadline (Frist) ${deadline.toISOString().slice(0, 10)}` : ""}`,
-        entity: "Document",
-        entityId: job.documentId,
-        payload: {
-          documentId: job.documentId,
-          archiveName,
-          archiveCategory,
-          deadline: deadline ? deadline.toISOString() : null,
-          createFristenTask: Boolean(deadline),
+    }
+
+    if (restSegs.length > 0) {
+      await prisma.auditLog.create({
+        data: {
+          action: "document.bulk_split",
+          entity: "Document",
+          entityId: job.documentId,
+          metadata: JSON.stringify({
+            segments: finalSegments.length,
+            childCount: restSegs.length,
+            creator: prepared.creator,
+          }),
         },
       });
     }

@@ -361,11 +361,15 @@ export async function ollamaHealth(): Promise<{
   }
 }
 
+const DEFAULT_CHAT_TIMEOUT_MS = Number(process.env.OLLAMA_CHAT_TIMEOUT_MS ?? 180_000);
+const DEFAULT_VISION_TIMEOUT_MS = Number(process.env.OLLAMA_VISION_TIMEOUT_MS ?? 180_000);
+
 export async function chatCompletion(opts: {
   host: string;
   model: string;
   messages: Array<{ role: string; content: string }>;
   stream?: false;
+  timeoutMs?: number;
 }): Promise<string> {
   return withHostFailover(opts.host, async (host) => {
     const res = await fetch(`${normalizeHost(host)}/api/chat`, {
@@ -377,6 +381,7 @@ export async function chatCompletion(opts: {
         stream: false,
         keep_alive: 0,
       }),
+      signal: AbortSignal.timeout(opts.timeoutMs ?? DEFAULT_CHAT_TIMEOUT_MS),
     });
     if (!res.ok) {
       throw new Error(`Ollama chat failed: ${res.status} ${await res.text()}`);
@@ -462,6 +467,8 @@ export async function visionExtract(opts: {
   model: string;
   imageBase64: string;
   prompt: string;
+  /** Override default vision timeout (ms). */
+  timeoutMs?: number;
 }): Promise<string> {
   return withHostFailover(opts.host, async (host) => {
     const res = await fetch(`${normalizeHost(host)}/api/chat`, {
@@ -480,6 +487,7 @@ export async function visionExtract(opts: {
         keep_alive: 0,
         format: "json",
       }),
+      signal: AbortSignal.timeout(opts.timeoutMs ?? DEFAULT_VISION_TIMEOUT_MS),
     });
     if (!res.ok) {
       throw new Error(`Ollama vision failed: ${res.status} ${await res.text()}`);
