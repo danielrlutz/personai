@@ -1,0 +1,116 @@
+// @ts-nocheck
+import fs from "node:fs";
+import fsp from "node:fs/promises";
+import path from "node:path";
+import React from "react";
+import { renderToBuffer } from "@react-pdf/renderer";
+import { profileExportsDir } from "../config.js";
+import { ARCHIVE_TAXONOMY } from "../specialists/roster.js";
+import { createConfirmation, listPendingConfirmations } from "../confirm/confirm-service.js";
+import { resolveConfirmation } from "../confirm/apply-confirmation.js";
+import { CareerDocument } from "../export/career-document.js";
+import { sendError, withPrisma } from "./helpers.js";
+export async function registerConfirmationRoutes(app) {
+    app.get("/confirmations", async (req, reply) => {
+        try {
+            const { prisma } = await withPrisma(req);
+            const pending = await listPendingConfirmations(prisma);
+            return {
+                confirmations: pending.map((c) => ({
+                    ...c,
+                    payload: JSON.parse(c.payload || "{}"),
+                })),
+            };
+        }
+        catch (err) {
+            return sendError(reply, err);
+        }
+    });
+    app.post("/confirmations/:id/confirm", async (req, reply) => {
+        try {
+            const { prisma } = await withPrisma(req);
+            return await resolveConfirmation(prisma, req.params.id, "confirm");
+        }
+        catch (err) {
+            return sendError(reply, err);
+        }
+    });
+    app.post("/confirmations/:id/reject", async (req, reply) => {
+        try {
+            const { prisma } = await withPrisma(req);
+            return await resolveConfirmation(prisma, req.params.id, "reject");
+        }
+        catch (err) {
+            return sendError(reply, err);
+        }
+    });
+    app.get("/archive/documents", async (req, reply) => {
+        try {
+            const { prisma } = await withPrisma(req);
+            const documents = await prisma.document.findMany({
+                orderBy: { uploadedAt: "desc" },
+                take: 100,
+                include: {
+                    extractions: { orderBy: { createdAt: "desc" }, take: 1 },
+                    jobs: { orderBy: { createdAt: "desc" }, take: 1 },
+                },
+            });
+            return { documents, taxonomy: ARCHIVE_TAXONOMY };
+        }
+        catch (err) {
+            return sendError(reply, err);
+        }
+    });
+    app.post("/career/pdf", async (req, reply) => {
+        try {
+            const { profileId, prisma } = await withPrisma(req);
+            if (!req.body.title?.trim() || !Array.isArray(req.body.sections)) {
+                return reply.status(400).send({ error: "title and sections are required" });
+            }
+            if (!req.body.confirmed) {
+                const confirmation = await createConfirmation(prisma, {
+                    action: "career.pdf",
+                    summary: `Generate career PDF: ${req.body.title}`,
+                    entity: "CareerPdf",
+                    payload: {
+                        title: req.body.title,
+                        subtitle: req.body.subtitle,
+                        sections: req.body.sections,
+                    },
+                });
+                return reply.status(202).send({
+                    needsConfirm: true,
+                    confirmation,
+                    message: "Confirm before generating the career PDF.",
+                });
+            }
+            const pdfData = {
+                title: req.body.title,
+                subtitle: req.body.subtitle,
+                sections: req.body.sections,
+                generatedAt: new Date().toISOString().slice(0, 10),
+            };
+            const doc = React.createElement(CareerDocument, { data: pdfData });
+            const buffer = await renderToBuffer(doc);
+            const exportsDir = profileExportsDir(profileId);
+            fs.mkdirSync(exportsDir, { recursive: true });
+            const filename = `career-${Date.now()}.pdf`;
+            const storagePath = path.join(exportsDir, filename);
+            await fsp.writeFile(storagePath, buffer);
+            await prisma.auditLog.create({
+                data: {
+                    action: "career.pdf",
+                    entity: "CareerPdf",
+                    metadata: JSON.stringify({ title: req.body.title, storagePath }),
+                },
+            });
+            reply.header("Content-Type", "application/pdf");
+            reply.header("Content-Disposition", `attachment; filename="${filename}"`);
+            return reply.send(buffer);
+        }
+        catch (err) {
+            return sendError(reply, err, 500);
+        }
+    });
+}
+//# sourceMappingURL=confirmations.js.map

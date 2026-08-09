@@ -26,9 +26,14 @@ import { MedicalReportDocument } from "../export/medical-report.js";
 import { getPrisma } from "../db/prisma-singleton.js";
 import { sendError, sseWrite, withPrisma, getProfileId } from "./helpers.js";
 import { registerLifeRoutes } from "./life.js";
+import { registerTeamRoutes } from "./team.js";
+import { registerConfirmationRoutes } from "./confirmations.js";
+import { createConfirmation } from "../confirm/confirm-service.js";
 
 export async function registerRoutes(app: FastifyInstance): Promise<void> {
   await registerLifeRoutes(app);
+  await registerTeamRoutes(app);
+  await registerConfirmationRoutes(app);
 
   app.get("/health", async () => ({
     ok: true,
@@ -263,24 +268,40 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     }
   });
 
-  app.patch<{ Params: { id: string }; Body: { status?: "PENDING" | "PAID" | "OVERDUE" | "CANCELLED" } }>(
-    "/finance/qr-bills/:id",
-    async (req, reply) => {
-      try {
-        const { prisma } = await withPrisma(req);
-        const bill = await prisma.qRBill.update({
-          where: { id: req.params.id },
-          data: {
-            status: req.body.status,
-            paidAt: req.body.status === "PAID" ? new Date() : undefined,
-          },
+  app.patch<{
+    Params: { id: string };
+    Body: { status?: "PENDING" | "PAID" | "OVERDUE" | "CANCELLED"; confirmed?: boolean };
+  }>("/finance/qr-bills/:id", async (req, reply) => {
+    try {
+      const { prisma } = await withPrisma(req);
+      if (req.body.status === "PAID" && !req.body.confirmed) {
+        const bill = await prisma.qRBill.findUnique({ where: { id: req.params.id } });
+        if (!bill) return reply.status(404).send({ error: "QR bill not found" });
+        const confirmation = await createConfirmation(prisma, {
+          action: "qr.mark_paid",
+          summary: `Mark paid + ledger: ${bill.creditorName} · ${bill.amount} ${bill.currency}`,
+          entity: "QRBill",
+          entityId: bill.id,
+          payload: { billId: bill.id, writeLedger: true },
         });
-        return bill;
-      } catch (err) {
-        return sendError(reply, err);
+        return reply.status(202).send({
+          needsConfirm: true,
+          confirmation,
+          message: "Confirm before marking paid and writing the ledger.",
+        });
       }
-    },
-  );
+      const bill = await prisma.qRBill.update({
+        where: { id: req.params.id },
+        data: {
+          status: req.body.status,
+          paidAt: req.body.status === "PAID" ? new Date() : undefined,
+        },
+      });
+      return bill;
+    } catch (err) {
+      return sendError(reply, err);
+    }
+  });
 
   app.get("/finance/transactions", async (req, reply) => {
     try {
@@ -496,6 +517,25 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   }>("/medical/export", async (req, reply) => {
     try {
       const { profileId, prisma } = await withPrisma(req);
+      if (!(req.body as { confirmed?: boolean }).confirmed) {
+        const confirmation = await createConfirmation(prisma, {
+          action: "medical.export",
+          summary: `Export medical report: ${req.body.title} (${req.body.complaintIds?.length ?? 0} complaints)`,
+          entity: "MedicalExport",
+          payload: {
+            title: req.body.title,
+            dateRangeFrom: req.body.dateRangeFrom,
+            dateRangeTo: req.body.dateRangeTo,
+            complaintIds: req.body.complaintIds,
+            analysisIds: req.body.analysisIds ?? [],
+          },
+        });
+        return reply.status(202).send({
+          needsConfirm: true,
+          confirmation,
+          message: "Confirm before generating the medical PDF export.",
+        });
+      }
       const profile = getActiveProfile();
       const complaints = await prisma.complaintLog.findMany({
         where: { id: { in: req.body.complaintIds } },
@@ -586,117 +626,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     }
   });
 
-  app.post<{
-    Body: {
-      message: string;
-      sessionId?: string;
-      persona?: "CFO" | "COUNSEL" | "COMBINED";
-    };
-  }>("/advisor/chat/stream", async (req, reply) => {
-    try {
-      const { prisma } = await withPrisma(req);
-      const persona = req.body.persona ?? "COMBINED";
-
-      let session = req.body.sessionId
-        ? await prisma.chatSession.findUnique({ where: { id: req.body.sessionId } })
-        : null;
-      if (!session) {
-        session = await prisma.chatSession.create({
-          data: {
-            title: req.body.message.slice(0, 60),
-            persona,
-            model: config.reasoningModel,
-          },
-        });
-      }
-
-      const budget = await prisma.budgetCategory.findMany({ include: { transactions: true } });
-      const bills = await prisma.qRBill.findMany({ where: { status: "PENDING" }, take: 10 });
-      const tasks = await prisma.legalTask.findMany({
-        where: { status: { in: ["TODO", "IN_PROGRESS"] } },
-        take: 10,
-      });
-      const context = { budget, bills, tasks, persona };
-
-      await prisma.chatMessage.create({
-        data: {
-          sessionId: session.id,
-          role: "USER",
-          content: req.body.message,
-          context: JSON.stringify(context),
-        },
-      });
-
-      reply.raw.writeHead(200, {
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache",
-        Connection: "keep-alive",
-      });
-
-      sseWrite(reply, "context", { sessionId: session.id, vram: vramLock.getState() });
-
-      const release = await vramLock.acquire("REASONING", (reason) => {
-        sseWrite(reply, "context", { waiting: true, reason });
-      });
-
-      let full = "";
-      try {
-        const host = await resolveOllamaHost();
-        const personaPrompt =
-          persona === "CFO"
-            ? "Du bist CFO für einen Schweizer Freelancer. Antworte strategisch zu Finanzen, Cashflow und Budget (CHF)."
-            : persona === "COUNSEL"
-              ? "Du bist Corporate Counsel für einen Schweizer Freelancer. Antworte zu rechtlichen/steuerlichen Themen (Schweiz)."
-              : "Du bist dualer CFO und Corporate Counsel für einen Schweizer Freelancer.";
-
-        const history = await prisma.chatMessage.findMany({
-          where: { sessionId: session.id },
-          orderBy: { createdAt: "asc" },
-          take: 20,
-        });
-
-        for await (const token of streamChat({
-          host,
-          model: config.reasoningModel,
-          messages: [
-            {
-              role: "system",
-              content: `${personaPrompt}\nKontext:\n${JSON.stringify(context)}`,
-            },
-            ...history.map((m) => ({
-              role: m.role === "USER" ? "user" : m.role === "ASSISTANT" ? "assistant" : "system",
-              content: m.content,
-            })),
-          ],
-        })) {
-          full += token;
-          sseWrite(reply, "token", { token });
-        }
-
-        await prisma.chatMessage.create({
-          data: {
-            sessionId: session.id,
-            role: "ASSISTANT",
-            content: full,
-          },
-        });
-        await prisma.chatSession.update({
-          where: { id: session.id },
-          data: { updatedAt: new Date() },
-        });
-        sseWrite(reply, "done", { sessionId: session.id, content: full });
-      } catch (err) {
-        sseWrite(reply, "error", {
-          message: err instanceof Error ? err.message : String(err),
-        });
-      } finally {
-        await release();
-        reply.raw.end();
-      }
-    } catch (err) {
-      return sendError(reply, err);
-    }
-  });
+  // /advisor/chat/stream and /team/chat/stream registered in team.ts
 
   // Briefing
   app.get("/briefing/today", async (req, reply) => {
@@ -761,6 +691,8 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       ocr: config.licenseTier === "pro",
       advisorChat: config.licenseTier === "pro",
       dualMedicalAnalysis: config.licenseTier === "pro",
+      teamChat: config.licenseTier === "pro",
+      careerPdf: config.licenseTier === "pro",
     },
   }));
 }

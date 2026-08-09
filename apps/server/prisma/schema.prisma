@@ -77,16 +77,17 @@ enum ChatRole {
   SYSTEM
 }
 
-enum AdvisorPersona {
-  CFO
-  COUNSEL
-  COMBINED
-}
-
 enum ExportStatus {
   DRAFT
   GENERATED
   FAILED
+}
+
+enum ConfirmationStatus {
+  pending
+  confirmed
+  rejected
+  expired
 }
 
 enum BriefingStatus {
@@ -139,19 +140,23 @@ model AuditLog {
 }
 
 model Document {
-  id           String               @id @default(cuid())
-  filename     String
-  mimeType     String
-  documentType DocumentType         @default(OTHER)
-  storagePath  String
-  fileSize     Int
-  sha256       String?
-  uploadedAt   DateTime             @default(now())
-  jobs         IngestionJob[]
-  extractions  DocumentExtraction[]
-  transaction  Transaction?
-  qrBill       QRBill?
-  complaint    ComplaintLog?
+  id              String               @id @default(cuid())
+  filename        String
+  mimeType        String
+  documentType    DocumentType         @default(OTHER)
+  storagePath     String
+  fileSize        Int
+  sha256          String?
+  archiveName     String?
+  archiveCategory Int?
+  deadline        DateTime?
+  confirmedAt     DateTime?
+  uploadedAt      DateTime             @default(now())
+  jobs            IngestionJob[]
+  extractions     DocumentExtraction[]
+  transaction     Transaction?
+  qrBill          QRBill?
+  complaint       ComplaintLog?
 }
 
 model IngestionJob {
@@ -244,13 +249,27 @@ model LegalTask {
 }
 
 model ChatSession {
-  id        String         @id @default(cuid())
+  id        String   @id @default(cuid())
   title     String?
-  persona   AdvisorPersona @default(COMBINED)
-  model     String         @default("deepseek-r1:8b")
+  persona   String   @default("secretary")
+  model     String   @default("deepseek-r1:8b")
   messages  ChatMessage[]
-  createdAt DateTime       @default(now())
-  updatedAt DateTime       @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model PendingConfirmation {
+  id         String             @id @default(cuid())
+  action     String
+  summary    String
+  payload    String
+  entity     String?
+  entityId   String?
+  status     ConfirmationStatus @default(pending)
+  createdAt  DateTime           @default(now())
+  resolvedAt DateTime?
+
+  @@index([status, createdAt])
 }
 
 model ChatMessage {
