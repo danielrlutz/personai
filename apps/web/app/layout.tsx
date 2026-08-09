@@ -24,15 +24,23 @@ const fraunces = Fraunces({
 export const metadata: Metadata = {
   title: "PersonAI OS",
   description: "Private desk for triage, specialists, archive, money, and Fristen",
-  manifest: "/manifest.json",
+  applicationName: "PersonAI OS",
+  // Prefer application/manifest+json MIME via nginx; .json kept as fallback.
+  manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
     title: "PersonAI OS",
   },
   icons: {
-    icon: "/icon-192.png",
-    apple: "/icon-192.png",
+    icon: [
+      { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+  },
+  other: {
+    "mobile-web-app-capable": "yes",
   },
 };
 

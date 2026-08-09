@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Settings, Server, User, Shield, Cpu, Brain, Trash2, HardDrive } from "lucide-react";
 import { ProductSettingsCard } from "@/components/settings/ProductSettingsCard";
+import { InstallAppCard } from "@/components/shared/InstallAppCard";
 import {
   clearAppPin,
   getIdleLockMs,
@@ -1021,6 +1022,8 @@ export default function SettingsPage() {
           )}
         </CardContent>
       </Card>
+
+      <InstallAppCard />
 
       <Card>
         <CardHeader>
