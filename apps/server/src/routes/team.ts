@@ -3,10 +3,19 @@ import { config } from "../config.js";
 import {
   ARCHIVE_TAXONOMY,
   SPECIALISTS,
+  STYLIST_VISION_PROMPT,
   getSpecialist,
+  modelNameForPref,
   resolveSpecialistId,
 } from "../specialists/roster.js";
-import { humanizeOllamaError, resolveOllamaHost, streamChat } from "../ollama/client.js";
+import { resolveSpecialistModel } from "../specialists/resolve-model.js";
+import { runForgeQaLoop } from "../specialists/forge-qa-loop.js";
+import {
+  humanizeOllamaError,
+  resolveOllamaHost,
+  streamChat,
+  visionDescribe,
+} from "../ollama/client.js";
 import { vramLock } from "../ollama/vram-lock.js";
 import {
   HISTORY_WINDOW,
@@ -30,42 +39,46 @@ type ChatBody = {
   sessionId?: string;
   specialist?: string;
   persona?: string;
+  /** Raw base64 (optionally data-URL) for Stylist photo analysis. */
+  imageBase64?: string;
+  imageMimeType?: string;
 };
+
+type ForgeQaBody = {
+  brief?: string;
+  sessionId?: string;
+};
+
+function stripDataUrl(base64: string): string {
+  return base64.replace(/^data:image\/\w+;base64,/, "").trim();
+}
 
 export async function registerTeamRoutes(app: FastifyInstance): Promise<void> {
   app.get("/specialists", async () => ({
-    specialists: SPECIALISTS.map(({ id, label, shortLabel, description, group }) => ({
-      id,
-      label,
-      shortLabel,
-      description,
-      group,
-    })),
+    specialists: SPECIALISTS.map(
+      ({ id, label, shortLabel, description, group, modelPref }) => ({
+        id,
+        label,
+        shortLabel,
+        description,
+        group,
+        modelPref,
+        preferredModel: modelNameForPref(modelPref),
+      }),
+    ),
     taxonomy: ARCHIVE_TAXONOMY,
+    models: {
+      reasoning: config.reasoningModel,
+      coder: config.coderModel,
+      vision: config.visionModel,
+    },
   }));
 
-  async function streamSpecialistChat(req: FastifyRequest, reply: FastifyReply): Promise<void> {
-    const body = (req.body ?? {}) as ChatBody;
-    if (!body.message?.trim()) {
-      reply.status(400).send({ error: "message is required" });
-      return;
-    }
-    const { prisma } = await withPrisma(req);
-    const specialistId = resolveSpecialistId(body.specialist ?? body.persona);
-    const specialist = getSpecialist(specialistId);
-    let session = body.sessionId
-      ? await prisma.chatSession.findUnique({ where: { id: body.sessionId } })
-      : null;
-    if (!session) {
-      session = await prisma.chatSession.create({
-        data: {
-          title: body.message.slice(0, 60),
-          persona: specialistId,
-          model: config.reasoningModel,
-        },
-      });
-    }
-
+  async function loadUserCare(
+    prisma: Awaited<ReturnType<typeof withPrisma>>["prisma"],
+    specialistId: string,
+    sessionSummary: string | null | undefined,
+  ) {
     const [ceo, facts, liveOps, archiveFacts] = await Promise.all([
       getCeoProfileCard(prisma),
       listRecentMemoryFacts(prisma),
@@ -86,20 +99,65 @@ export async function registerTeamRoutes(app: FastifyInstance): Promise<void> {
       taxonomy: archiveMap.get(ARCHIVE_TAXONOMY_KEY) ?? null,
       refreshedAt: archiveMap.get(ARCHIVE_REFRESHED_KEY) ?? null,
     };
-    const userCare = formatUserCareContext({
-      ceo,
-      facts,
+    return {
+      userCare: formatUserCareContext({
+        ceo,
+        facts,
+        liveOps,
+        sessionSummary,
+        archive,
+      }),
       liveOps,
-      sessionSummary: session.sessionSummary,
       archive,
-    });
+    };
+  }
+
+  async function streamSpecialistChat(req: FastifyRequest, reply: FastifyReply): Promise<void> {
+    const body = (req.body ?? {}) as ChatBody;
+    if (!body.message?.trim() && !body.imageBase64?.trim()) {
+      reply.status(400).send({ error: "message or image is required" });
+      return;
+    }
+    const { prisma } = await withPrisma(req);
+    const specialistId = resolveSpecialistId(body.specialist ?? body.persona);
+    const specialist = getSpecialist(specialistId);
+    const hasImage = Boolean(body.imageBase64?.trim());
+    if (hasImage && specialistId !== "stylist") {
+      reply.status(400).send({
+        error: "Photo upload is only available when Stylist is selected.",
+      });
+      return;
+    }
+
+    let session = body.sessionId
+      ? await prisma.chatSession.findUnique({ where: { id: body.sessionId } })
+      : null;
+    if (!session) {
+      session = await prisma.chatSession.create({
+        data: {
+          title: (body.message || "Stylist photo").slice(0, 60),
+          persona: specialistId,
+          model: config.reasoningModel,
+        },
+      });
+    }
+
+    const { userCare, liveOps, archive } = await loadUserCare(
+      prisma,
+      specialistId,
+      session.sessionSummary,
+    );
+
+    const userText =
+      body.message?.trim() ||
+      (hasImage ? "Please analyze this photo for wardrobe and presentation coaching." : "");
 
     await prisma.chatMessage.create({
       data: {
         sessionId: session.id,
         role: "USER",
-        content: body.message,
-        context: JSON.stringify(liveOps),
+        content: hasImage ? `${userText}\n\n[photo attached]` : userText,
+        context: JSON.stringify({ ...liveOps, hasImage }),
       },
     });
 
@@ -115,14 +173,58 @@ export async function registerTeamRoutes(app: FastifyInstance): Promise<void> {
       archiveLinked: archive.linked,
       archiveReady: archive.ready,
     });
-    const release = await vramLock.acquire("REASONING", (reason) => {
-      sseWrite(reply, "context", { waiting: true, reason });
-    });
+
     let full = "";
     let ollamaHost = "";
+    let usedModel = config.reasoningModel;
+    let visionNotes: string | null = null;
+    let releaseReasoning: (() => Promise<void>) | null = null;
+
     try {
       ollamaHost = await resolveOllamaHost();
-      // Recent N messages (newest first from DB), then chronological for the model.
+
+      if (hasImage && specialistId === "stylist") {
+        const releaseVision = await vramLock.acquire("VISION", (reason) => {
+          sseWrite(reply, "context", { waiting: true, reason, phase: "vision" });
+        });
+        try {
+          sseWrite(reply, "context", {
+            phase: "vision",
+            model: config.visionModel,
+          });
+          visionNotes = await visionDescribe({
+            host: ollamaHost,
+            model: config.visionModel,
+            imageBase64: stripDataUrl(body.imageBase64!),
+            prompt: STYLIST_VISION_PROMPT,
+          });
+          if (!visionNotes) {
+            visionNotes =
+              "(Vision model returned no notes — coach from the user's description.)";
+          }
+        } finally {
+          await releaseVision();
+        }
+      }
+
+      releaseReasoning = await vramLock.acquire("REASONING", (reason) => {
+        sseWrite(reply, "context", { waiting: true, reason });
+      });
+      const resolved = await resolveSpecialistModel(ollamaHost, specialistId);
+      usedModel = resolved.model;
+      if (session.model !== usedModel) {
+        await prisma.chatSession.update({
+          where: { id: session.id },
+          data: { model: usedModel },
+        });
+      }
+      sseWrite(reply, "context", {
+        model: usedModel,
+        modelPref: resolved.pref,
+        modelFallback: resolved.fallback,
+        preferredModel: resolved.preferredModel,
+      });
+
       const historyDesc = await prisma.chatMessage.findMany({
         where: { sessionId: session.id },
         orderBy: { createdAt: "desc" },
@@ -130,13 +232,17 @@ export async function registerTeamRoutes(app: FastifyInstance): Promise<void> {
       });
       const history = historyDesc.reverse();
 
+      const systemExtra = visionNotes
+        ? `\n\nVISION NOTES FROM USER PHOTO (treat as what you see):\n${visionNotes}`
+        : "";
+
       for await (const token of streamChat({
         host: ollamaHost,
-        model: config.reasoningModel,
+        model: usedModel,
         messages: [
           {
             role: "system",
-            content: `${specialist.systemPrompt}\n\n${userCare}`,
+            content: `${specialist.systemPrompt}\n\n${userCare}${systemExtra}`,
           },
           ...history.map((m) => ({
             role:
@@ -152,6 +258,7 @@ export async function registerTeamRoutes(app: FastifyInstance): Promise<void> {
         full += token;
         sseWrite(reply, "token", { token });
       }
+
       await prisma.chatMessage.create({
         data: { sessionId: session.id, role: "ASSISTANT", content: full },
       });
@@ -164,12 +271,14 @@ export async function registerTeamRoutes(app: FastifyInstance): Promise<void> {
         sessionId: session.id,
         content: full,
         specialist: specialistId,
+        model: usedModel,
+        hadVision: Boolean(visionNotes),
       });
     } catch (err) {
-      const message = humanizeOllamaError(err, ollamaHost || undefined, config.reasoningModel);
+      const message = humanizeOllamaError(err, ollamaHost || undefined, usedModel);
       sseWrite(reply, "error", { message, error: message });
     } finally {
-      await release();
+      if (releaseReasoning) await releaseReasoning();
       reply.raw.end();
     }
   }
@@ -185,6 +294,43 @@ export async function registerTeamRoutes(app: FastifyInstance): Promise<void> {
   app.post("/advisor/chat/stream", async (req, reply) => {
     try {
       await streamSpecialistChat(req, reply);
+    } catch (err) {
+      return sendError(reply, err);
+    }
+  });
+
+  /** Automated Forge → QA → retry → forge.ship confirm. */
+  app.post("/team/forge-qa/stream", async (req, reply) => {
+    try {
+      const body = (req.body ?? {}) as ForgeQaBody;
+      if (!body.brief?.trim()) {
+        return reply.status(400).send({ error: "brief is required" });
+      }
+      const { prisma } = await withPrisma(req);
+      const { userCare } = await loadUserCare(prisma, "forge", null);
+
+      reply.raw.writeHead(200, {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        Connection: "keep-alive",
+      });
+
+      try {
+        const result = await runForgeQaLoop({
+          prisma,
+          brief: body.brief,
+          userCare,
+          onProgress: (event) => {
+            sseWrite(reply, event.phase, event);
+          },
+        });
+        sseWrite(reply, "result", result);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        sseWrite(reply, "error", { message, error: message });
+      } finally {
+        reply.raw.end();
+      }
     } catch (err) {
       return sendError(reply, err);
     }

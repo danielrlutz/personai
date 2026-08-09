@@ -230,15 +230,17 @@ export function useChatStream({ specialist, onSessionId }: UseChatStreamOptions)
   }, []);
 
   const sendMessage = useCallback(
-    async (text: string) => {
+    async (text: string, options?: { image?: File | Blob; imageFilename?: string }) => {
       const trimmed = text.trim();
-      if (!trimmed) return;
+      if (!trimmed && !options?.image) return;
       // Allow queueing even if another chat op is inflight — they stack in outbox.
       setError(null);
       await getOutbox().enqueueTeamChat({
-        message: trimmed,
+        message: trimmed || (options?.image ? "Please analyze this photo." : ""),
         specialist,
         sessionId: sessionIdRef.current,
+        image: options?.image,
+        imageFilename: options?.imageFilename,
       });
     },
     [specialist],

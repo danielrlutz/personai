@@ -9,6 +9,10 @@ export interface TeamChatPayload {
   message: string;
   specialist: string;
   sessionId?: string;
+  /** Optional Stylist photo stored in IDB blobs */
+  imageBlobKey?: string;
+  imageMimeType?: string;
+  imageFilename?: string;
 }
 
 export interface IngestUploadPayload {

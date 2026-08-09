@@ -120,7 +120,7 @@ class OutboxQueue {
       : T extends "ingest-upload"
         ? IngestUploadPayload
         : OutboxPayload,
-    options?: { blob?: Blob; autoProcess?: boolean },
+    options?: { blob?: Blob; blobKey?: string; autoProcess?: boolean },
   ): Promise<OutboxOp> {
     await this.ready;
     const now = Date.now();
@@ -140,6 +140,12 @@ class OutboxQueue {
       await idbPutBlob(p.blobKey, options.blob, {
         filename: p.filename,
         mimeType: p.mimeType,
+      });
+    } else if (type === "team-chat" && options?.blob && options.blobKey) {
+      const p = payload as TeamChatPayload;
+      await idbPutBlob(options.blobKey, options.blob, {
+        filename: p.imageFilename ?? "photo.jpg",
+        mimeType: p.imageMimeType ?? "image/jpeg",
       });
     }
 
@@ -172,13 +178,27 @@ class OutboxQueue {
     specialist: string;
     sessionId?: string;
     clientMessageId?: string;
+    image?: File | Blob;
+    imageFilename?: string;
   }): Promise<OutboxOp> {
-    return this.enqueue("team-chat", {
+    const payload: TeamChatPayload = {
       clientMessageId: input.clientMessageId ?? newId("user"),
       message: input.message.trim(),
       specialist: input.specialist,
       sessionId: input.sessionId,
-    });
+    };
+    if (input.image) {
+      const blobKey = newId("blob");
+      payload.imageBlobKey = blobKey;
+      payload.imageMimeType =
+        (input.image instanceof File ? input.image.type : input.image.type) ||
+        "image/jpeg";
+      payload.imageFilename =
+        input.imageFilename ||
+        (input.image instanceof File ? input.image.name : "photo.jpg");
+      return this.enqueue("team-chat", payload, { blob: input.image, blobKey });
+    }
+    return this.enqueue("team-chat", payload);
   }
 
   async retry(opId: string): Promise<void> {
@@ -229,6 +249,15 @@ class OutboxQueue {
         await idbDeleteBlob(blobKey);
       } catch {
         // ignore
+      }
+    } else if (op.type === "team-chat") {
+      const blobKey = (op.payload as TeamChatPayload).imageBlobKey;
+      if (blobKey) {
+        try {
+          await idbDeleteBlob(blobKey);
+        } catch {
+          // ignore
+        }
       }
     }
     await idbDeleteOp(op.id);

@@ -24,11 +24,31 @@ export async function processOp(op: OutboxOp, emit: ProcessEmit): Promise<Proces
   throw new Error(`Unknown outbox op type: ${(op as OutboxOp).type}`);
 }
 
+async function blobToBase64(blob: Blob): Promise<string> {
+  const buffer = await blob.arrayBuffer();
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary);
+}
+
 async function processTeamChat(op: OutboxOp<"team-chat">, emit: ProcessEmit): Promise<ProcessResult> {
   const payload = op.payload as TeamChatPayload;
   let assistantContent = "";
   let sessionId = payload.sessionId;
   let streamError: string | null = null;
+
+  let imageBase64: string | undefined;
+  if (payload.imageBlobKey) {
+    const blob = await idbGetBlob(payload.imageBlobKey);
+    if (!blob) {
+      throw new Error("Photo missing from device cache — re-attach the image");
+    }
+    imageBase64 = await blobToBase64(blob);
+  }
 
   emit({ kind: "team-chat-progress", opId: op.id, phase: "started", payload });
 
@@ -49,6 +69,9 @@ async function processTeamChat(op: OutboxOp<"team-chat">, emit: ProcessEmit): Pr
         message: payload.message,
         sessionId: payload.sessionId,
         specialist: payload.specialist,
+        ...(imageBase64
+          ? { imageBase64, imageMimeType: payload.imageMimeType }
+          : {}),
       },
       onEvent: (event, data) => {
         if (event === "context" && typeof data === "object" && data && "sessionId" in data) {

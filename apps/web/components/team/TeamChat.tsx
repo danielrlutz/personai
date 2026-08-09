@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { BookmarkPlus, Send, Trash2, Users } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { BookmarkPlus, ImagePlus, Send, Trash2, Users, X } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,6 +11,7 @@ import { useChatStream } from "@/components/advisor/useChatStream";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { SpecialistPicker } from "./SpecialistPicker";
 import { CareerPdfPanel } from "./CareerPdfPanel";
+import { ForgeQaPanel } from "./ForgeQaPanel";
 import { apiGet, apiPost, type DriveStatus, type MemoryFact } from "@/lib/api-client";
 import { SPECIALIST_FALLBACK, type SpecialistMeta } from "@/lib/specialists";
 import { toast } from "@/lib/toast";
@@ -20,10 +21,15 @@ interface TeamChatProps {
   initialSpecialist?: string;
 }
 
+const MAX_STYLIST_IMAGE_BYTES = 8 * 1024 * 1024;
+
 export function TeamChat({ initialSpecialist = "secretary" }: TeamChatProps) {
   const [specialists, setSpecialists] = useState<SpecialistMeta[]>(SPECIALIST_FALLBACK);
   const [specialist, setSpecialist] = useState(initialSpecialist);
   const [input, setInput] = useState("");
+  const [photo, setPhoto] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
   const [showRemember, setShowRemember] = useState(false);
   const [rememberKey, setRememberKey] = useState("");
   const [rememberValue, setRememberValue] = useState("");
@@ -34,6 +40,9 @@ export function TeamChat({ initialSpecialist = "secretary" }: TeamChatProps) {
     specialist,
   });
   const showCareerPdf = specialist === "career_strategist";
+  const showForgeQa = specialist === "forge" || specialist === "qa_auditor";
+  const showStylistPhoto = specialist === "stylist";
+  const showSidePanel = showCareerPdf || showForgeQa;
 
   useEffect(() => {
     void apiGet<{ specialists: SpecialistMeta[] }>("/specialists", { silent: true })
@@ -50,18 +59,66 @@ export function TeamChat({ initialSpecialist = "secretary" }: TeamChatProps) {
     if (initialSpecialist) setSpecialist(initialSpecialist);
   }, [initialSpecialist]);
 
+  useEffect(() => {
+    // Drop pending photo when leaving Stylist.
+    if (specialist !== "stylist") {
+      clearPhoto();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only on specialist change
+  }, [specialist]);
+
+  useEffect(() => {
+    return () => {
+      if (photoPreview) URL.revokeObjectURL(photoPreview);
+    };
+  }, [photoPreview]);
+
   const active = specialists.find((s) => s.id === specialist) ?? specialists[0];
   const hasUnsent = messages.some((m) => m.role === "user" && m.status !== "sent");
 
-  const handleSend = () => {
-    if (!input.trim()) return;
-    void sendMessage(input).catch((err) => {
-      toast.error(err instanceof Error ? err.message : "Could not queue message", {
-        title: "Message failed to send",
-        sticky: true,
-      });
+  const clearPhoto = () => {
+    setPhoto(null);
+    setPhotoPreview((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
     });
+    if (fileRef.current) fileRef.current.value = "";
+  };
+
+  const onPickPhoto = (file: File | null) => {
+    if (!file) {
+      clearPhoto();
+      return;
+    }
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please choose a photo (JPEG, PNG, or WebP).", {
+        title: "Not an image",
+      });
+      return;
+    }
+    if (file.size > MAX_STYLIST_IMAGE_BYTES) {
+      toast.error("Keep photos under 8 MB.", { title: "Photo too large" });
+      return;
+    }
+    setPhoto(file);
+    setPhotoPreview((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return URL.createObjectURL(file);
+    });
+  };
+
+  const handleSend = () => {
+    if (!input.trim() && !photo) return;
+    void sendMessage(input, photo ? { image: photo, imageFilename: photo.name } : undefined).catch(
+      (err) => {
+        toast.error(err instanceof Error ? err.message : "Could not queue message", {
+          title: "Message failed to send",
+          sticky: true,
+        });
+      },
+    );
     setInput("");
+    clearPhoto();
   };
 
   const openRemember = () => {
@@ -97,7 +154,7 @@ export function TeamChat({ initialSpecialist = "secretary" }: TeamChatProps) {
   return (
     <div
       className={
-        showCareerPdf
+        showSidePanel
           ? "grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,320px)]"
           : "min-w-0"
       }
@@ -119,8 +176,11 @@ export function TeamChat({ initialSpecialist = "secretary" }: TeamChatProps) {
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={clear}
-                disabled={streaming || (messages.length === 0 && !hasUnsent)}
+                onClick={() => {
+                  clear();
+                  clearPhoto();
+                }}
+                disabled={streaming || (messages.length === 0 && !hasUnsent && !photo)}
               >
                 <Trash2 className="h-4 w-4" />
                 Clear
@@ -135,14 +195,21 @@ export function TeamChat({ initialSpecialist = "secretary" }: TeamChatProps) {
           />
           {active ? (
             <p className="text-xs leading-relaxed text-muted-foreground break-words">
-              <span className="font-medium text-foreground">{active.label}</span> — {active.description}
+              <span className="font-medium text-foreground">{active.label}</span> —{" "}
+              {active.description}
+              {active.preferredModel ? (
+                <span className="text-muted-foreground/80"> · model {active.preferredModel}</span>
+              ) : null}
             </p>
           ) : null}
           {drive && !drive.linked ? (
             <p className="rounded-xl bg-surface-container px-3 py-2 text-xs leading-relaxed text-muted-foreground">
               No archive context yet — this specialist can still advise, but not from your filed
               documents.{" "}
-              <Link href="/settings/?focus=drive" className="font-medium text-foreground underline-offset-2 hover:underline">
+              <Link
+                href="/settings/?focus=drive"
+                className="font-medium text-foreground underline-offset-2 hover:underline"
+              >
                 Link Google Drive
               </Link>
             </p>
@@ -164,7 +231,6 @@ export function TeamChat({ initialSpecialist = "secretary" }: TeamChatProps) {
                   msg.role === "assistant" &&
                   i === messages.length - 1 &&
                   messages[i - 1]?.status === "pending";
-                // Never render an empty advisor bubble except while actively streaming.
                 if (msg.role === "assistant" && !msg.content.trim() && !isStreamingAssistant) {
                   return null;
                 }
@@ -194,7 +260,8 @@ export function TeamChat({ initialSpecialist = "secretary" }: TeamChatProps) {
             {showRemember ? (
               <div className="mb-3 animate-scale-in space-y-2 rounded-xl border border-border/70 bg-card/80 p-3.5">
                 <p className="text-xs text-muted-foreground">
-                  Save a short fact for future chats and the morning brief — not the full conversation.
+                  Save a short fact for future chats and the morning brief — not the full
+                  conversation.
                 </p>
                 <Input
                   value={rememberKey}
@@ -225,9 +292,54 @@ export function TeamChat({ initialSpecialist = "secretary" }: TeamChatProps) {
             ) : rememberNote ? (
               <p className="mb-2 text-xs text-muted-foreground">{rememberNote}</p>
             ) : null}
+
+            {showStylistPhoto && photoPreview ? (
+              <div className="mb-3 flex items-start gap-2">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={photoPreview}
+                  alt="Outfit preview"
+                  className="h-20 w-20 rounded-lg object-cover"
+                />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-xs text-muted-foreground">{photo?.name}</p>
+                  <Button size="sm" variant="ghost" className="mt-1 h-7 px-2" onClick={clearPhoto}>
+                    <X className="h-3.5 w-3.5" />
+                    Remove photo
+                  </Button>
+                </div>
+              </div>
+            ) : null}
+
             <div className="flex min-w-0 items-end gap-2">
+              {showStylistPhoto ? (
+                <>
+                  <input
+                    ref={fileRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    className="hidden"
+                    onChange={(e) => onPickPhoto(e.target.files?.[0] ?? null)}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="shrink-0"
+                    disabled={streaming}
+                    onClick={() => fileRef.current?.click()}
+                    title="Attach photo for Stylist"
+                  >
+                    <ImagePlus className="h-4 w-4" />
+                  </Button>
+                </>
+              ) : null}
               <Textarea
-                placeholder={`Message ${active?.shortLabel ?? "Staff"}…`}
+                placeholder={
+                  showStylistPhoto
+                    ? `Message Stylist… (optional photo)`
+                    : `Message ${active?.shortLabel ?? "Staff"}…`
+                }
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => {
@@ -239,14 +351,26 @@ export function TeamChat({ initialSpecialist = "secretary" }: TeamChatProps) {
                 rows={2}
                 className="min-w-0 flex-1 resize-none"
               />
-              <Button onClick={handleSend} disabled={!input.trim()} size="icon" className="shrink-0">
+              <Button
+                onClick={handleSend}
+                disabled={!input.trim() && !photo}
+                size="icon"
+                className="shrink-0"
+              >
                 <Send className="h-4 w-4" />
               </Button>
             </div>
+            {showStylistPhoto ? (
+              <p className="mt-2 text-xs text-muted-foreground">
+                Attach a photo for wardrobe / presentation feedback. Uses the vision model, then
+                Stylist coaching.
+              </p>
+            ) : null}
           </div>
         </CardContent>
       </Card>
       {showCareerPdf ? <CareerPdfPanel /> : null}
+      {showForgeQa ? <ForgeQaPanel /> : null}
     </div>
   );
 }
