@@ -16,7 +16,14 @@ function statusLabel(health: OllamaHealth | null): string {
   return "Ollama ready";
 }
 
-export function OllamaStatusIndicator({ className }: { className?: string }) {
+export function OllamaStatusIndicator({
+  className,
+  compact = false,
+}: {
+  className?: string;
+  /** Icon + status only — for collapsed nav rail. */
+  compact?: boolean;
+}) {
   const [health, setHealth] = useState<OllamaHealth | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -50,9 +57,16 @@ export function OllamaStatusIndicator({ className }: { className?: string }) {
 
   if (loading) {
     return (
-      <div className={cn("flex items-center gap-2 text-xs text-muted-foreground", className)}>
-        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-        <span>Ollama</span>
+      <div
+        className={cn(
+          "flex min-w-0 items-center gap-2 text-xs text-muted-foreground",
+          compact && "justify-center",
+          className,
+        )}
+        title="Checking Ollama…"
+      >
+        <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
+        {!compact ? <span className="min-w-0 truncate">Ollama</span> : null}
       </div>
     );
   }
@@ -69,23 +83,44 @@ export function OllamaStatusIndicator({ className }: { className?: string }) {
   ].filter(Boolean);
   const title = titleParts.join(" · ");
 
+  if (compact) {
+    return (
+      <div className={cn("flex items-center justify-center gap-1.5", className)} title={title}>
+        <Cpu className={cn("h-3.5 w-3.5 shrink-0", ok ? "text-primary" : "text-destructive")} />
+        <span
+          className={cn(
+            "h-1.5 w-1.5 shrink-0 rounded-full",
+            ok ? (locked ? "bg-warning" : "bg-success") : "bg-destructive",
+          )}
+        />
+      </div>
+    );
+  }
+
   return (
-    <div className={cn("flex min-w-0 items-center gap-2 text-xs", className)} title={title}>
-      <Cpu className={cn("h-3.5 w-3.5 shrink-0", ok ? "text-primary" : "text-destructive")} />
-      <span className={cn("min-w-0 truncate", ok ? "text-muted-foreground" : "text-destructive")}>
-        {label}
-      </span>
+    <div className={cn("flex min-w-0 flex-col gap-0.5 text-xs", className)} title={title}>
+      <div className="flex min-w-0 items-center gap-2">
+        <Cpu className={cn("h-3.5 w-3.5 shrink-0", ok ? "text-primary" : "text-destructive")} />
+        <span
+          className={cn(
+            "min-w-0 flex-1 truncate font-medium",
+            ok ? "text-muted-foreground" : "text-destructive",
+          )}
+        >
+          {label}
+        </span>
+        <span
+          className={cn(
+            "h-1.5 w-1.5 shrink-0 rounded-full",
+            ok ? (locked ? "bg-warning" : "bg-success") : "bg-destructive",
+          )}
+        />
+      </div>
       {ok && hostShort ? (
-        <span className="hidden max-w-[8rem] truncate font-mono text-[10px] text-muted-foreground sm:inline">
+        <span className="truncate pl-[1.375rem] font-mono text-[10px] leading-tight text-muted-foreground/90">
           {hostShort}
         </span>
       ) : null}
-      <span
-        className={cn(
-          "h-1.5 w-1.5 shrink-0 rounded-full",
-          ok ? (locked ? "bg-warning" : "bg-success") : "bg-destructive",
-        )}
-      />
     </div>
   );
 }

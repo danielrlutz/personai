@@ -24,7 +24,7 @@ export function SpecialistPicker({ specialists, value, onChange, disabled }: Spe
             <p className="mb-1.5 text-xs font-semibold uppercase tracking-[0.06em] text-foreground/70">
               {GROUP_LABEL[group]}
             </p>
-            <div className="flex flex-wrap gap-1.5 sm:gap-2">
+            <div className="grid grid-cols-2 gap-1.5 min-[420px]:grid-cols-3 sm:grid-cols-4 lg:grid-cols-[repeat(auto-fill,minmax(7.5rem,1fr))] sm:gap-2">
               {items.map((s) => {
                 const selected = value === s.id;
                 return (
@@ -36,13 +36,13 @@ export function SpecialistPicker({ specialists, value, onChange, disabled }: Spe
                     aria-pressed={selected}
                     onClick={() => onChange(s.id)}
                     className={cn(
-                      "pressable inline-flex min-h-10 min-w-0 items-center rounded-full px-3.5 text-sm font-medium transition-colors duration-md ease-md disabled:opacity-50 sm:px-4",
+                      "pressable inline-flex min-h-10 w-full min-w-0 items-center justify-center rounded-full px-3 text-sm font-medium transition-colors duration-md ease-md disabled:opacity-50 sm:px-3.5",
                       selected
                         ? "bg-primary text-primary-foreground shadow-elev-1 ring-1 ring-primary/30"
                         : "bg-surface-container text-foreground/80 hover:bg-surface-container-high hover:text-foreground",
                     )}
                   >
-                    {s.shortLabel}
+                    <span className="truncate">{s.shortLabel}</span>
                   </button>
                 );
               })}

@@ -110,8 +110,8 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
         </div>
       </nav>
 
-      <div className={cn("border-t border-border/60 p-3", collapsed && "px-1.5")}>
-        <OllamaStatusIndicator className={collapsed ? "justify-center" : undefined} />
+      <div className={cn("border-t border-border/60 p-3", collapsed && "px-1.5 py-2.5")}>
+        <OllamaStatusIndicator compact={collapsed} />
       </div>
     </aside>
   );

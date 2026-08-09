@@ -11,12 +11,14 @@ function TeamPageInner() {
   const specialist = params.get("specialist") ?? "secretary";
 
   return (
-    <PageEnter className="mx-auto w-full max-w-6xl space-y-3 sm:space-y-4">
-      <div className="page-header min-w-0">
-        <h1 className="page-title">Team</h1>
-        <p className="page-subtitle">
-          Ask your specialists anything. Important changes still ask for confirmation first.
-        </p>
+    <PageEnter className="flex w-full min-w-0 flex-col gap-2 sm:gap-3">
+      <div className="page-header flex min-w-0 flex-col gap-0.5 sm:flex-row sm:items-end sm:justify-between sm:gap-6">
+        <div className="min-w-0">
+          <h1 className="page-title">Team</h1>
+          <p className="page-subtitle mt-0.5 max-w-3xl">
+            Ask your specialists anything. Important changes still ask for confirmation first.
+          </p>
+        </div>
       </div>
       <ConfirmGate compact />
       <TeamChat initialSpecialist={specialist} />

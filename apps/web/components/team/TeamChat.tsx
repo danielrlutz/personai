@@ -155,12 +155,12 @@ export function TeamChat({ initialSpecialist = "secretary" }: TeamChatProps) {
     <div
       className={
         showSidePanel
-          ? "grid min-w-0 gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,300px)] lg:gap-4"
+          ? "grid min-w-0 w-full gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,320px)] xl:grid-cols-[minmax(0,1fr)_minmax(0,360px)] lg:gap-4"
           : "min-w-0 w-full"
       }
     >
-      <Card className="flex h-[calc(100dvh-10.5rem)] min-h-[20rem] min-w-0 flex-col overflow-hidden hover:shadow-elev-2 md:h-[calc(100dvh-8rem)]">
-        <CardHeader className="shrink-0 space-y-2.5 border-b border-border/60 p-3.5 pb-3 sm:p-4 sm:pb-3.5">
+      <Card className="flex h-[calc(100dvh-9.5rem)] min-h-[20rem] min-w-0 w-full flex-col overflow-hidden hover:shadow-elev-2 md:h-[calc(100dvh-7.25rem)]">
+        <CardHeader className="shrink-0 space-y-2.5 border-b border-border/60 p-3.5 pb-3 sm:p-5 sm:pb-4">
           <div className="flex min-w-0 items-center justify-between gap-2 sm:gap-3">
             <CardTitle className="flex min-w-0 items-center gap-2 sm:gap-2.5">
               <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-container">
