@@ -40,8 +40,10 @@ async function processTeamChat(op: OutboxOp<"team-chat">, emit: ProcessEmit): Pr
       else resolve();
     };
 
+    // silent: OutboxBootstrap surfaces a sticky snackbar for failed ops.
     void streamSSE("/team/chat/stream", {
       method: "POST",
+      silent: true,
       body: {
         message: payload.message,
         sessionId: payload.sessionId,
@@ -121,7 +123,8 @@ async function processIngestUpload(
     type: payload.mimeType || blob.type || "application/octet-stream",
   });
   form.append("file", file);
-  await apiUpload("/ingest/upload", form);
+  // silent: OutboxBootstrap surfaces a sticky snackbar for failed uploads.
+  await apiUpload("/ingest/upload", form, { silent: true });
 
   emit({ kind: "ingest-upload-done", opId: op.id, filename: payload.filename });
   return { type: "ingest-upload", filename: payload.filename };

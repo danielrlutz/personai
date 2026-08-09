@@ -7,6 +7,7 @@ import {
   humanizeConfirmationSummary,
   labelForConfirmAction,
 } from "@/lib/confirm-labels";
+import { toast } from "@/lib/toast";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -26,11 +27,20 @@ export function ConfirmGate({ refreshKey = 0, onResolved, compact }: ConfirmGate
 
   const load = useCallback(async () => {
     try {
-      const data = await apiGet<{ confirmations: PendingConfirmation[] }>("/confirmations");
+      // silent: ToastHost/api-client already surfaces fetch failures; keep inline for empty state.
+      const data = await apiGet<{ confirmations: PendingConfirmation[] }>("/confirmations", {
+        silent: true,
+      });
       setItems(data.confirmations);
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load confirmations");
+      const message = err instanceof Error ? err.message : "Failed to load confirmations";
+      setError(message);
+      toast.error(message, {
+        title: "Couldn't load confirmations",
+        sticky: true,
+        dedupeKey: `confirm-load:${message}`,
+      });
     }
   }, []);
 
@@ -41,11 +51,21 @@ export function ConfirmGate({ refreshKey = 0, onResolved, compact }: ConfirmGate
   const decide = async (id: string, decision: "confirm" | "reject") => {
     setBusyId(id);
     try {
-      await apiPost(`/confirmations/${id}/${decision === "confirm" ? "confirm" : "reject"}`);
+      await apiPost(
+        `/confirmations/${id}/${decision === "confirm" ? "confirm" : "reject"}`,
+        undefined,
+        { silent: true },
+      );
       await load();
       onResolved?.(decision);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Action failed");
+      const message = err instanceof Error ? err.message : "Action failed";
+      setError(message);
+      toast.error(message, {
+        title: decision === "confirm" ? "Couldn't confirm" : "Couldn't decline",
+        sticky: true,
+        dedupeKey: `confirm-decide:${id}:${message}`,
+      });
     } finally {
       setBusyId(null);
     }

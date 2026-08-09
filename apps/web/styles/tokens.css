@@ -56,4 +56,8 @@
   --motion-easing: cubic-bezier(0.22, 1, 0.36, 1);
   --motion-easing-emphasized: cubic-bezier(0.2, 0, 0, 1);
   --motion-stagger: 45ms;
+
+  /* Stacking — toast always above command palette / drawers (z-50) */
+  --z-modal: 50;
+  --z-toast: 9999;
 }

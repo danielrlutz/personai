@@ -13,6 +13,7 @@ import { SpecialistPicker } from "./SpecialistPicker";
 import { CareerPdfPanel } from "./CareerPdfPanel";
 import { apiGet, apiPost, type MemoryFact } from "@/lib/api-client";
 import { SPECIALIST_FALLBACK, type SpecialistMeta } from "@/lib/specialists";
+import { toast } from "@/lib/toast";
 
 interface TeamChatProps {
   initialSpecialist?: string;
@@ -33,7 +34,7 @@ export function TeamChat({ initialSpecialist = "secretary" }: TeamChatProps) {
   const showCareerPdf = specialist === "career_strategist";
 
   useEffect(() => {
-    void apiGet<{ specialists: SpecialistMeta[] }>("/specialists")
+    void apiGet<{ specialists: SpecialistMeta[] }>("/specialists", { silent: true })
       .then((data) => {
         if (data.specialists?.length) setSpecialists(data.specialists);
       })
@@ -49,7 +50,12 @@ export function TeamChat({ initialSpecialist = "secretary" }: TeamChatProps) {
 
   const handleSend = () => {
     if (!input.trim()) return;
-    void sendMessage(input);
+    void sendMessage(input).catch((err) => {
+      toast.error(err instanceof Error ? err.message : "Could not queue message", {
+        title: "Message failed to send",
+        sticky: true,
+      });
+    });
     setInput("");
   };
 

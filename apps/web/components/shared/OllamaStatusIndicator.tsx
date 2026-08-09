@@ -23,7 +23,7 @@ export function OllamaStatusIndicator({ className }: { className?: string }) {
     let mounted = true;
     const poll = async () => {
       try {
-        const data = await apiGet<OllamaHealth>("/ollama/health");
+        const data = await apiGet<OllamaHealth>("/ollama/health", { silent: true });
         if (mounted) setHealth(data);
       } catch {
         if (mounted) setHealth({ ok: false });

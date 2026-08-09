@@ -1,11 +1,13 @@
 "use client";
 
 import { useLayoutEffect, useState } from "react";
+import { ToastHost } from "@/components/toast/ToastHost";
 import { isTauriRuntime, syncTauriApiBaseUrl } from "@/lib/tauri";
 
 /**
  * In Tauri, resolve the sidecar API base URL before children fetch.
  * Browser/PWA skips the gate entirely (localhost:4000, or same-host :4000 on remote).
+ * Hosts the global toast portal (document.body) for the whole app.
  */
 export function ApiBootstrap({ children }: { children: React.ReactNode }) {
   const [ready, setReady] = useState(() => {
@@ -45,5 +47,10 @@ export function ApiBootstrap({ children }: { children: React.ReactNode }) {
     );
   }
 
-  return <>{children}</>;
+  return (
+    <>
+      {children}
+      <ToastHost />
+    </>
+  );
 }

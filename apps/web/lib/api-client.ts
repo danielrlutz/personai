@@ -6,6 +6,7 @@ import {
   setStoredApiBaseUrl,
   setStoredProfileId,
 } from "./platform";
+import { notifyApiFailure } from "./toast";
 
 const DEFAULT_API_BASE = "http://localhost:4000";
 
@@ -23,6 +24,24 @@ export class ApiError extends Error {
   ) {
     super(message);
     this.name = "ApiError";
+  }
+}
+
+/** Extends fetch init — set `silent: true` when the caller shows its own error UI. */
+export type ApiRequestInit = RequestInit & { silent?: boolean };
+
+function splitInit(init?: ApiRequestInit): { request: RequestInit; silent: boolean } {
+  if (!init) return { request: {}, silent: false };
+  const { silent, ...request } = init;
+  return { request, silent: Boolean(silent) };
+}
+
+async function runNotified<T>(fn: () => Promise<T>, silent: boolean): Promise<T> {
+  try {
+    return await fn();
+  } catch (err) {
+    if (!silent) notifyApiFailure(err);
+    throw err;
   }
 }
 
@@ -129,64 +148,82 @@ async function parseResponse<T>(res: Response): Promise<T> {
   return body as T;
 }
 
-export async function apiGet<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(apiUrl(path), {
-    ...init,
-    method: "GET",
-    headers: buildHeaders(init?.headers),
-  });
-  return parseResponse<T>(res);
+export async function apiGet<T>(path: string, init?: ApiRequestInit): Promise<T> {
+  const { request, silent } = splitInit(init);
+  return runNotified(async () => {
+    const res = await fetch(apiUrl(path), {
+      ...request,
+      method: "GET",
+      headers: buildHeaders(request.headers),
+    });
+    return parseResponse<T>(res);
+  }, silent);
 }
 
-export async function apiPost<T>(path: string, body?: unknown, init?: RequestInit): Promise<T> {
-  const res = await fetch(apiUrl(path), {
-    ...init,
-    method: "POST",
-    headers: buildHeaders(init?.headers),
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
-  return parseResponse<T>(res);
+export async function apiPost<T>(path: string, body?: unknown, init?: ApiRequestInit): Promise<T> {
+  const { request, silent } = splitInit(init);
+  return runNotified(async () => {
+    const res = await fetch(apiUrl(path), {
+      ...request,
+      method: "POST",
+      headers: buildHeaders(request.headers),
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+    return parseResponse<T>(res);
+  }, silent);
 }
 
-export async function apiPatch<T>(path: string, body?: unknown, init?: RequestInit): Promise<T> {
-  const res = await fetch(apiUrl(path), {
-    ...init,
-    method: "PATCH",
-    headers: buildHeaders(init?.headers),
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
-  return parseResponse<T>(res);
+export async function apiPatch<T>(path: string, body?: unknown, init?: ApiRequestInit): Promise<T> {
+  const { request, silent } = splitInit(init);
+  return runNotified(async () => {
+    const res = await fetch(apiUrl(path), {
+      ...request,
+      method: "PATCH",
+      headers: buildHeaders(request.headers),
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+    return parseResponse<T>(res);
+  }, silent);
 }
 
-export async function apiPut<T>(path: string, body?: unknown, init?: RequestInit): Promise<T> {
-  const res = await fetch(apiUrl(path), {
-    ...init,
-    method: "PUT",
-    headers: buildHeaders(init?.headers),
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
-  return parseResponse<T>(res);
+export async function apiPut<T>(path: string, body?: unknown, init?: ApiRequestInit): Promise<T> {
+  const { request, silent } = splitInit(init);
+  return runNotified(async () => {
+    const res = await fetch(apiUrl(path), {
+      ...request,
+      method: "PUT",
+      headers: buildHeaders(request.headers),
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+    return parseResponse<T>(res);
+  }, silent);
 }
 
-export async function apiDelete<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(apiUrl(path), {
-    ...init,
-    method: "DELETE",
-    headers: buildHeaders(init?.headers),
-  });
-  return parseResponse<T>(res);
+export async function apiDelete<T>(path: string, init?: ApiRequestInit): Promise<T> {
+  const { request, silent } = splitInit(init);
+  return runNotified(async () => {
+    const res = await fetch(apiUrl(path), {
+      ...request,
+      method: "DELETE",
+      headers: buildHeaders(request.headers),
+    });
+    return parseResponse<T>(res);
+  }, silent);
 }
 
-export async function apiUpload<T>(path: string, formData: FormData, init?: RequestInit): Promise<T> {
-  const headers = buildHeaders(init?.headers);
-  headers.delete("Content-Type");
-  const res = await fetch(apiUrl(path), {
-    ...init,
-    method: "POST",
-    headers,
-    body: formData,
-  });
-  return parseResponse<T>(res);
+export async function apiUpload<T>(path: string, formData: FormData, init?: ApiRequestInit): Promise<T> {
+  const { request, silent } = splitInit(init);
+  return runNotified(async () => {
+    const headers = buildHeaders(request.headers);
+    headers.delete("Content-Type");
+    const res = await fetch(apiUrl(path), {
+      ...request,
+      method: "POST",
+      headers,
+      body: formData,
+    });
+    return parseResponse<T>(res);
+  }, silent);
 }
 
 export type SSEHandler = {
@@ -195,21 +232,36 @@ export type SSEHandler = {
   onDone?: () => void;
 };
 
-export async function streamSSE(path: string, options: SSEHandler & { method?: string; body?: unknown } = {}): Promise<() => void> {
+export async function streamSSE(
+  path: string,
+  options: SSEHandler & { method?: string; body?: unknown; silent?: boolean } = {},
+): Promise<() => void> {
   const controller = new AbortController();
   const headers = buildHeaders();
   headers.set("Accept", "text/event-stream");
+  const silent = Boolean(options.silent);
 
-  const res = await fetch(apiUrl(path), {
-    method: options.method ?? "GET",
-    headers,
-    body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
-    signal: controller.signal,
-  });
+  let res: Response;
+  try {
+    res = await fetch(apiUrl(path), {
+      method: options.method ?? "GET",
+      headers,
+      body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+      signal: controller.signal,
+    });
+  } catch (err) {
+    if (!silent) notifyApiFailure(err);
+    throw err;
+  }
 
   if (!res.ok) {
-    const err = await parseResponse<never>(res);
-    throw err;
+    try {
+      const err = await parseResponse<never>(res);
+      throw err;
+    } catch (err) {
+      if (!silent) notifyApiFailure(err);
+      throw err;
+    }
   }
 
   const reader = res.body?.getReader();

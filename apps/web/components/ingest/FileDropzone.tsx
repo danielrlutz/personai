@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Upload, FileText } from "lucide-react";
 import { getOutbox, type OutboxEvent } from "@/lib/outbox";
+import { toast } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
@@ -29,7 +30,14 @@ export function FileDropzone({ onUploaded }: FileDropzoneProps) {
     const list = Array.from(files);
     if (!list.length) return;
     for (const file of list) {
-      await getOutbox().enqueueUpload(file);
+      try {
+        await getOutbox().enqueueUpload(file);
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Could not queue file", {
+          title: `Upload queue · ${file.name}`,
+          sticky: true,
+        });
+      }
     }
   }, []);
 

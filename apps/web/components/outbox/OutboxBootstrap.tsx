@@ -1,9 +1,28 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
-import { getOutbox, useOutbox } from "@/lib/outbox";
+import { getOutbox, useOutbox, type OutboxEvent, type OutboxOp } from "@/lib/outbox";
+import { toast } from "@/lib/toast";
 import { OutboxPendingStrip } from "./OutboxPendingStrip";
+
+function toastForFailedOp(op: OutboxOp): void {
+  const message = op.lastError?.trim() || "Operation failed";
+  if (op.type === "ingest-upload") {
+    const filename = "filename" in op.payload ? String(op.payload.filename) : "file";
+    toast.error(message, {
+      title: `Upload failed · ${filename}`,
+      sticky: true,
+      dedupeKey: `outbox:${op.id}:${op.updatedAt}`,
+    });
+    return;
+  }
+  toast.error(message, {
+    title: "Message failed to send",
+    sticky: true,
+    dedupeKey: `outbox:${op.id}:${op.updatedAt}`,
+  });
+}
 
 /** Starts the durable outbox drain loop and shows a Pending/Retry strip for non-chat ops. */
 export function OutboxBootstrap() {
@@ -11,9 +30,23 @@ export function OutboxBootstrap() {
   const { hasWork } = useOutbox("ingest-upload");
   // Archive page renders its own strip above the server ingestion queue.
   const hideStrip = pathname?.startsWith("/ingest");
+  const seenFailures = useRef(new Set<string>());
 
   useEffect(() => {
     void getOutbox().whenReady().then(() => getOutbox().drain());
+  }, []);
+
+  useEffect(() => {
+    return getOutbox().subscribe((event: OutboxEvent) => {
+      if (event.kind !== "changed") return;
+      for (const op of event.ops) {
+        if (op.status !== "failed") continue;
+        const key = `${op.id}:${op.updatedAt}`;
+        if (seenFailures.current.has(key)) continue;
+        seenFailures.current.add(key);
+        toastForFailedOp(op);
+      }
+    });
   }, []);
 
   if (!hasWork || hideStrip) return null;

@@ -15,7 +15,7 @@ export function ProfileSwitcher({ className }: { className?: string }) {
   useEffect(() => {
     const load = async () => {
       try {
-        const registry = await apiGet<ProfileRegistry>("/profiles");
+        const registry = await apiGet<ProfileRegistry>("/profiles", { silent: true });
         const id = getActiveProfileId() ?? registry.activeProfileId;
         setActiveProfile(registry.profiles.find((p) => p.id === id) ?? null);
       } catch {

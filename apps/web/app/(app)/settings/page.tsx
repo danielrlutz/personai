@@ -78,7 +78,7 @@ export default function SettingsPage() {
 
   const refreshOllama = async () => {
     try {
-      const data = await apiGet<OllamaHealth>("/ollama/health");
+      const data = await apiGet<OllamaHealth>("/ollama/health", { silent: true });
       setOllama(data);
       setOllamaHost(data.configuredHost ?? data.host ?? "http://127.0.0.1:11434");
     } catch {
@@ -110,8 +110,8 @@ export default function SettingsPage() {
   useEffect(() => {
     setApiUrl(getStoredApiBaseUrl() ?? getApiBaseUrl());
     setSuggestedApiUrl(getSuggestedApiBaseUrl());
-    void apiGet<LicenseInfo>("/license").then(setLicense).catch(() => undefined);
-    void apiGet<ProfileRegistry>("/profiles").then((registry) => {
+    void apiGet<LicenseInfo>("/license", { silent: true }).then(setLicense).catch(() => undefined);
+    void apiGet<ProfileRegistry>("/profiles", { silent: true }).then((registry) => {
       const id = getActiveProfileId();
       const profile = registry.profiles.find((p) => p.id === id);
       setProfileName(profile?.name ?? "Unknown");
