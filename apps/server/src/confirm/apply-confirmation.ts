@@ -325,6 +325,26 @@ export async function resolveConfirmation(prisma, id, decision) {
     case "calendar.event":
       result = await applyCalendarEvent(prisma, payload);
       break;
+    case "memory.fact": {
+      const key = String(payload.key ?? "").trim();
+      const value = String(payload.value ?? "").trim();
+      if (!key || !value) throw new Error("memory.fact requires key and value");
+      result = await prisma.memoryFact.upsert({
+        where: { key },
+        create: {
+          key: key.slice(0, 120),
+          value: value.slice(0, 2000),
+          source: String(payload.source ?? "session-distill").slice(0, 80),
+          specialistId: payload.specialistId ? String(payload.specialistId) : null,
+        },
+        update: {
+          value: value.slice(0, 2000),
+          source: String(payload.source ?? "session-distill").slice(0, 80),
+          specialistId: payload.specialistId ? String(payload.specialistId) : null,
+        },
+      });
+      break;
+    }
     default:
       throw new Error(`Unsupported action: ${pending.action}`);
   }

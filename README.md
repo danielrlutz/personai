@@ -2,7 +2,7 @@
 
 Local-first **pocket team** for personal life, business ops, or both (Swiss/CH-DE aware) — twelve specialist modes, archive OCR with confirm gates, finance/legal/medical, morning brief, and local Ollama. Data stays on disk (SQLite per profile). New profiles default to **personal** mode (no business/MWST boilerplate).
 
-Inspired by Harmonia Hermes (one orchestration path, confirm before irreversible writes) — implemented **in-app**, not as Telegram bots or n8n.
+Inspired by Harmonia Hermes (one orchestration path, confirm before irreversible writes) — implemented **in-app**, not as Telegram bots or n8n. Specialist **skills** live as `apps/server/skills/*/SKILL.md` (Hermes-style registry, injected per role). **Memory distill** (Settings) promotes chat cues into confirm-gated memory facts.
 
 **New users:** see the end-to-end walkthrough in [docs/USER-GUIDE.md](docs/USER-GUIDE.md) (unlock, Settings / Product vault, Google Drive OAuth, daily Home triage, security habits).
 

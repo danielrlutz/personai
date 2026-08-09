@@ -1,5 +1,9 @@
 import type { FastifyInstance } from "fastify";
 import { ensureBusinessCategoryShells } from "../db/prisma-singleton.js";
+import {
+  collectMemoryDistillCandidates,
+  queueMemoryDistillConfirmations,
+} from "../memory/distill.js";
 import { ensureCeoProfile } from "../memory/user-care.js";
 import { sendError, withPrisma } from "./helpers.js";
 
@@ -119,6 +123,36 @@ export async function registerMemoryRoutes(app: FastifyInstance): Promise<void> 
       return { ok: true };
     } catch (err) {
       return sendError(reply, err, 404);
+    }
+  });
+
+  /** Scan recent chats for durable-looking facts; queue confirm-gated promotions. */
+  app.post<{
+    Body: { sessionId?: string; queue?: boolean };
+  }>("/memory-facts/distill", async (req, reply) => {
+    try {
+      const { prisma } = await withPrisma(req);
+      const candidates = await collectMemoryDistillCandidates(prisma, {
+        sessionId: req.body?.sessionId?.trim() || undefined,
+      });
+      if (req.body?.queue === false) {
+        return { candidates, queued: 0, confirmations: [] };
+      }
+      const { queued, confirmations } = await queueMemoryDistillConfirmations(
+        prisma,
+        candidates,
+      );
+      return {
+        candidates,
+        queued,
+        confirmations,
+        message:
+          queued > 0
+            ? `${queued} memory promotion(s) waiting under Needs your confirmation.`
+            : "No new durable facts found in recent chats.",
+      };
+    } catch (err) {
+      return sendError(reply, err);
     }
   });
 }

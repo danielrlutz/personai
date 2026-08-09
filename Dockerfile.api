@@ -22,6 +22,7 @@ WORKDIR /app
 RUN pnpm --filter @personai/server deploy --prod /deploy \
   && cp -r apps/server/dist /deploy/dist \
   && cp -r apps/server/prisma /deploy/prisma \
+  && cp -r apps/server/skills /deploy/skills \
   && mkdir -p /deploy/scripts \
   && cp -r apps/server/scripts/. /deploy/scripts/ \
   && cd /deploy \

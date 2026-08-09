@@ -9,6 +9,9 @@ const ACTION_LABELS: Record<string, string> = {
   "document.upload": "Document upload",
   "forge.ship": "Ship code",
   "premium.spend": "Premium spend",
+  "premium.inference": "Premium inference",
+  "memory.fact": "Remember fact",
+  "calendar.event": "Calendar event",
   "confirm.accept": "Confirmed",
   "confirm.reject": "Rejected",
 };

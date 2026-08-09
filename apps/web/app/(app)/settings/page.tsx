@@ -98,6 +98,7 @@ export default function SettingsPage() {
   const [factValue, setFactValue] = useState("");
   const [factSaving, setFactSaving] = useState(false);
   const [factNote, setFactNote] = useState<string | null>(null);
+  const [distillBusy, setDistillBusy] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -377,6 +378,28 @@ export default function SettingsPage() {
       setFacts((prev) => prev.filter((f) => f.id !== id));
     } catch (err) {
       setFactNote(err instanceof Error ? err.message : "Failed to delete fact");
+    }
+  };
+
+  const distillFromChats = async () => {
+    setDistillBusy(true);
+    setFactNote(null);
+    try {
+      const data = await apiPost<{
+        queued: number;
+        message?: string;
+        candidates: Array<{ key: string; value: string }>;
+      }>("/memory-facts/distill", {});
+      setFactNote(
+        data.message ??
+          (data.queued > 0
+            ? `${data.queued} promotion(s) queued — confirm on Home.`
+            : "No new durable facts found."),
+      );
+    } catch (err) {
+      setFactNote(err instanceof Error ? err.message : "Distill failed");
+    } finally {
+      setDistillBusy(false);
     }
   };
 
@@ -847,6 +870,8 @@ export default function SettingsPage() {
           </CardTitle>
           <CardDescription>
             Short facts you want remembered. Specialists see the 20 most recently updated.
+            Distill scans recent chats for “remember / prefer / live / work” cues and queues
+            confirmations before writing.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -868,6 +893,14 @@ export default function SettingsPage() {
               {factSaving ? "…" : "Add"}
             </Button>
           </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void distillFromChats()}
+            disabled={distillBusy}
+          >
+            {distillBusy ? "Scanning…" : "Distill from recent chats"}
+          </Button>
           {facts.length === 0 ? (
             <p className="text-sm text-muted-foreground">No facts yet.</p>
           ) : (

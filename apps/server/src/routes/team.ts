@@ -32,6 +32,7 @@ import {
   ARCHIVE_REFRESHED_KEY,
   ARCHIVE_TAXONOMY_KEY,
 } from "../archive/init-context.js";
+import { formatSkillsForPrompt, listSkillCatalog } from "../skills/registry.js";
 import { sendError, sseStart, sseWrite, withPrisma } from "./helpers.js";
 
 type ChatBody = {
@@ -67,6 +68,7 @@ export async function registerTeamRoutes(app: FastifyInstance): Promise<void> {
       }),
     ),
     taxonomy: ARCHIVE_TAXONOMY,
+    skills: listSkillCatalog(),
     models: {
       reasoning: config.reasoningModel,
       coder: config.coderModel,
@@ -231,6 +233,8 @@ export async function registerTeamRoutes(app: FastifyInstance): Promise<void> {
       const systemExtra = visionNotes
         ? `\n\nVISION NOTES FROM USER PHOTO (treat as what you see):\n${visionNotes}`
         : "";
+      const skillsBlock = formatSkillsForPrompt(specialistId);
+      const skillsExtra = skillsBlock ? `\n\n${skillsBlock}` : "";
 
       for await (const token of streamChat({
         host: ollamaHost,
@@ -238,7 +242,7 @@ export async function registerTeamRoutes(app: FastifyInstance): Promise<void> {
         messages: [
           {
             role: "system",
-            content: `${specialist.systemPrompt}\n\n${userCare}${systemExtra}`,
+            content: `${specialist.systemPrompt}\n\n${userCare}${skillsExtra}${systemExtra}`,
           },
           ...history.map((m) => ({
             role:

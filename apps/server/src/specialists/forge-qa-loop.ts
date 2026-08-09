@@ -7,6 +7,7 @@ import {
   resolveOllamaHost,
 } from "../ollama/client.js";
 import { vramLock } from "../ollama/vram-lock.js";
+import { formatSkillsForPrompt } from "../skills/registry.js";
 import { getSpecialist } from "./roster.js";
 import { resolveSpecialistModel } from "./resolve-model.js";
 
@@ -103,6 +104,8 @@ export async function runForgeQaLoop(opts: {
 
   const forge = getSpecialist("forge");
   const qa = getSpecialist("qa_auditor");
+  const forgeSkills = formatSkillsForPrompt("forge");
+  const qaSkills = formatSkillsForPrompt("qa_auditor");
   let ollamaHost = "";
   let proposal = "";
   let lastVerdict: QaVerdict | null = null;
@@ -135,7 +138,7 @@ export async function runForgeQaLoop(opts: {
         messages: [
           {
             role: "system",
-            content: `${forge.systemPrompt}\n\n${opts.userCare}`,
+            content: `${forge.systemPrompt}\n\n${opts.userCare}${forgeSkills ? `\n\n${forgeSkills}` : ""}`,
           },
           { role: "user", content: forgeUser },
         ],
@@ -165,7 +168,7 @@ export async function runForgeQaLoop(opts: {
         messages: [
           {
             role: "system",
-            content: `${qa.systemPrompt}\n\n${opts.userCare}`,
+            content: `${qa.systemPrompt}\n\n${opts.userCare}${qaSkills ? `\n\n${qaSkills}` : ""}`,
           },
           {
             role: "user",
