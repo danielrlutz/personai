@@ -6,6 +6,7 @@ import { Search } from "lucide-react";
 import { Sidebar } from "./Sidebar";
 import { ProfileSwitcher } from "./ProfileSwitcher";
 import { MobileNav } from "./MobileNav";
+import { OutboxBootstrap } from "@/components/outbox/OutboxBootstrap";
 import { setProfileId } from "@/lib/api-client";
 import { logoutToProfiles, requireProfile } from "@/lib/session";
 import { cn } from "@/lib/utils";
@@ -144,6 +145,7 @@ export function AppShell({ children }: AppShellProps) {
             </div>
           )}
         </main>
+        {gate === "allowed" ? <OutboxBootstrap /> : null}
       </div>
 
       {gate === "allowed" ? <MobileNav /> : null}
