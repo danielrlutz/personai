@@ -5,6 +5,7 @@ import { resolveProductConfig } from "../settings/host-vault.js";
 import { ARCHIVE_TAXONOMY } from "../specialists/roster.js";
 import { sendError, withPrisma } from "./helpers.js";
 import { ingestionEvents } from "../ollama/ingestion-worker.js";
+import { cancelIngestJob } from "../ingest/cancel-job.js";
 
 function monthKey(d = new Date()): string {
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
@@ -278,6 +279,30 @@ export async function registerOpsRoutes(app: FastifyInstance): Promise<void> {
       });
       ingestionEvents.emit("queue", { profileId });
       return updated;
+    } catch (err) {
+      return sendError(reply, err);
+    }
+  });
+
+  /** Remove from ingest queue. Never deletes confirmed/archived Drive files. */
+  app.delete<{ Params: { id: string } }>("/ingest/jobs/:id", async (req, reply) => {
+    try {
+      const { profileId, prisma } = await withPrisma(req);
+      const result = await cancelIngestJob(prisma, req.params.id);
+      await prisma.auditLog.create({
+        data: {
+          action: "ingest.cancel",
+          entity: "IngestionJob",
+          entityId: result.jobId,
+          metadata: JSON.stringify({
+            documentId: result.documentId,
+            mode: result.mode,
+            documentDeleted: result.documentDeleted,
+          }),
+        },
+      });
+      ingestionEvents.emit("queue", { profileId });
+      return result;
     } catch (err) {
       return sendError(reply, err);
     }

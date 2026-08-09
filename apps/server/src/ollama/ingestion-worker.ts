@@ -26,6 +26,11 @@ import {
   isLikelySwissIban,
   type SwissQrBill,
 } from "../ingest/swiss-qr.js";
+import {
+  finalizeCancelledJob,
+  isCancelRequested,
+} from "../ingest/cancel-job.js";
+import { safeDate, safeDateOrNow, safeFiniteNumber } from "../lib/safe-data.js";
 
 export const ingestionEvents = new EventEmitter();
 
@@ -132,7 +137,8 @@ async function createConfirmForExtraction(opts: {
     (Boolean(structured.amount) && isLikelySwissIban(iban));
 
   if (hasQr && iban) {
-    const amountNum = structured.amount != null ? Number(structured.amount) : null;
+    const amountNum = safeFiniteNumber(structured.amount);
+    const due = safeDate(structured.dueDate);
     await createConfirmation(prisma, {
       action: "ledger.write",
       summary: `Save QR bill ${entity} · ${amountNum ?? "open amount"} ${structured.currency ?? "CHF"} · file as ${archiveName}`,
@@ -148,7 +154,7 @@ async function createConfirmForExtraction(opts: {
         currency: String(structured.currency ?? "CHF"),
         reference: structured.reference ? String(structured.reference) : null,
         referenceType: structured.referenceType ? String(structured.referenceType) : null,
-        dueDate: structured.dueDate ? String(structured.dueDate) : null,
+        dueDate: due ? due.toISOString().slice(0, 10) : null,
         qrPayload: structured.qrPayload ? String(structured.qrPayload) : null,
         archiveName,
         archiveCategory,
@@ -158,20 +164,21 @@ async function createConfirmForExtraction(opts: {
     return;
   }
 
-  if (structured.amount && structured.vendor) {
+  const amountNum = safeFiniteNumber(structured.amount);
+  if (amountNum != null && structured.vendor) {
     await createConfirmation(prisma, {
       action: "ledger.write",
-      summary: `Save expense ${entity} · ${structured.amount} ${structured.currency ?? "CHF"} · file as ${archiveName}`,
+      summary: `Save expense ${entity} · ${amountNum} ${structured.currency ?? "CHF"} · file as ${archiveName}`,
       entity: "Document",
       entityId: documentId,
       payload: {
         kind: "transaction",
         documentId,
         type: "EXPENSE",
-        amount: Number(structured.amount),
+        amount: amountNum,
         currency: String(structured.currency ?? "CHF"),
         description: entity,
-        date: structured.date ? String(structured.date) : new Date().toISOString(),
+        date: safeDateOrNow(structured.date).toISOString(),
         archiveName,
         archiveCategory,
       },
@@ -225,7 +232,8 @@ async function persistExtraction(opts: {
     extension,
   });
   const archiveCategory = suggestArchiveCategory(docType);
-  const deadline = structured.dueDate ? new Date(String(structured.dueDate)) : null;
+  // Invalid OCR dueDate must become null — never Invalid Date into Prisma.
+  const deadline = safeDate(structured.dueDate);
 
   await prisma.document.update({
     where: { id: documentId },
@@ -419,7 +427,16 @@ async function processJob(profileId: string, jobId: string): Promise<void> {
     // OCR every leaf page while holding the VISION lock (no interleaved reasoning)
     const pageOcrs: PageOcr[] = [];
     for (const page of leafPages) {
+      if (await isCancelRequested(prisma, jobId)) {
+        await finalizeCancelledJob(prisma, jobId);
+        return;
+      }
       pageOcrs.push(await ocrPage({ host, page }));
+    }
+
+    if (await isCancelRequested(prisma, jobId)) {
+      await finalizeCancelledJob(prisma, jobId);
+      return;
     }
 
     // Re-merge "Seite 1 von N" continuations after OCR
@@ -464,6 +481,10 @@ async function processJob(profileId: string, jobId: string): Promise<void> {
     });
 
     for (const segment of restSegs) {
+      if (await isCancelRequested(prisma, jobId)) {
+        await finalizeCancelledJob(prisma, jobId);
+        return;
+      }
       const segOcrs = segment.pages.map((p) => ocrByPage.get(p.pageNumber)!);
       await spawnChildDocument({
         prisma,
@@ -490,20 +511,31 @@ async function processJob(profileId: string, jobId: string): Promise<void> {
       });
     }
 
+    if (await isCancelRequested(prisma, jobId)) {
+      await finalizeCancelledJob(prisma, jobId);
+      return;
+    }
+
     await prisma.ingestionJob.update({
       where: { id: jobId },
       data: { status: "COMPLETED", completedAt: new Date(), pausedReason: null },
     });
   } catch (err) {
-    await prisma.ingestionJob.update({
-      where: { id: jobId },
-      data: {
-        status: "FAILED",
-        errorMessage: err instanceof Error ? err.message : String(err),
-        completedAt: new Date(),
-        pausedReason: null,
-      },
-    });
+    if (await isCancelRequested(prisma, jobId).catch(() => false)) {
+      await finalizeCancelledJob(prisma, jobId).catch(() => undefined);
+    } else {
+      await prisma.ingestionJob
+        .update({
+          where: { id: jobId },
+          data: {
+            status: "FAILED",
+            errorMessage: err instanceof Error ? err.message : String(err),
+            completedAt: new Date(),
+            pausedReason: null,
+          },
+        })
+        .catch(() => undefined);
+    }
   } finally {
     await release();
     ingestionEvents.emit("queue", { profileId });

@@ -1,10 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { FileText, Loader2, CheckCircle2, XCircle, Clock } from "lucide-react";
-import { apiGet, streamSSE, type IngestionJob } from "@/lib/api-client";
+import { FileText, Loader2, CheckCircle2, XCircle, Clock, X } from "lucide-react";
+import { apiDelete, apiGet, streamSSE, type IngestionJob } from "@/lib/api-client";
 import { formatRelative } from "@/lib/utils";
+import { toast } from "@/lib/toast";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/shared/EmptyState";
@@ -17,6 +19,10 @@ const statusConfig = {
   COMPLETED: { icon: CheckCircle2, variant: "success" as const, label: "Completed" },
   FAILED: { icon: XCircle, variant: "destructive" as const, label: "Failed" },
 };
+
+function canCancel(status: IngestionJob["status"]): boolean {
+  return status === "QUEUED" || status === "FAILED" || status === "PROCESSING" || status === "COMPLETED";
+}
 
 interface IngestionQueueProps {
   refreshKey?: number;
@@ -34,6 +40,7 @@ export function IngestionQueue({ refreshKey, liveUpdates = true }: IngestionQueu
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
 
   const applyQueue = useCallback(
     (data: {
@@ -89,6 +96,49 @@ export function IngestionQueue({ refreshKey, liveUpdates = true }: IngestionQueu
     };
   }, [applyQueue, liveUpdates, refreshKey, reloadToken]);
 
+  const cancelJob = useCallback(
+    async (job: IngestionJob) => {
+      const label = job.document.filename || "this document";
+      const processingNote =
+        job.status === "PROCESSING"
+          ? " OCR may finish the current page, then the item is removed. Archived Drive files are never deleted."
+          : " This only removes the queue item — confirmed archive / Drive files are kept.";
+      if (
+        !window.confirm(
+          `Remove “${label}” from the queue?${processingNote}`,
+        )
+      ) {
+        return;
+      }
+      setCancellingId(job.id);
+      try {
+        const result = await apiDelete<{
+          ok: boolean;
+          mode: "removed" | "cancelling";
+          documentDeleted: boolean;
+        }>(`/ingest/jobs/${job.id}`);
+        if (result.mode === "cancelling") {
+          toast.success("Cancel requested — removing when processing allows.");
+        } else {
+          toast.success(
+            result.documentDeleted
+              ? "Removed from queue (upload discarded)."
+              : "Removed from queue.",
+          );
+        }
+        setJobs((prev) =>
+          result.mode === "removed" ? prev.filter((j) => j.id !== job.id) : prev,
+        );
+        setReloadToken((n) => n + 1);
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Could not remove from queue");
+      } finally {
+        setCancellingId(null);
+      }
+    },
+    [],
+  );
+
   const queuedCount = jobs.filter((j) => j.status === "QUEUED" || j.status === "PROCESSING").length;
 
   if (loading) {
@@ -122,6 +172,7 @@ export function IngestionQueue({ refreshKey, liveUpdates = true }: IngestionQueu
               {jobs.map((job) => {
                 const config = statusConfig[job.status];
                 const Icon = config.icon;
+                const busy = cancellingId === job.id;
                 return (
                   <li
                     key={job.id}
@@ -143,12 +194,35 @@ export function IngestionQueue({ refreshKey, liveUpdates = true }: IngestionQueu
                             {job.errorMessage}
                           </p>
                         )}
+                        {job.pausedReason === "cancel_requested" && (
+                          <p className="mt-0.5 text-xs text-muted-foreground">Cancelling…</p>
+                        )}
                       </div>
                     </div>
-                    <Badge variant={config.variant} className="w-fit shrink-0 gap-1">
-                      <Icon className={`h-3 w-3 ${job.status === "PROCESSING" ? "animate-spin" : ""}`} />
-                      {config.label}
-                    </Badge>
+                    <div className="flex shrink-0 items-center gap-2 self-end sm:self-auto">
+                      {canCancel(job.status) && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 gap-1 px-2 text-muted-foreground"
+                          disabled={busy || job.pausedReason === "cancel_requested"}
+                          onClick={() => void cancelJob(job)}
+                          aria-label={`Cancel ${job.document.filename}`}
+                        >
+                          {busy ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <X className="h-3.5 w-3.5" />
+                          )}
+                          Cancel
+                        </Button>
+                      )}
+                      <Badge variant={config.variant} className="w-fit gap-1">
+                        <Icon className={`h-3 w-3 ${job.status === "PROCESSING" ? "animate-spin" : ""}`} />
+                        {config.label}
+                      </Badge>
+                    </div>
                   </li>
                 );
               })}
