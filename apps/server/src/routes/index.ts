@@ -5,7 +5,13 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { renderToBuffer } from "@react-pdf/renderer";
 import React from "react";
-import { createProfile, listProfiles, switchProfile, getActiveProfile } from "../profiles/registry.js";
+import {
+  createProfile,
+  listPublicProfiles,
+  switchProfile,
+  getActiveProfile,
+  toPublicProfile,
+} from "../profiles/registry.js";
 import { config, profileExportsDir, profileUploadsDir } from "../config.js";
 import {
   ollamaHealth,
@@ -29,10 +35,15 @@ import { registerLifeRoutes } from "./life.js";
 import { registerTeamRoutes } from "./team.js";
 import { registerMemoryRoutes } from "./memory.js";
 import { registerConfirmationRoutes } from "./confirmations.js";
+import { registerAuthRoutes } from "./auth.js";
 import { createConfirmation } from "../confirm/confirm-service.js";
 import { driveStatus } from "../archive/drive.js";
+import { getRequestSession } from "../auth/middleware.js";
+import { assertPasswordStrength } from "../auth/password.js";
+import { createSession } from "../auth/session.js";
 
 export async function registerRoutes(app: FastifyInstance): Promise<void> {
+  await registerAuthRoutes(app);
   await registerLifeRoutes(app);
   await registerTeamRoutes(app);
   await registerMemoryRoutes(app);
@@ -80,22 +91,46 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     };
   });
 
-  // Profiles
-  app.get("/profiles", async () => listProfiles());
+  // Profiles — list is public (names + hasPassword only). Mutations require auth or setup password.
+  app.get("/profiles", async () => listPublicProfiles());
 
-  app.post<{ Body: { name: string; avatar?: string } }>("/profiles", async (req, reply) => {
-    try {
-      const profile = await createProfile(req.body.name, req.body.avatar);
-      return profile;
-    } catch (err) {
-      return sendError(reply, err);
-    }
-  });
+  app.post<{ Body: { name?: string; avatar?: string; password?: string } }>(
+    "/profiles",
+    async (req, reply) => {
+      try {
+        const name = req.body?.name?.trim();
+        const password = req.body?.password;
+        if (!name) return reply.status(400).send({ error: "name is required" });
+        if (typeof password !== "string") {
+          return reply.status(400).send({ error: "password is required for new profiles" });
+        }
+        assertPasswordStrength(password);
+        const profile = await createProfile(name, { avatar: req.body?.avatar, password });
+        const token = createSession(profile.id);
+        return { token, profile: toPublicProfile(profile) };
+      } catch (err) {
+        return sendError(reply, err);
+      }
+    },
+  );
 
   app.post<{ Body: { profileId: string } }>("/profiles/switch", async (req, reply) => {
     try {
+      const session = getRequestSession(req);
+      if (!session) {
+        return reply.status(401).send({
+          error: "Authentication required to switch profiles",
+          code: "AUTH_REQUIRED",
+        });
+      }
+      if (session.profileId !== req.body.profileId) {
+        return reply.status(403).send({
+          error: "Sign out and log in to the other profile with its password.",
+          code: "PROFILE_MISMATCH",
+        });
+      }
       const profile = await switchProfile(req.body.profileId);
-      return profile;
+      return toPublicProfile(profile);
     } catch (err) {
       return sendError(reply, err, 404);
     }

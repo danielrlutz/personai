@@ -7,8 +7,9 @@ import { Sidebar } from "./Sidebar";
 import { ProfileSwitcher } from "./ProfileSwitcher";
 import { MobileNav } from "./MobileNav";
 import { OutboxBootstrap } from "@/components/outbox/OutboxBootstrap";
-import { setProfileId } from "@/lib/api-client";
+import { setProfileId, setSessionToken, getSessionToken } from "@/lib/api-client";
 import { logoutToProfiles, requireProfile } from "@/lib/session";
+import { getStoredSessionToken } from "@/lib/platform";
 import { cn } from "@/lib/utils";
 
 const commandItems = [
@@ -45,17 +46,19 @@ export function AppShell({ children }: AppShellProps) {
 
   useLayoutEffect(() => {
     const profileId = requireProfile();
-    if (!profileId) {
+    const token = getStoredSessionToken();
+    if (!profileId || !token) {
       setGate("redirecting");
       router.replace("/profiles/");
       return;
     }
     setProfileId(profileId);
+    setSessionToken(token);
     setGate("allowed");
 
     const onProfileChanged = (event: Event) => {
       const detail = (event as CustomEvent<{ profileId: string | null }>).detail;
-      if (!detail?.profileId) {
+      if (!detail?.profileId || !getSessionToken()) {
         setGate("redirecting");
         router.replace("/profiles/");
       }

@@ -2,6 +2,7 @@ export type Platform = "browser" | "pwa" | "tauri";
 
 const PROFILE_STORAGE_KEY = "personai:activeProfileId";
 const API_URL_STORAGE_KEY = "personai:apiBaseUrl";
+const SESSION_TOKEN_KEY = "personai:sessionToken";
 
 export function getPlatform(): Platform {
   if (typeof window === "undefined") return "browser";
@@ -39,6 +40,21 @@ export function clearStoredProfileId(): void {
   window.dispatchEvent(new CustomEvent("personai:profile-changed", { detail: { profileId: null } }));
 }
 
+export function getStoredSessionToken(): string | null {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem(SESSION_TOKEN_KEY);
+}
+
+export function setStoredSessionToken(token: string): void {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(SESSION_TOKEN_KEY, token);
+}
+
+export function clearStoredSessionToken(): void {
+  if (typeof window === "undefined") return;
+  localStorage.removeItem(SESSION_TOKEN_KEY);
+}
+
 /** Normalize API base: trim, drop trailing slash(es). Empty → null. */
 export function normalizeApiBaseUrl(url: string): string | null {
   const trimmed = url.trim().replace(/\/+$/, "");
@@ -67,4 +83,4 @@ export function setStoredApiBaseUrl(url: string): void {
   localStorage.setItem(API_URL_STORAGE_KEY, normalized);
 }
 
-export { PROFILE_STORAGE_KEY, API_URL_STORAGE_KEY };
+export { PROFILE_STORAGE_KEY, API_URL_STORAGE_KEY, SESSION_TOKEN_KEY };

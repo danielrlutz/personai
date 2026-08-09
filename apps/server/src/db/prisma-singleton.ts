@@ -10,6 +10,7 @@ import {
   profileExportsDir,
   profileUploadsDir,
 } from "../config.js";
+import { dbLooksEncryptedOnDisk, isProfileUnlocked } from "../auth/crypto-db.js";
 
 let activeClient: PrismaClient | null = null;
 let activeProfileId: string | null = null;
@@ -50,6 +51,11 @@ export async function getPrisma(profileId: string): Promise<PrismaClient> {
     await activeClient.$disconnect();
     activeClient = null;
     activeProfileId = null;
+  }
+
+  // Refuse to create a fresh empty DB beside a sealed ciphertext.
+  if (dbLooksEncryptedOnDisk(profileId) && !isProfileUnlocked(profileId)) {
+    throw new Error("Profile database is locked. Sign in with your password first.");
   }
 
   ensureDatabase(profileId);
@@ -137,6 +143,12 @@ export function getActiveProfileId(): string | null {
 
 export async function shutdownPrisma(): Promise<void> {
   if (activeClient) {
+    try {
+      // Flush WAL into the main DB file before disconnect / encryption seal.
+      await activeClient.$executeRawUnsafe("PRAGMA wal_checkpoint(TRUNCATE);");
+    } catch {
+      // ignore — file may already be closed or not in WAL mode
+    }
     await activeClient.$disconnect();
     activeClient = null;
     activeProfileId = null;

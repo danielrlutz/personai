@@ -62,7 +62,44 @@ Check status: `GET /archive/drive` or the `drive` field on `GET /health`.
 - **AI**: Ollama (`maternion/LightOnOCR-2`, `deepseek-r1:8b`) with VRAM semaphore
 - **Deploy**: Docker Compose (dev + VPS with Caddy)
 
-## Desktop vs VPS / PWA (data isolation)
+## Security
+
+**Yes — password auth and at-rest encryption are essential** once the API is reachable beyond loopback (Tailscale phone, VPS). Volume permissions and Tailscale alone are **not** enough: anyone who can hit `:4000` could previously open any profile with only `X-Profile-Id`.
+
+### What ships now
+
+| Control | Behaviour |
+|---------|-----------|
+| **Password** | Per-profile, Argon2id (64 MiB, t=3). Min 8 characters. |
+| **Session** | Opaque Bearer token (SHA-256 stored server-side in `data/sessions.json`). Sent as `Authorization: Bearer …`. |
+| **API lock** | All routes except `GET /health`, `GET /profiles`, `POST /auth/login`, `POST /auth/setup` require a valid session. Bare `X-Profile-Id` is **not** a credential. |
+| **At rest** | Profile SQLite is sealed as `personai.db.enc` (AES-256-GCM) with a random DEK wrapped by a password-derived KEK. Sign-out / process exit re-seals and deletes plaintext `personai.db`. |
+| **Migration** | Existing profiles without a password must **set one on next open** before entering the app. |
+
+### User setup
+
+1. Open the app → **profiles** screen.
+2. Pick your account → **set password** (first time) or **unlock** with password.
+3. New accounts: name + password on create (DB encrypted from the start).
+4. Change password anytime: **Settings → Password & encryption**.
+5. Sign out: seals the DB; you must unlock again.
+
+### Tailscale / transit notes
+
+| Path | Recommendation |
+|------|----------------|
+| **Tailscale MagicDNS** `http://HOST:3000` → `http://HOST:4000` | Common and OK **inside the tailnet**. WireGuard protects the path; PersonAI still requires password + session. Prefer full FQDN on Android. |
+| **Public internet** | Terminate **HTTPS** with Caddy (`docker-compose.prod.yml` + `Caddyfile`). Do not expose bare `:4000` to the world. |
+| **Optional TLS on Tailscale** | You can put Caddy in front of MagicDNS hostnames; not required for phone-on-tailnet HTTP. |
+
+### What is still out of scope (honest)
+
+- Uploads / archive PDFs are **not** individually encrypted (only the SQLite DB file).
+- Session token lives in `localStorage` (needed for static web + cross-origin `:3000`→`:4000` over HTTP; httpOnly Secure cookies need HTTPS).
+- Crash before seal can leave a temporary plaintext `personai.db` — treat disk/volume ACLs as a second layer.
+- Drive service-account JSON and `.env` secrets remain filesystem-protected; keep them out of git.
+
+### Desktop vs VPS / PWA (data isolation)
 
 These are **separate deployments** of the same UI — decentralized by design.
 
@@ -263,13 +300,13 @@ Still recommend baking via `vps-tailscale.sh`. If UI and API share the same Magi
 
 The web image is a **static Next.js export** — `NEXT_PUBLIC_API_URL` is baked at **image build** time; `.env` alone is not enough without rebuild (hostname fallback and Settings override still work without a bake-in).
 
-PersonAI routes are `/`, `/profiles/`, `/dashboard/`, etc. There is **no** `/auth` route. There are **no** SvelteKit `/_app/immutable/...` assets — only Next `/_next/static/...`.
+PersonAI **web** routes are `/`, `/profiles/`, `/dashboard/`, etc. Password login happens on `/profiles/` (API uses `/auth/login`, `/auth/setup` — there is **no** Next.js page at `/auth`). There are **no** SvelteKit `/_app/immutable/...` assets — only Next `/_next/static/...`.
 
 Login navigates with a **relative** `/dashboard/` (trailing slash). nginx uses `absolute_redirect off` so directory redirects never rewrite the phone onto `:80` / `localhost` (that looked like `ERR_CONNECTION_REFUSED` after profile select).
 
-### Troubleshooting: `/_app/immutable` 404 or redirect to `/auth`
+### Troubleshooting: `/_app/immutable` 404 or redirect to `/auth?redirect=…`
 
-If nginx/web logs show `/_app/immutable/nodes/...` 404s, or the phone navigates to `/auth?redirect=...`, the browser is almost certainly running a **different app** (or an old Service Worker / site cache) on the same MagicDNS origin — not PersonAI.
+If nginx/web logs show `/_app/immutable/nodes/...` 404s, or the phone navigates to a **foreign** `/auth?redirect=...` (query-string login from another stack), the browser is almost certainly running a **different app** (or an old Service Worker / site cache) on the same MagicDNS origin — not PersonAI.
 
 1. On the VPS, confirm the web container only has Next `out/` (no `_app`):
 

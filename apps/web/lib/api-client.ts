@@ -1,17 +1,24 @@
 import {
   clearStoredProfileId,
+  clearStoredSessionToken,
   getStoredApiBaseUrl,
   getStoredProfileId,
+  getStoredSessionToken,
   normalizeApiBaseUrl,
   setStoredApiBaseUrl,
   setStoredProfileId,
+  setStoredSessionToken,
 } from "./platform";
+import { describeApiFailure, describeStreamError } from "./api-errors";
 import { notifyApiFailure } from "./toast";
 
 const DEFAULT_API_BASE = "http://localhost:4000";
 
 /** undefined = use storage; null = explicitly logged out; string = active override */
 let profileIdOverride: string | null | undefined = undefined;
+
+/** undefined = use storage; null = logged out; string = override */
+let sessionTokenOverride: string | null | undefined = undefined;
 
 /** In-memory override so Settings save takes effect before next full reload. */
 let apiBaseUrlOverride: string | null | undefined = undefined;
@@ -116,6 +123,21 @@ export function setProfileId(id: string | null): void {
   }
 }
 
+export function getSessionToken(): string | null {
+  if (sessionTokenOverride !== undefined) return sessionTokenOverride;
+  return getStoredSessionToken();
+}
+
+export function setSessionToken(token: string | null): void {
+  sessionTokenOverride = token;
+  if (typeof window === "undefined") return;
+  if (token) {
+    setStoredSessionToken(token);
+  } else {
+    clearStoredSessionToken();
+  }
+}
+
 function buildHeaders(extra?: HeadersInit): Headers {
   const headers = new Headers(extra);
   if (!headers.has("Content-Type")) {
@@ -125,10 +147,25 @@ function buildHeaders(extra?: HeadersInit): Headers {
   if (profileId) {
     headers.set("X-Profile-Id", profileId);
   }
+  const token = getSessionToken();
+  if (token) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
   return headers;
 }
 
-async function parseResponse<T>(res: Response): Promise<T> {
+function maybeRedirectOnAuthFailure(status: number, path: string): void {
+  if (typeof window === "undefined") return;
+  if (status !== 401 && status !== 403) return;
+  // Avoid loops on the public profiles / auth endpoints.
+  if (path.startsWith("/auth/") || path.startsWith("/profiles")) return;
+  if (window.location.pathname.startsWith("/profiles")) return;
+  setSessionToken(null);
+  setProfileId(null);
+  window.location.replace("/profiles/");
+}
+
+async function parseResponse<T>(res: Response, path?: string): Promise<T> {
   const text = await res.text();
   let body: unknown = null;
   if (text) {
@@ -139,6 +176,7 @@ async function parseResponse<T>(res: Response): Promise<T> {
     }
   }
   if (!res.ok) {
+    if (path) maybeRedirectOnAuthFailure(res.status, path);
     const message =
       typeof body === "object" && body !== null && "error" in body
         ? String((body as { error: unknown }).error)
@@ -156,7 +194,7 @@ export async function apiGet<T>(path: string, init?: ApiRequestInit): Promise<T>
       method: "GET",
       headers: buildHeaders(request.headers),
     });
-    return parseResponse<T>(res);
+    return parseResponse<T>(res, path);
   }, silent);
 }
 
@@ -169,7 +207,7 @@ export async function apiPost<T>(path: string, body?: unknown, init?: ApiRequest
       headers: buildHeaders(request.headers),
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
-    return parseResponse<T>(res);
+    return parseResponse<T>(res, path);
   }, silent);
 }
 
@@ -182,7 +220,7 @@ export async function apiPatch<T>(path: string, body?: unknown, init?: ApiReques
       headers: buildHeaders(request.headers),
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
-    return parseResponse<T>(res);
+    return parseResponse<T>(res, path);
   }, silent);
 }
 
@@ -195,7 +233,7 @@ export async function apiPut<T>(path: string, body?: unknown, init?: ApiRequestI
       headers: buildHeaders(request.headers),
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
-    return parseResponse<T>(res);
+    return parseResponse<T>(res, path);
   }, silent);
 }
 
@@ -207,7 +245,7 @@ export async function apiDelete<T>(path: string, init?: ApiRequestInit): Promise
       method: "DELETE",
       headers: buildHeaders(request.headers),
     });
-    return parseResponse<T>(res);
+    return parseResponse<T>(res, path);
   }, silent);
 }
 
@@ -222,7 +260,7 @@ export async function apiUpload<T>(path: string, formData: FormData, init?: ApiR
       headers,
       body: formData,
     });
-    return parseResponse<T>(res);
+    return parseResponse<T>(res, path);
   }, silent);
 }
 
@@ -250,18 +288,33 @@ export async function streamSSE(
       signal: controller.signal,
     });
   } catch (err) {
-    if (!silent) notifyApiFailure(err);
-    throw err;
+    const described = describeApiFailure(err, { path, apiBaseUrl: getApiBaseUrl() });
+    if (!silent) notifyApiFailure(err, { path, apiBaseUrl: getApiBaseUrl() });
+    // Human message so silent callers (outbox / chat "Not sent") show a real cause.
+    throw new Error(described.message, { cause: err });
   }
 
   if (!res.ok) {
+    let parsedErr: unknown;
     try {
-      const err = await parseResponse<never>(res);
-      throw err;
+      await parseResponse<never>(res);
     } catch (err) {
-      if (!silent) notifyApiFailure(err);
-      throw err;
+      parsedErr = err;
     }
+    const described = describeApiFailure(parsedErr ?? new Error(`Request failed (${res.status})`), {
+      path,
+      apiBaseUrl: getApiBaseUrl(),
+    });
+    if (!silent) {
+      notifyApiFailure(parsedErr ?? new Error(described.message), {
+        path,
+        apiBaseUrl: getApiBaseUrl(),
+      });
+    }
+    if (parsedErr instanceof ApiError) {
+      throw new ApiError(described.message, parsedErr.status, parsedErr.body);
+    }
+    throw new Error(described.message, { cause: parsedErr });
   }
 
   const reader = res.body?.getReader();
@@ -296,8 +349,7 @@ export async function streamSSE(
               options.onEvent?.(event, data);
               if (event === "done") options.onDone?.();
               if (event === "error") {
-                const msg = typeof data === "object" && data && "message" in data ? String((data as { message: unknown }).message) : "Stream error";
-                options.onError?.(new Error(msg));
+                options.onError?.(new Error(describeStreamError(data)));
               }
             } catch {
               options.onEvent?.(event, dataStr);
@@ -322,11 +374,18 @@ export interface Profile {
   name: string;
   avatar?: string;
   createdAt: string;
+  hasPassword?: boolean;
+  dbEncrypted?: boolean;
 }
 
 export interface ProfileRegistry {
   activeProfileId: string | null;
   profiles: Profile[];
+}
+
+export interface AuthResponse {
+  token: string;
+  profile: Profile;
 }
 
 export type HabitFrequency = "DAILY" | "WEEKLY" | "CUSTOM";

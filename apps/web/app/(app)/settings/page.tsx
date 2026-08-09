@@ -82,6 +82,11 @@ export default function SettingsPage() {
   const [factValue, setFactValue] = useState("");
   const [factSaving, setFactSaving] = useState(false);
   const [factNote, setFactNote] = useState<string | null>(null);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordSaving, setPasswordSaving] = useState(false);
+  const [passwordNote, setPasswordNote] = useState<string | null>(null);
   const platform = typeof window !== "undefined" ? getPlatform() : "browser";
 
   const refreshOllama = async () => {
@@ -236,6 +241,33 @@ export default function SettingsPage() {
       setFacts((prev) => prev.filter((f) => f.id !== id));
     } catch (err) {
       setFactNote(err instanceof Error ? err.message : "Failed to delete fact");
+    }
+  };
+
+  const changePassword = async () => {
+    if (newPassword.length < 8) {
+      setPasswordNote("New password must be at least 8 characters.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordNote("New passwords do not match.");
+      return;
+    }
+    setPasswordSaving(true);
+    setPasswordNote(null);
+    try {
+      await apiPost("/auth/password/change", {
+        currentPassword,
+        newPassword,
+      });
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setPasswordNote("Password updated. Your encrypted database key was re-wrapped.");
+    } catch (err) {
+      setPasswordNote(err instanceof Error ? err.message : "Failed to change password");
+    } finally {
+      setPasswordSaving(false);
     }
   };
 
@@ -550,6 +582,49 @@ export default function SettingsPage() {
             </ul>
           )}
           {factNote ? <p className="text-xs text-muted-foreground">{factNote}</p> : null}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Shield className="h-4 w-4 text-primary" />
+            Password & encryption
+          </CardTitle>
+          <CardDescription>
+            Argon2id-hashed password unlocks a session token and decrypts this profile&apos;s SQLite
+            database (AES-256-GCM). Sign-out re-seals the DB on disk.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <Input
+            type="password"
+            value={currentPassword}
+            onChange={(e) => setCurrentPassword(e.target.value)}
+            placeholder="Current password"
+            autoComplete="current-password"
+          />
+          <Input
+            type="password"
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+            placeholder="New password (min 8)"
+            autoComplete="new-password"
+          />
+          <Input
+            type="password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            placeholder="Confirm new password"
+            autoComplete="new-password"
+          />
+          <Button
+            onClick={() => void changePassword()}
+            disabled={passwordSaving || !currentPassword || !newPassword}
+          >
+            {passwordSaving ? "Updating…" : "Change password"}
+          </Button>
+          {passwordNote ? <p className="text-xs text-muted-foreground">{passwordNote}</p> : null}
         </CardContent>
       </Card>
 

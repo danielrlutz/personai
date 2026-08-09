@@ -1,8 +1,13 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { requireProfileId } from "../profiles/registry.js";
 import { getPrisma } from "../db/prisma-singleton.js";
+import { getRequestSession } from "../auth/middleware.js";
 
+/** Prefer authenticated session profile; never trust bare X-Profile-Id alone on protected routes. */
 export function getProfileId(request: FastifyRequest): string {
+  const session = getRequestSession(request);
+  if (session?.profileId) return session.profileId;
+
   const header = request.headers["x-profile-id"];
   return requireProfileId(typeof header === "string" ? header : undefined);
 }

@@ -2,21 +2,34 @@
 
 import { useEffect, useState } from "react";
 import { motion, useReducedMotion } from "framer-motion";
-import { Plus, User, ArrowRight } from "lucide-react";
-import { apiGet, apiPost, type Profile, type ProfileRegistry } from "@/lib/api-client";
-import { loginWithProfile } from "@/lib/session";
+import { Plus, User, ArrowRight, Lock, KeyRound } from "lucide-react";
+import { apiGet, type Profile, type ProfileRegistry } from "@/lib/api-client";
+import {
+  createProfileWithPassword,
+  enterApp,
+  loginWithPassword,
+  setupPassword,
+} from "@/lib/session";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { pageVariants, staggerContainer, staggerItem } from "@/lib/motion";
 
+type Step =
+  | { kind: "list" }
+  | { kind: "login"; profile: Profile }
+  | { kind: "setup"; profile: Profile }
+  | { kind: "create" };
+
 export default function ProfilesPage() {
   const reduce = useReducedMotion();
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
-  const [creating, setCreating] = useState(false);
+  const [step, setStep] = useState<Step>({ kind: "list" });
   const [newName, setNewName] = useState("");
+  const [password, setPassword] = useState("");
+  const [passwordConfirm, setPasswordConfirm] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -27,28 +40,79 @@ export default function ProfilesPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  const selectProfile = async (profile: Profile) => {
+  const resetPasswordFields = () => {
+    setPassword("");
+    setPasswordConfirm("");
+  };
+
+  const selectProfile = (profile: Profile) => {
+    setError(null);
+    resetPasswordFields();
+    if (profile.hasPassword) {
+      setStep({ kind: "login", profile });
+    } else {
+      setStep({ kind: "setup", profile });
+    }
+  };
+
+  const submitLogin = async () => {
+    if (step.kind !== "login" || !password) return;
     setSubmitting(true);
     setError(null);
     try {
-      await loginWithProfile(profile.id);
+      await loginWithPassword(step.profile.id, password);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to switch profile");
+      setError(err instanceof Error ? err.message : "Login failed");
       setSubmitting(false);
     }
   };
 
-  const createProfile = async () => {
-    if (!newName.trim()) return;
+  const submitSetup = async () => {
+    if (step.kind !== "setup") return;
+    if (password.length < 8) {
+      setError("Password must be at least 8 characters");
+      return;
+    }
+    if (password !== passwordConfirm) {
+      setError("Passwords do not match");
+      return;
+    }
     setSubmitting(true);
     setError(null);
     try {
-      const profile = await apiPost<Profile>("/profiles", { name: newName.trim() });
-      await loginWithProfile(profile.id);
+      await setupPassword(step.profile.id, password);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not set password");
+      setSubmitting(false);
+    }
+  };
+
+  const submitCreate = async () => {
+    if (!newName.trim()) return;
+    if (password.length < 8) {
+      setError("Password must be at least 8 characters");
+      return;
+    }
+    if (password !== passwordConfirm) {
+      setError("Passwords do not match");
+      return;
+    }
+    setSubmitting(true);
+    setError(null);
+    try {
+      await createProfileWithPassword(newName.trim(), password);
+      await enterApp();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create profile");
       setSubmitting(false);
     }
+  };
+
+  const backToList = () => {
+    setStep({ kind: "list" });
+    setError(null);
+    resetPasswordFields();
+    setNewName("");
   };
 
   return (
@@ -76,7 +140,13 @@ export default function ProfilesPage() {
             PersonAI
           </h1>
           <p className="mt-2.5 text-[15px] leading-relaxed text-muted-foreground">
-            Welcome back — choose an account to continue
+            {step.kind === "login"
+              ? `Enter password for ${step.profile.name}`
+              : step.kind === "setup"
+                ? `Set a password for ${step.profile.name}`
+                : step.kind === "create"
+                  ? "Create a protected account"
+                  : "Sign in — your data is password-protected"}
           </p>
         </div>
 
@@ -86,86 +156,154 @@ export default function ProfilesPage() {
           </p>
         )}
 
-        <Card className="overflow-hidden shadow-elev-2 hover:shadow-elev-2">
-          {loading ? (
-            <div className="space-y-0 p-3">
-              <Skeleton className="h-16 rounded-xl" />
-              <Skeleton className="mt-2 h-16 rounded-xl" />
-            </div>
-          ) : (
-            <motion.ul
-              variants={reduce ? undefined : staggerContainer}
-              initial={reduce ? undefined : "hidden"}
-              animate={reduce ? undefined : "show"}
-            >
-              {profiles.map((profile) => (
-                <motion.li key={profile.id} variants={reduce ? undefined : staggerItem}>
-                  <button
-                    type="button"
-                    disabled={submitting}
-                    onClick={() => void selectProfile(profile)}
-                    className="md-list-row pressable w-full justify-between text-left disabled:pointer-events-none disabled:opacity-60"
-                  >
-                    <span className="flex min-w-0 items-center gap-3.5">
-                      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary-container shadow-elev-1">
-                        <User className="h-5 w-5 text-primary-on-container" />
-                      </span>
-                      <span className="min-w-0">
-                        <span className="block truncate text-[15px] font-semibold tracking-tight">
-                          {profile.name}
+        {step.kind === "list" && (
+          <>
+            <Card className="overflow-hidden shadow-elev-2 hover:shadow-elev-2">
+              {loading ? (
+                <div className="space-y-0 p-3">
+                  <Skeleton className="h-16 rounded-xl" />
+                  <Skeleton className="mt-2 h-16 rounded-xl" />
+                </div>
+              ) : (
+                <motion.ul
+                  variants={reduce ? undefined : staggerContainer}
+                  initial={reduce ? undefined : "hidden"}
+                  animate={reduce ? undefined : "show"}
+                >
+                  {profiles.map((profile) => (
+                    <motion.li key={profile.id} variants={reduce ? undefined : staggerItem}>
+                      <button
+                        type="button"
+                        disabled={submitting}
+                        onClick={() => selectProfile(profile)}
+                        className="md-list-row pressable w-full justify-between text-left disabled:pointer-events-none disabled:opacity-60"
+                      >
+                        <span className="flex min-w-0 items-center gap-3.5">
+                          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary-container shadow-elev-1">
+                            <User className="h-5 w-5 text-primary-on-container" />
+                          </span>
+                          <span className="min-w-0">
+                            <span className="block truncate text-[15px] font-semibold tracking-tight">
+                              {profile.name}
+                            </span>
+                            <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                              {profile.hasPassword ? (
+                                <>
+                                  <Lock className="h-3 w-3" /> Password protected
+                                </>
+                              ) : (
+                                <>
+                                  <KeyRound className="h-3 w-3" /> Set password to continue
+                                </>
+                              )}
+                            </span>
+                          </span>
                         </span>
-                        <span className="block text-xs text-muted-foreground">
-                          Created {new Date(profile.createdAt).toLocaleDateString("de-CH")}
-                        </span>
-                      </span>
-                    </span>
-                    <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-md ease-md group-hover:translate-x-0.5" />
-                  </button>
-                </motion.li>
-              ))}
-              {!profiles.length && (
-                <li className="px-5 py-12 text-center text-sm leading-relaxed text-muted-foreground">
-                  No profiles yet — create one to get started.
-                </li>
+                        <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      </button>
+                    </motion.li>
+                  ))}
+                  {!profiles.length && (
+                    <li className="px-5 py-12 text-center text-sm leading-relaxed text-muted-foreground">
+                      No profiles yet — create one to get started.
+                    </li>
+                  )}
+                </motion.ul>
               )}
-            </motion.ul>
-          )}
-        </Card>
+            </Card>
 
-        <div className="mt-6">
-          {creating ? (
-            <Card className="animate-scale-in">
-              <CardContent className="flex flex-col gap-3 p-4 sm:flex-row">
+            <div className="mt-6">
+              <Button
+                variant="tonal"
+                className="w-full"
+                onClick={() => {
+                  setStep({ kind: "create" });
+                  setError(null);
+                  resetPasswordFields();
+                }}
+                disabled={submitting}
+              >
+                <Plus className="h-4 w-4" />
+                Use another account
+              </Button>
+            </div>
+          </>
+        )}
+
+        {(step.kind === "login" || step.kind === "setup" || step.kind === "create") && (
+          <Card className="animate-scale-in shadow-elev-2">
+            <CardContent className="flex flex-col gap-3 p-4">
+              {step.kind === "create" && (
                 <Input
                   autoFocus
                   placeholder="Profile name"
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && void createProfile()}
                   disabled={submitting}
+                  autoComplete="username"
                 />
-                <div className="flex gap-2">
-                  <Button onClick={() => void createProfile()} disabled={submitting}>
-                    Create
-                  </Button>
-                  <Button variant="ghost" onClick={() => setCreating(false)} disabled={submitting}>
-                    Cancel
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ) : (
-            <Button
-              variant="tonal"
-              className="w-full"
-              onClick={() => setCreating(true)}
-              disabled={submitting}
-            >
-              <Plus className="h-4 w-4" />
-              Use another account
-            </Button>
-          )}
-        </div>
+              )}
+              <Input
+                autoFocus={step.kind !== "create"}
+                type="password"
+                placeholder={step.kind === "login" ? "Password" : "Choose a password (min 8)"}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key !== "Enter") return;
+                  if (step.kind === "login") void submitLogin();
+                  else if (step.kind === "setup") void submitSetup();
+                  else void submitCreate();
+                }}
+                disabled={submitting}
+                autoComplete={step.kind === "login" ? "current-password" : "new-password"}
+              />
+              {step.kind !== "login" && (
+                <Input
+                  type="password"
+                  placeholder="Confirm password"
+                  value={passwordConfirm}
+                  onChange={(e) => setPasswordConfirm(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key !== "Enter") return;
+                    if (step.kind === "setup") void submitSetup();
+                    else void submitCreate();
+                  }}
+                  disabled={submitting}
+                  autoComplete="new-password"
+                />
+              )}
+              {step.kind === "setup" && (
+                <p className="text-xs leading-relaxed text-muted-foreground">
+                  This encrypts your profile database at rest. You will need this password on every
+                  device that opens this account.
+                </p>
+              )}
+              <div className="flex gap-2">
+                <Button
+                  className="flex-1"
+                  onClick={() => {
+                    if (step.kind === "login") void submitLogin();
+                    else if (step.kind === "setup") void submitSetup();
+                    else void submitCreate();
+                  }}
+                  disabled={submitting || !password}
+                >
+                  {submitting
+                    ? "Please wait…"
+                    : step.kind === "login"
+                      ? "Unlock"
+                      : step.kind === "setup"
+                        ? "Set password & continue"
+                        : "Create & unlock"}
+                </Button>
+                <Button variant="ghost" onClick={backToList} disabled={submitting}>
+                  Back
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </motion.div>
     </div>
   );
