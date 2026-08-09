@@ -8,8 +8,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { BriefingSnapshotCards } from "./BriefingSnapshotCards";
 import { BriefingNarrative } from "./BriefingNarrative";
 import { BriefingActionItems } from "./BriefingActionItems";
+import { useUsageMode } from "@/lib/usage-mode";
 
 export function DailyBriefing() {
+  const { usageMode } = useUsageMode();
   const [briefing, setBriefing] = useState<DailyBriefing | null>(null);
   const [loading, setLoading] = useState(true);
   const [regenerating, setRegenerating] = useState(false);
@@ -105,11 +107,11 @@ export function DailyBriefing() {
         </div>
       </div>
 
-      <BriefingSnapshotCards snapshot={briefing.snapshot} />
+      <BriefingSnapshotCards snapshot={briefing.snapshot} usageMode={usageMode} />
 
       <div className="grid gap-4 lg:grid-cols-2">
         <BriefingNarrative initialNarrative={briefing.narrative} tier={briefing.tier} />
-        <BriefingActionItems snapshot={briefing.snapshot} />
+        <BriefingActionItems snapshot={briefing.snapshot} usageMode={usageMode} />
       </div>
     </div>
   );

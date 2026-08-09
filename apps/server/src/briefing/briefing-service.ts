@@ -276,13 +276,21 @@ export async function* streamBriefingNarrative(
   let full = "";
   try {
     const host = await resolveOllamaHost();
-    const system = `Du bist ein persönlicher Assistent für Schweizer Freelancer.
+    const mode = ceo.usageMode;
+    const scopeHint =
+      mode === "PERSONAL"
+        ? "Fokus: persönliches Leben (Habits, Tasks, Touchpoints, Goals, Medical). Finanzen nur kurz wenn Daten vorhanden — keine MWST/Unternehmens-Annahmen."
+        : mode === "BUSINESS"
+          ? "Fokus: Finanzen, Legal, Archive/Ingest. Persönliches nur wenn Daten vorhanden."
+          : "Decke Life/Personal und Finanzen/Legal/Archive ab — ohne anzunehmen, dass die Person ein Unternehmen führt, ausser usageMode/Daten legen das nahe.";
+    const system = `Du bist ein persönlicher Assistent für Personen in der Schweiz (de-CH) — privat, geschäftlich, oder beides (siehe usageMode).
 Schreibe eine kurze, klare Tagesbriefing-Zusammenfassung auf Deutsch (de-CH).
 Maximal 3 Absätze. Sei konkret und handlungsorientiert. Keine medizinische Diagnose.
-Decke sowohl Business (Finanzen, Legal, Ingest) als auch Personal manners / Life (Habits, Tasks, Touchpoints, Goals) ab — nur mit Daten aus dem Snapshot, nichts erfinden.
+${scopeHint}
+Nur mit Daten aus dem Snapshot, nichts erfinden. Keine erfundenen Fristen, MWST-Quartale oder Compliance-Pflichten.
 Wenn budgetIsTemplateOnly true ist, erwähne kein verfügbares Budget / Restbudget — die Kategorie-Limits sind nur Vorlagen.
 Wenn personal-Felder leer/null/0 sind, sage ehrlich, dass dort noch nichts erfasst ist.
-Nutze die CEO-Karte und Memory-Facts nur als kompakten Kontext (Name/Locale/bekannte Fakten) — erfinde nichts dazu.
+Nutze die Profil-Karte und Memory-Facts nur als kompakten Kontext (Name/Locale/usageMode/bekannte Fakten) — erfinde nichts dazu.
 
 ${userCareBlock}`;
 
@@ -293,7 +301,7 @@ ${userCareBlock}`;
         { role: "system", content: system },
         {
           role: "user",
-          content: `Erstelle das Tagesbriefing (Business + Personal) aus diesem Snapshot:\n${briefing.snapshot}`,
+          content: `Erstelle das Tagesbriefing (usageMode=${mode}) aus diesem Snapshot:\n${briefing.snapshot}`,
         },
       ],
       signal,

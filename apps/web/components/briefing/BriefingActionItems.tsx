@@ -4,33 +4,26 @@ import Link from "next/link";
 import { CheckCircle2, Circle, ArrowRight } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import type { BriefingSnapshot } from "@/lib/api-client";
+import type { BriefingSnapshot, UsageMode } from "@/lib/api-client";
+import { isPersonalFirst } from "@/lib/usage-mode";
 
 interface BriefingActionItemsProps {
   snapshot: BriefingSnapshot;
+  usageMode?: UsageMode;
 }
 
-export function BriefingActionItems({ snapshot }: BriefingActionItemsProps) {
-  const actions: Array<{ label: string; href: string; done?: boolean; priority?: "high" | "normal" }> = [];
+type Action = { label: string; href: string; done?: boolean; priority?: "high" | "normal" };
 
-  snapshot.finance.billsDueToday.forEach((bill) => {
-    actions.push({
-      label: `Pay ${bill.creditor} (${bill.amount.toFixed(2)} CHF)`,
-      href: "/finance",
-      priority: "high",
-    });
-  });
-
-  snapshot.legal.tasksDueToday.forEach((task) => {
-    actions.push({
-      label: task.title,
-      href: "/legal",
-      priority: "high",
-    });
-  });
+export function BriefingActionItems({
+  snapshot,
+  usageMode = "PERSONAL",
+}: BriefingActionItemsProps) {
+  const personalFirst = isPersonalFirst(usageMode);
+  const personalActions: Action[] = [];
+  const businessActions: Action[] = [];
 
   snapshot.personal?.tasksDueToday.forEach((task) => {
-    actions.push({
+    personalActions.push({
       label: task.title,
       href: "/life",
       priority: "high",
@@ -38,21 +31,21 @@ export function BriefingActionItems({ snapshot }: BriefingActionItemsProps) {
   });
 
   snapshot.personal?.habitsPending.forEach((habit) => {
-    actions.push({
+    personalActions.push({
       label: `Log habit: ${habit.title}`,
       href: "/life",
     });
   });
 
   snapshot.personal?.touchpointsDue.forEach((tp) => {
-    actions.push({
+    personalActions.push({
       label: `Reach out to ${tp.contactName}`,
       href: "/life",
     });
   });
 
   if (snapshot.personal && snapshot.personal.overdueTasks > 0) {
-    actions.push({
+    personalActions.push({
       label:
         snapshot.personal.overdueTasks === 1
           ? "Resolve 1 overdue personal task"
@@ -62,8 +55,24 @@ export function BriefingActionItems({ snapshot }: BriefingActionItemsProps) {
     });
   }
 
+  snapshot.finance.billsDueToday.forEach((bill) => {
+    businessActions.push({
+      label: `Pay ${bill.creditor} (${bill.amount.toFixed(2)} CHF)`,
+      href: "/finance",
+      priority: "high",
+    });
+  });
+
+  snapshot.legal.tasksDueToday.forEach((task) => {
+    businessActions.push({
+      label: task.title,
+      href: "/legal",
+      priority: "high",
+    });
+  });
+
   if (snapshot.ingest.queuedJobs > 0) {
-    actions.push({
+    businessActions.push({
       label:
         snapshot.ingest.queuedJobs === 1
           ? "Review 1 document in the archive queue"
@@ -73,7 +82,7 @@ export function BriefingActionItems({ snapshot }: BriefingActionItemsProps) {
   }
 
   if (snapshot.legal.overdueTasks > 0) {
-    actions.push({
+    businessActions.push({
       label:
         snapshot.legal.overdueTasks === 1
           ? "Resolve 1 overdue legal task"
@@ -82,6 +91,10 @@ export function BriefingActionItems({ snapshot }: BriefingActionItemsProps) {
       priority: "high",
     });
   }
+
+  const actions = personalFirst
+    ? [...personalActions, ...businessActions]
+    : [...businessActions, ...personalActions];
 
   if (actions.length === 0) {
     actions.push({
@@ -99,24 +112,22 @@ export function BriefingActionItems({ snapshot }: BriefingActionItemsProps) {
       <CardContent>
         {actions.slice(0, 6).map((action, i) => (
           <div
-            key={i}
-            className="md-list-row justify-between rounded-none border-x-0 border-t-0 px-0 py-2.5 first:pt-0"
+            key={`${action.href}-${action.label}-${i}`}
+            className="flex items-center gap-3 border-b border-border/50 py-2.5 last:border-0"
           >
-            <div className="flex min-w-0 items-center gap-2.5">
-              {action.done ? (
-                <CheckCircle2 className="h-4 w-4 shrink-0 text-success" />
-              ) : (
-                <Circle
-                  className={`h-4 w-4 shrink-0 ${
-                    action.priority === "high" ? "text-warning" : "text-muted-foreground"
-                  }`}
-                />
-              )}
-              <span className="truncate text-sm">{action.label}</span>
-            </div>
-            <Button variant="ghost" size="sm" asChild className="shrink-0">
+            {action.done ? (
+              <CheckCircle2 className="h-4 w-4 shrink-0 text-primary" />
+            ) : (
+              <Circle
+                className={`h-4 w-4 shrink-0 ${
+                  action.priority === "high" ? "text-warning" : "text-muted-foreground"
+                }`}
+              />
+            )}
+            <span className="min-w-0 flex-1 truncate text-sm">{action.label}</span>
+            <Button variant="ghost" size="sm" className="shrink-0" asChild>
               <Link href={action.href}>
-                Go <ArrowRight className="ml-1 h-3 w-3" />
+                <ArrowRight className="h-3.5 w-3.5" />
               </Link>
             </Button>
           </div>

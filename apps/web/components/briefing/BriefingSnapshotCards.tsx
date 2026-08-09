@@ -3,10 +3,12 @@
 import { Wallet, Scale, HeartPulse, Upload, AlertCircle, Receipt, Sparkles } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCHF } from "@/lib/utils";
-import type { BriefingSnapshot } from "@/lib/api-client";
+import type { BriefingSnapshot, UsageMode } from "@/lib/api-client";
+import { isPersonalFirst } from "@/lib/usage-mode";
 
 interface BriefingSnapshotCardsProps {
   snapshot: BriefingSnapshot;
+  usageMode?: UsageMode;
 }
 
 function formatBudgetRemaining(value: number | null, templateOnly?: boolean): string {
@@ -14,12 +16,54 @@ function formatBudgetRemaining(value: number | null, templateOnly?: boolean): st
   return formatCHF(value);
 }
 
-export function BriefingSnapshotCards({ snapshot }: BriefingSnapshotCardsProps) {
+type SnapshotCard = {
+  title: string;
+  icon: typeof Wallet;
+  accent: string;
+  items: Array<{ label: string; value: string }>;
+};
+
+function CardGrid({ cards, columns }: { cards: SnapshotCard[]; columns: string }) {
+  return (
+    <div className={`grid gap-3 ${columns}`}>
+      {cards.map(({ title, icon: Icon, accent, items }, index) => (
+        <Card
+          key={title}
+          className="animate-in overflow-hidden"
+          style={{ animationDelay: `${index * 45}ms` }}
+        >
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-sm">
+              <Icon className={`h-4 w-4 ${accent}`} />
+              {title}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {items.map((item) => (
+              <div key={item.label} className="flex min-w-0 items-center justify-between gap-2 text-sm">
+                <span className="truncate text-muted-foreground">{item.label}</span>
+                <span className="shrink-0 text-right font-semibold tabular-nums tracking-tight">
+                  {item.value}
+                </span>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
+export function BriefingSnapshotCards({
+  snapshot,
+  usageMode = "PERSONAL",
+}: BriefingSnapshotCardsProps) {
   const billsToday = snapshot.finance.billsDueToday.length;
   const billsWeek = snapshot.finance.billsDueThisWeek;
   const personal = snapshot.personal;
+  const personalFirst = isPersonalFirst(usageMode);
 
-  const businessCards = [
+  const financeLegalArchive: SnapshotCard[] = [
     {
       title: "Finance",
       icon: Wallet,
@@ -47,25 +91,6 @@ export function BriefingSnapshotCards({ snapshot }: BriefingSnapshotCardsProps) 
       ],
     },
     {
-      title: "Medical",
-      icon: HeartPulse,
-      accent: "text-rose-400",
-      items: [
-        { label: "Recent entries", value: String(snapshot.medical.recentComplaints) },
-        {
-          label: "Avg mood (7d)",
-          value: snapshot.medical.avgMoodScore7d != null ? `${snapshot.medical.avgMoodScore7d}/10` : "—",
-        },
-        {
-          label: "Trend",
-          value:
-            snapshot.medical.notableTrend === "sleep_down"
-              ? "Sleep ↓"
-              : snapshot.medical.notableTrend ?? "—",
-        },
-      ],
-    },
-    {
       title: "Archive",
       icon: Upload,
       accent: "text-amber-400",
@@ -76,7 +101,27 @@ export function BriefingSnapshotCards({ snapshot }: BriefingSnapshotCardsProps) 
     },
   ];
 
-  const personalCards = personal
+  const medicalCard: SnapshotCard = {
+    title: "Medical",
+    icon: HeartPulse,
+    accent: "text-rose-400",
+    items: [
+      { label: "Recent entries", value: String(snapshot.medical.recentComplaints) },
+      {
+        label: "Avg mood (7d)",
+        value: snapshot.medical.avgMoodScore7d != null ? `${snapshot.medical.avgMoodScore7d}/10` : "—",
+      },
+      {
+        label: "Trend",
+        value:
+          snapshot.medical.notableTrend === "sleep_down"
+            ? "Sleep ↓"
+            : snapshot.medical.notableTrend ?? "—",
+      },
+    ],
+  };
+
+  const personalCards: SnapshotCard[] = personal
     ? [
         {
           title: "Habits",
@@ -128,90 +173,65 @@ export function BriefingSnapshotCards({ snapshot }: BriefingSnapshotCardsProps) 
             },
           ],
         },
+        medicalCard,
       ]
-    : [];
+    : [medicalCard];
+
+  const lifeBlock = (
+    <div className="space-y-3">
+      <h3 className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+        Life
+      </h3>
+      {personalCards.length === 0 ? (
+        <Card>
+          <CardContent className="flex items-center gap-3 p-5">
+            <Sparkles className="h-5 w-5 shrink-0 text-muted-foreground" />
+            <div className="min-w-0">
+              <p className="text-sm font-semibold tracking-tight">
+                No personal summary in this briefing yet
+              </p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Add something under Life, then regenerate the briefing.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
+        <CardGrid cards={personalCards} columns="sm:grid-cols-2 xl:grid-cols-4" />
+      )}
+    </div>
+  );
+
+  const opsCards =
+    usageMode === "PERSONAL"
+      ? financeLegalArchive.filter((c) => c.title === "Finance" || c.title === "Archive")
+      : financeLegalArchive;
+
+  const opsBlock = (
+    <div className="space-y-3">
+      <h3 className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+        {usageMode === "BUSINESS" ? "Business" : "Money & docs"}
+      </h3>
+      <CardGrid
+        cards={opsCards}
+        columns={opsCards.length >= 3 ? "sm:grid-cols-2 xl:grid-cols-3" : "sm:grid-cols-2"}
+      />
+    </div>
+  );
 
   return (
     <div className="space-y-6">
-      <div className="space-y-3">
-        <h3 className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-          Business
-        </h3>
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {businessCards.map(({ title, icon: Icon, accent, items }, index) => (
-            <Card
-              key={title}
-              className="animate-in overflow-hidden"
-              style={{ animationDelay: `${index * 45}ms` }}
-            >
-              <CardHeader className="pb-2">
-                <CardTitle className="flex items-center gap-2 text-sm">
-                  <Icon className={`h-4 w-4 ${accent}`} />
-                  {title}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                {items.map((item) => (
-                  <div key={item.label} className="flex min-w-0 items-center justify-between gap-2 text-sm">
-                    <span className="truncate text-muted-foreground">{item.label}</span>
-                    <span className="shrink-0 text-right font-semibold tabular-nums tracking-tight">
-                      {item.value}
-                    </span>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      </div>
-
-      <div className="space-y-3">
-        <h3 className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-          Personal
-        </h3>
-        {personalCards.length === 0 ? (
-          <Card>
-            <CardContent className="flex items-center gap-3 p-5">
-              <Sparkles className="h-5 w-5 shrink-0 text-muted-foreground" />
-              <div className="min-w-0">
-                <p className="text-sm font-semibold tracking-tight">
-                  No personal summary in this briefing yet
-                </p>
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  Add something under Life, then regenerate the briefing.
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {personalCards.map(({ title, icon: Icon, accent, items }, index) => (
-              <Card
-                key={title}
-                className="animate-in overflow-hidden"
-                style={{ animationDelay: `${index * 45}ms` }}
-              >
-                <CardHeader className="pb-2">
-                  <CardTitle className="flex items-center gap-2 text-sm">
-                    <Icon className={`h-4 w-4 ${accent}`} />
-                    {title}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  {items.map((item) => (
-                    <div key={item.label} className="flex min-w-0 items-center justify-between gap-2 text-sm">
-                      <span className="truncate text-muted-foreground">{item.label}</span>
-                      <span className="shrink-0 text-right font-semibold tabular-nums tracking-tight">
-                        {item.value}
-                      </span>
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        )}
-      </div>
+      {personalFirst ? (
+        <>
+          {lifeBlock}
+          {opsBlock}
+        </>
+      ) : (
+        <>
+          {opsBlock}
+          {lifeBlock}
+        </>
+      )}
 
       {billsToday > 0 ? (
         <Card className="border-warning/30 bg-warning/5">
@@ -237,7 +257,7 @@ export function BriefingSnapshotCards({ snapshot }: BriefingSnapshotCardsProps) 
               <p className="text-sm font-semibold tracking-tight">No bills due today</p>
               <p className="mt-0.5 text-xs text-muted-foreground">
                 {billsWeek === 0
-                  ? "No pending QR bills this week — ingest a bill or add one under Finance."
+                  ? "No pending QR bills this week — add one under Finance when you need it."
                   : `${billsWeek} pending bill${billsWeek === 1 ? "" : "s"} due later this week.`}
               </p>
             </div>

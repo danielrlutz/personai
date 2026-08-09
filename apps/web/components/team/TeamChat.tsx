@@ -141,7 +141,7 @@ export function TeamChat({ initialSpecialist = "secretary" }: TeamChatProps) {
               <EmptyState
                 icon={Users}
                 title="Ask your pocket team"
-                description="Staff handles everyday requests. Switch to CFO, Legal, coding, Career, or coaching when you need a specialist."
+                description="Staff handles everyday requests. Switch to Finance, Legal, coding, Career, or coaching when you need a specialist."
               />
             ) : (
               messages.map((msg, i) => {

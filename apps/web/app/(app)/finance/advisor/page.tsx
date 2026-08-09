@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 
-/** Finance advisor folds into the unified pocket team (CFO mode). */
+/** Finance advisor folds into the unified pocket team (finance specialist). */
 export default function AdvisorPage() {
   const router = useRouter();
   useEffect(() => {

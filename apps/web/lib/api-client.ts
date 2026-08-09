@@ -463,10 +463,14 @@ export interface BriefingSnapshot {
   };
 }
 
+export type UsageMode = "PERSONAL" | "BUSINESS" | "BOTH";
+
 export interface CeoProfile {
   id?: string;
   displayName: string | null;
   company: string | null;
+  /** App focus — default PERSONAL for new profiles. */
+  usageMode?: UsageMode;
   locale: string | null;
   language: string | null;
   timezone: string | null;
