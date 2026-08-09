@@ -21,7 +21,9 @@ export function TeamChat({ initialSpecialist = "secretary" }: TeamChatProps) {
   const [specialists, setSpecialists] = useState<SpecialistMeta[]>(SPECIALIST_FALLBACK);
   const [specialist, setSpecialist] = useState(initialSpecialist);
   const [input, setInput] = useState("");
-  const { messages, streaming, error, sendMessage, clear } = useChatStream({ specialist });
+  const { messages, streaming, error, sendMessage, retryMessage, clear } = useChatStream({
+    specialist,
+  });
   const showCareerPdf = specialist === "career_strategist";
 
   useEffect(() => {
@@ -37,6 +39,7 @@ export function TeamChat({ initialSpecialist = "secretary" }: TeamChatProps) {
   }, [initialSpecialist]);
 
   const active = specialists.find((s) => s.id === specialist) ?? specialists[0];
+  const hasUnsent = messages.some((m) => m.role === "user" && m.status !== "sent");
 
   const handleSend = () => {
     if (!input.trim()) return;
@@ -59,7 +62,13 @@ export function TeamChat({ initialSpecialist = "secretary" }: TeamChatProps) {
               <Users className="h-4 w-4 shrink-0 text-primary" />
               <span className="truncate">Pocket team</span>
             </CardTitle>
-            <Button variant="ghost" size="sm" onClick={clear} disabled={streaming || messages.length === 0} className="shrink-0">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={clear}
+              disabled={streaming || (messages.length === 0 && !hasUnsent)}
+              className="shrink-0"
+            >
               <Trash2 className="h-4 w-4" />
               Clear
             </Button>
@@ -67,10 +76,7 @@ export function TeamChat({ initialSpecialist = "secretary" }: TeamChatProps) {
           <SpecialistPicker
             specialists={specialists}
             value={specialist}
-            onChange={(id) => {
-              setSpecialist(id);
-              clear();
-            }}
+            onChange={setSpecialist}
             disabled={streaming}
           />
           {active ? (
@@ -89,16 +95,36 @@ export function TeamChat({ initialSpecialist = "secretary" }: TeamChatProps) {
                 description="Staff routes everyday requests. Switch to CFO, Legal, Forge↔QA, Career, or coaching modes when you need a specialist."
               />
             ) : (
-              messages.map((msg, i) => (
-                <StreamingMessage
-                  key={msg.id}
-                  role={msg.role}
-                  content={msg.content}
-                  streaming={streaming && i === messages.length - 1 && msg.role === "assistant"}
-                />
-              ))
+              messages.map((msg, i) => {
+                const isStreamingAssistant =
+                  streaming &&
+                  msg.role === "assistant" &&
+                  i === messages.length - 1 &&
+                  messages[i - 1]?.status === "pending";
+                // Never render an empty advisor bubble except while actively streaming.
+                if (msg.role === "assistant" && !msg.content.trim() && !isStreamingAssistant) {
+                  return null;
+                }
+                return (
+                  <StreamingMessage
+                    key={msg.id}
+                    role={msg.role}
+                    content={msg.content}
+                    streaming={isStreamingAssistant}
+                    status={msg.status}
+                    error={msg.error}
+                    onRetry={
+                      msg.role === "user" && msg.status === "failed"
+                        ? () => void retryMessage(msg.outboxOpId ?? msg.id)
+                        : undefined
+                    }
+                  />
+                );
+              })
             )}
-            {error && <p className="break-words text-sm text-destructive">{error}</p>}
+            {error && !hasUnsent ? (
+              <p className="break-words text-sm text-destructive">{error}</p>
+            ) : null}
           </div>
 
           <div className="shrink-0 border-t border-border/80 p-4">
@@ -114,10 +140,9 @@ export function TeamChat({ initialSpecialist = "secretary" }: TeamChatProps) {
                   }
                 }}
                 rows={2}
-                disabled={streaming}
                 className="min-w-0 flex-1 resize-none"
               />
-              <Button onClick={handleSend} disabled={streaming || !input.trim()} size="icon" className="shrink-0">
+              <Button onClick={handleSend} disabled={!input.trim()} size="icon" className="shrink-0">
                 <Send className="h-4 w-4" />
               </Button>
             </div>
