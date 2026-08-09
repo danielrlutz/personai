@@ -33,7 +33,7 @@ export function MobileNav() {
       className="surface-panel fixed inset-x-0 bottom-0 z-40 border-t shadow-elev-2 md:hidden"
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
-      <ul className="flex items-stretch justify-around px-0.5 pt-1.5">
+      <ul className="flex items-stretch justify-around px-0.5 pt-1">
         {nav.map(({ href, label, icon: Icon }) => {
           const base = href.replace(/\/+$/, "");
           const active = pathname === href || pathname === base || pathname.startsWith(`${base}/`);
@@ -42,7 +42,7 @@ export function MobileNav() {
               <Link
                 href={href}
                 className={cn(
-                  "pressable flex min-w-0 flex-col items-center gap-0.5 px-0.5 py-1.5 text-[10px] font-medium transition-colors duration-md ease-md sm:text-[11px]",
+                  "pressable flex min-h-[3.25rem] min-w-0 flex-col items-center justify-center gap-0.5 px-0.5 py-1 text-[11px] font-medium leading-tight transition-colors duration-md ease-md sm:text-xs",
                   active ? "text-primary" : "text-muted-foreground",
                 )}
               >

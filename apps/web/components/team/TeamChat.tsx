@@ -155,23 +155,23 @@ export function TeamChat({ initialSpecialist = "secretary" }: TeamChatProps) {
     <div
       className={
         showSidePanel
-          ? "grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,320px)]"
-          : "min-w-0"
+          ? "grid min-w-0 gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,300px)] lg:gap-4"
+          : "min-w-0 w-full"
       }
     >
-      <Card className="flex h-[calc(100dvh-12rem)] min-h-[22rem] min-w-0 flex-col overflow-hidden hover:shadow-elev-2 md:h-[calc(100dvh-9rem)]">
-        <CardHeader className="shrink-0 space-y-3.5 border-b border-border/60 pb-4">
-          <div className="flex items-center justify-between gap-3">
-            <CardTitle className="flex min-w-0 items-center gap-2.5">
+      <Card className="flex h-[calc(100dvh-10.5rem)] min-h-[20rem] min-w-0 flex-col overflow-hidden hover:shadow-elev-2 md:h-[calc(100dvh-8rem)]">
+        <CardHeader className="shrink-0 space-y-2.5 border-b border-border/60 p-3.5 pb-3 sm:p-4 sm:pb-3.5">
+          <div className="flex min-w-0 items-center justify-between gap-2 sm:gap-3">
+            <CardTitle className="flex min-w-0 items-center gap-2 sm:gap-2.5">
               <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-container">
                 <Users className="h-4 w-4 text-primary-on-container" />
               </span>
               <span className="truncate">Pocket team</span>
             </CardTitle>
-            <div className="flex shrink-0 items-center gap-1">
+            <div className="flex shrink-0 items-center gap-0.5 sm:gap-1">
               <Button variant="ghost" size="sm" onClick={openRemember} disabled={streaming}>
                 <BookmarkPlus className="h-4 w-4" />
-                Remember
+                <span className="hidden sm:inline">Remember</span>
               </Button>
               <Button
                 variant="ghost"
@@ -183,7 +183,7 @@ export function TeamChat({ initialSpecialist = "secretary" }: TeamChatProps) {
                 disabled={streaming || (messages.length === 0 && !hasUnsent && !photo)}
               >
                 <Trash2 className="h-4 w-4" />
-                Clear
+                <span className="hidden sm:inline">Clear</span>
               </Button>
             </div>
           </div>
@@ -194,21 +194,22 @@ export function TeamChat({ initialSpecialist = "secretary" }: TeamChatProps) {
             disabled={streaming}
           />
           {active ? (
-            <p className="text-xs leading-relaxed text-muted-foreground break-words">
-              <span className="font-medium text-foreground">{active.label}</span> —{" "}
+            <p className="break-words text-sm leading-relaxed text-muted-foreground">
+              <span className="font-medium text-foreground">{active.label}</span>
+              <span className="text-foreground/50"> — </span>
               {active.description}
               {active.preferredModel ? (
-                <span className="text-muted-foreground/80"> · model {active.preferredModel}</span>
+                <span className="text-muted-foreground"> · model {active.preferredModel}</span>
               ) : null}
             </p>
           ) : null}
           {drive && !drive.linked ? (
-            <p className="rounded-xl bg-surface-container px-3 py-2 text-xs leading-relaxed text-muted-foreground">
+            <p className="rounded-xl border border-border/50 bg-surface-container px-3.5 py-2.5 text-sm leading-relaxed text-muted-foreground">
               No archive context yet — this specialist can still advise, but not from your filed
               documents.{" "}
               <Link
                 href="/settings/?focus=drive"
-                className="font-medium text-foreground underline-offset-2 hover:underline"
+                className="font-semibold text-primary underline-offset-2 hover:underline"
               >
                 Link Google Drive
               </Link>
@@ -217,12 +218,13 @@ export function TeamChat({ initialSpecialist = "secretary" }: TeamChatProps) {
         </CardHeader>
 
         <CardContent className="flex min-h-0 flex-1 flex-col overflow-hidden p-0">
-          <div className="min-h-0 flex-1 space-y-3.5 overflow-y-auto overflow-x-hidden p-5">
+          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overflow-x-hidden p-3.5 sm:p-4">
             {messages.length === 0 ? (
               <EmptyState
                 icon={Users}
                 title="Ask your pocket team"
                 description="Staff handles everyday requests. Switch to Finance, Legal, coding, Career, or coaching when you need a specialist."
+                className="py-8 sm:py-10"
               />
             ) : (
               messages.map((msg, i) => {
@@ -256,10 +258,10 @@ export function TeamChat({ initialSpecialist = "secretary" }: TeamChatProps) {
             ) : null}
           </div>
 
-          <div className="shrink-0 border-t border-border/60 bg-surface-container/30 p-4">
+          <div className="shrink-0 border-t border-border/60 bg-surface-container/30 p-3 sm:p-3.5">
             {showRemember ? (
-              <div className="mb-3 animate-scale-in space-y-2 rounded-xl border border-border/70 bg-card/80 p-3.5">
-                <p className="text-xs text-muted-foreground">
+              <div className="mb-3 animate-scale-in space-y-2 rounded-xl border border-border/70 bg-card/80 p-3">
+                <p className="text-sm text-muted-foreground">
                   Save a short fact for future chats and the morning brief — not the full
                   conversation.
                 </p>
@@ -325,7 +327,7 @@ export function TeamChat({ initialSpecialist = "secretary" }: TeamChatProps) {
                     type="button"
                     variant="outline"
                     size="icon"
-                    className="shrink-0"
+                    className="h-11 w-11 shrink-0"
                     disabled={streaming}
                     onClick={() => fileRef.current?.click()}
                     title="Attach photo for Stylist"
@@ -349,19 +351,19 @@ export function TeamChat({ initialSpecialist = "secretary" }: TeamChatProps) {
                   }
                 }}
                 rows={2}
-                className="min-w-0 flex-1 resize-none"
+                className="min-h-[2.75rem] min-w-0 flex-1 resize-none text-sm"
               />
               <Button
                 onClick={handleSend}
                 disabled={!input.trim() && !photo}
                 size="icon"
-                className="shrink-0"
+                className="h-11 w-11 shrink-0"
               >
                 <Send className="h-4 w-4" />
               </Button>
             </div>
             {showStylistPhoto ? (
-              <p className="mt-2 text-xs text-muted-foreground">
+              <p className="mt-2 text-sm text-muted-foreground">
                 Attach a photo for wardrobe / presentation feedback. Uses the vision model, then
                 Stylist coaching.
               </p>

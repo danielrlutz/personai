@@ -90,7 +90,7 @@ export default function SetupWizardPage() {
   const current = STEPS[step]!;
 
   return (
-    <PageEnter className="mx-auto max-w-2xl space-y-6">
+    <PageEnter className="mx-auto w-full max-w-2xl space-y-4 sm:space-y-5">
       <div className="page-header">
         <h1 className="page-title">First-launch setup</h1>
         <p className="page-subtitle">

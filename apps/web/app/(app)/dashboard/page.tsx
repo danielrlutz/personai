@@ -15,7 +15,7 @@ import { PageEnter } from "@/components/motion/PageEnter";
  */
 export default function DashboardPage() {
   return (
-    <PageEnter className="mx-auto max-w-3xl space-y-10">
+    <PageEnter className="mx-auto w-full max-w-3xl space-y-8 sm:space-y-9">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div className="min-w-0">
           <p className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">

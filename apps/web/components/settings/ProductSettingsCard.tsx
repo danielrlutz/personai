@@ -106,13 +106,13 @@ export function ProductSettingsCard() {
     label: string,
     key: keyof ProductSettings,
   ) => (
-    <label className="space-y-1 text-xs text-muted-foreground">
+    <label className="space-y-1.5 text-sm text-muted-foreground">
       {label}
       <Input
         list="personai-known-models"
         value={(s[key] as string) ?? ""}
         onChange={(e) => setS({ ...s, [key]: e.target.value })}
-        className="font-mono text-xs"
+        className="font-mono text-sm"
       />
     </label>
   );
@@ -138,7 +138,7 @@ export function ProductSettingsCard() {
         </datalist>
 
         <div className="grid gap-3 sm:grid-cols-2">
-          <label className="space-y-1 text-xs text-muted-foreground sm:col-span-2">
+          <label className="space-y-1.5 text-sm text-muted-foreground sm:col-span-2">
             Ollama host
             <Input
               value={s.ollamaHost ?? ""}
@@ -153,7 +153,7 @@ export function ProductSettingsCard() {
           {modelField("QA (deepseek-r1)", "qaModel")}
           {modelField("Coaching", "coachingModel")}
           {modelField("Stylist text", "stylistModel")}
-          <label className="space-y-1 text-xs text-muted-foreground">
+          <label className="space-y-1.5 text-sm text-muted-foreground">
             Public web URL
             <Input
               value={s.publicWebUrl ?? ""}
@@ -161,7 +161,7 @@ export function ProductSettingsCard() {
               placeholder="http://host:3000"
             />
           </label>
-          <label className="space-y-1 text-xs text-muted-foreground">
+          <label className="space-y-1.5 text-sm text-muted-foreground">
             Public API URL
             <Input
               value={s.publicApiUrl ?? ""}
@@ -197,7 +197,7 @@ export function ProductSettingsCard() {
             value={s.googleOauthRedirectUri ?? ""}
             onChange={(e) => setS({ ...s, googleOauthRedirectUri: e.target.value })}
             placeholder="Redirect URI …/archive/drive/oauth/callback"
-            className="font-mono text-xs"
+            className="font-mono text-sm"
           />
           <div className="flex flex-wrap gap-2">
             {s.googleOauthClientSecretSet ? (
@@ -232,7 +232,7 @@ export function ProductSettingsCard() {
         <Button onClick={() => void save()} disabled={saving}>
           {saving ? "Saving…" : "Save product vault"}
         </Button>
-        {note ? <p className="text-xs text-muted-foreground">{note}</p> : null}
+        {note ? <p className="text-sm text-muted-foreground">{note}</p> : null}
       </CardContent>
     </Card>
   );

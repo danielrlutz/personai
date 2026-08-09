@@ -10,7 +10,8 @@
   --surface-container: 150 5% 11.5%;
   --surface-container-high: 150 4% 16%;
   --muted: 150 4% 16%;
-  --muted-foreground: 40 6% 68%;
+  /* Secondary text on charcoal — keep above ~4.5:1 vs card */
+  --muted-foreground: 40 8% 72%;
   /* Sage primary — operational calm */
   --primary: 158 28% 42%;
   --primary-foreground: 150 20% 98%;
@@ -71,7 +72,8 @@ html.light {
   --surface-container: 40 14% 95%;
   --surface-container-high: 40 12% 92%;
   --muted: 40 10% 90%;
-  --muted-foreground: 150 6% 38%;
+  /* ~4.7:1 on white — readable body secondary, not washed gray */
+  --muted-foreground: 150 8% 32%;
   --primary: 158 32% 32%;
   --primary-foreground: 0 0% 100%;
   --primary-container: 158 30% 90%;

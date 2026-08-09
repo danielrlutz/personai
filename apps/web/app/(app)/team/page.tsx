@@ -11,7 +11,7 @@ function TeamPageInner() {
   const specialist = params.get("specialist") ?? "secretary";
 
   return (
-    <PageEnter className="mx-auto max-w-5xl space-y-5">
+    <PageEnter className="mx-auto w-full max-w-6xl space-y-3 sm:space-y-4">
       <div className="page-header min-w-0">
         <h1 className="page-title">Team</h1>
         <p className="page-subtitle">

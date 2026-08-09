@@ -138,12 +138,12 @@
   }
 
   .page-title {
-    @apply truncate text-[1.75rem] font-semibold leading-tight tracking-tight text-foreground;
+    @apply truncate text-[1.5rem] font-semibold leading-tight tracking-tight text-foreground sm:text-[1.75rem];
     letter-spacing: -0.03em;
   }
 
   .page-subtitle {
-    @apply mt-1.5 max-w-2xl text-sm leading-relaxed text-muted-foreground;
+    @apply mt-1 max-w-2xl text-sm leading-relaxed text-muted-foreground;
   }
 
   .section-title {

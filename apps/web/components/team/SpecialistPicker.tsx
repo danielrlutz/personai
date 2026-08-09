@@ -17,31 +17,35 @@ export function SpecialistPicker({ specialists, value, onChange, disabled }: Spe
   }));
 
   return (
-    <div className="space-y-3.5">
+    <div className="space-y-2.5">
       {groups.map(({ group, items }) =>
         items.length === 0 ? null : (
           <div key={group} className="min-w-0">
-            <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+            <p className="mb-1.5 text-xs font-semibold uppercase tracking-[0.06em] text-foreground/70">
               {GROUP_LABEL[group]}
             </p>
-            <div className="flex flex-wrap gap-2">
-              {items.map((s) => (
-                <button
-                  key={s.id}
-                  type="button"
-                  disabled={disabled}
-                  title={s.description}
-                  onClick={() => onChange(s.id)}
-                  className={cn(
-                    "pressable rounded-full px-3.5 py-1.5 text-xs font-medium transition-colors duration-md ease-md disabled:opacity-50",
-                    value === s.id
-                      ? "bg-secondary text-secondary-foreground shadow-elev-1 ring-1 ring-primary/25"
-                      : "bg-surface-container text-muted-foreground hover:bg-surface-container-high hover:text-foreground",
-                  )}
-                >
-                  {s.shortLabel}
-                </button>
-              ))}
+            <div className="flex flex-wrap gap-1.5 sm:gap-2">
+              {items.map((s) => {
+                const selected = value === s.id;
+                return (
+                  <button
+                    key={s.id}
+                    type="button"
+                    disabled={disabled}
+                    title={s.description}
+                    aria-pressed={selected}
+                    onClick={() => onChange(s.id)}
+                    className={cn(
+                      "pressable inline-flex min-h-10 min-w-0 items-center rounded-full px-3.5 text-sm font-medium transition-colors duration-md ease-md disabled:opacity-50 sm:px-4",
+                      selected
+                        ? "bg-primary text-primary-foreground shadow-elev-1 ring-1 ring-primary/30"
+                        : "bg-surface-container text-foreground/80 hover:bg-surface-container-high hover:text-foreground",
+                    )}
+                  >
+                    {s.shortLabel}
+                  </button>
+                );
+              })}
             </div>
           </div>
         ),

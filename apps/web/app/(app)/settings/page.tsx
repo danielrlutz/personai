@@ -431,7 +431,7 @@ export default function SettingsPage() {
   };
 
   return (
-    <PageEnter className="mx-auto max-w-2xl space-y-6">
+    <PageEnter className="mx-auto w-full max-w-3xl space-y-4 sm:space-y-5">
       <div className="page-header min-w-0">
         <div className="mb-1 flex items-center gap-2.5 text-primary">
           <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary-container shadow-elev-1">
@@ -445,7 +445,7 @@ export default function SettingsPage() {
         </p>
       </div>
 
-      <div className="space-y-5">
+      <div className="min-w-0 space-y-4">
       <Card className="animate-in">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">

@@ -57,16 +57,16 @@ function NavLink({
     <Link
       href={href}
       className={cn(
-        "pressable flex items-center gap-3 rounded-full px-3.5 py-2.5 text-sm font-medium transition-colors duration-md ease-md",
+        "pressable flex min-h-10 items-center gap-3 rounded-full px-3.5 py-2.5 text-sm font-medium transition-colors duration-md ease-md",
         active
           ? "bg-secondary text-secondary-foreground shadow-elev-1"
           : "text-muted-foreground hover:bg-surface-container-high hover:text-foreground",
-        collapsed && "justify-center rounded-2xl px-0 py-3",
+        collapsed && "min-h-11 justify-center rounded-2xl px-0 py-3",
       )}
       title={collapsed ? label : undefined}
     >
       <Icon className={cn("h-5 w-5 shrink-0", active && "text-primary")} />
-      {!collapsed && <span className="truncate">{label}</span>}
+      {!collapsed && <span className="min-w-0 truncate">{label}</span>}
     </Link>
   );
 }
@@ -105,7 +105,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
 
         <div className="mt-auto space-y-1 border-t border-border/50 pt-3">
           {!collapsed && (
-            <p className="px-3.5 pb-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+            <p className="px-3.5 pb-1 text-xs font-semibold uppercase tracking-[0.06em] text-foreground/65">
               Account
             </p>
           )}

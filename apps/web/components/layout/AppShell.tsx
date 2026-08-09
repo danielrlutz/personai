@@ -115,32 +115,32 @@ export function AppShell({ children }: AppShellProps) {
       </div>
 
       <div className="relative z-[1] flex min-w-0 flex-1 flex-col overflow-hidden">
-        <header className="surface-panel flex h-[var(--header-height)] shrink-0 items-center justify-between gap-3 border-b px-4 sm:px-6">
-          <div className="flex min-w-0 items-center gap-3">
+        <header className="surface-panel flex h-[var(--header-height)] shrink-0 items-center justify-between gap-2.5 border-b px-3 sm:gap-3 sm:px-5">
+          <div className="flex min-w-0 items-center gap-2.5 sm:gap-3">
             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border bg-surface-container-high text-primary md:hidden">
               <span className="font-display text-base leading-none">Ai</span>
             </div>
             <button
               type="button"
               onClick={() => setPaletteOpen(true)}
-              className="pressable flex h-11 min-w-0 max-w-full items-center gap-2.5 rounded-full border border-border/70 bg-surface-container/90 px-3.5 text-sm text-muted-foreground shadow-elev-1 transition-colors duration-md ease-md hover:border-border hover:bg-surface-container-high hover:text-foreground sm:px-5"
+              className="pressable flex h-10 min-w-0 max-w-full items-center gap-2 rounded-full border border-border/70 bg-surface-container/90 px-3 text-sm text-muted-foreground shadow-elev-1 transition-colors duration-md ease-md hover:border-border hover:bg-surface-container-high hover:text-foreground sm:h-11 sm:gap-2.5 sm:px-5"
             >
               <Search className="h-4 w-4 shrink-0" />
               <span className="hidden truncate sm:inline">Search PersonAI</span>
-              <kbd className="ml-1 hidden shrink-0 rounded-md border border-border/80 bg-background/80 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground sm:inline">
+              <kbd className="ml-1 hidden shrink-0 rounded-md border border-border/80 bg-background/80 px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground sm:inline">
                 ⌘K
               </kbd>
             </button>
           </div>
-          <div className="w-36 shrink-0 sm:w-52">
+          <div className="w-32 min-w-0 shrink-0 sm:w-52">
             {gate === "allowed" ? <ProfileSwitcher /> : null}
           </div>
         </header>
 
         <main
           className={cn(
-            "min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6 lg:p-8",
-            "pb-[calc(4.75rem+env(safe-area-inset-bottom))] md:pb-8",
+            "min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-5 lg:p-6",
+            "pb-[calc(4.75rem+env(safe-area-inset-bottom))] md:pb-6",
           )}
         >
           {gate === "allowed" ? (
