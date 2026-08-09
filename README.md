@@ -4,6 +4,8 @@ Local-first **pocket team** for personal life, business ops, or both (Swiss/CH-D
 
 Inspired by Harmonia Hermes (one orchestration path, confirm before irreversible writes) — implemented **in-app**, not as Telegram bots or n8n.
 
+**New users:** see the end-to-end walkthrough in [docs/USER-GUIDE.md](docs/USER-GUIDE.md) (unlock, Settings / Product vault, Google Drive OAuth, daily Home triage, security habits).
+
 ## Pocket team (Team)
 
 | Mode | Role |
