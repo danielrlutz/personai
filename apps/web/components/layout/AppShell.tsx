@@ -103,25 +103,25 @@ export function AppShell({ children }: AppShellProps) {
   }
 
   return (
-    <div className="flex h-dvh max-h-dvh overflow-hidden bg-background pt-[env(safe-area-inset-top)]">
-      <div className="hidden h-full shrink-0 md:block">
+    <div className="app-atmosphere flex h-dvh max-h-dvh overflow-hidden bg-background pt-[env(safe-area-inset-top)]">
+      <div className="relative z-[1] hidden h-full shrink-0 md:block">
         <Sidebar collapsed={collapsed} onToggle={() => setCollapsed((v) => !v)} />
       </div>
 
-      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+      <div className="relative z-[1] flex min-w-0 flex-1 flex-col overflow-hidden">
         <header className="surface-panel flex h-[var(--header-height)] shrink-0 items-center justify-between gap-3 border-b px-4 sm:px-6">
           <div className="flex min-w-0 items-center gap-3">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground md:hidden">
-              <span className="text-sm font-medium">P</span>
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-elev-1 md:hidden">
+              <span className="text-sm font-semibold">P</span>
             </div>
             <button
               type="button"
               onClick={() => setPaletteOpen(true)}
-              className="flex h-10 min-w-0 max-w-full items-center gap-2 rounded-full border border-border bg-surface-container px-3 text-sm text-muted-foreground transition-colors duration-md ease-md hover:bg-surface-container-high hover:text-foreground sm:px-4"
+              className="pressable flex h-11 min-w-0 max-w-full items-center gap-2.5 rounded-full border border-border/70 bg-surface-container/90 px-3.5 text-sm text-muted-foreground shadow-elev-1 transition-colors duration-md ease-md hover:border-border hover:bg-surface-container-high hover:text-foreground sm:px-5"
             >
               <Search className="h-4 w-4 shrink-0" />
-              <span className="hidden truncate sm:inline">Search</span>
-              <kbd className="ml-1 hidden shrink-0 rounded border border-border bg-background px-1.5 py-0.5 text-[10px] text-muted-foreground sm:inline">
+              <span className="hidden truncate sm:inline">Search PersonAI</span>
+              <kbd className="ml-1 hidden shrink-0 rounded-md border border-border/80 bg-background/80 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground sm:inline">
                 ⌘K
               </kbd>
             </button>
@@ -133,8 +133,8 @@ export function AppShell({ children }: AppShellProps) {
 
         <main
           className={cn(
-            "min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6",
-            "pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:pb-6",
+            "min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6 lg:p-8",
+            "pb-[calc(4.75rem+env(safe-area-inset-bottom))] md:pb-8",
           )}
         >
           {gate === "allowed" ? (
@@ -153,23 +153,23 @@ export function AppShell({ children }: AppShellProps) {
       {paletteOpen && gate === "allowed" && (
         <>
           <div
-            className="fixed inset-0 z-50 bg-black/50"
+            className="fixed inset-0 z-50 bg-black/55 backdrop-blur-[2px]"
             onClick={() => setPaletteOpen(false)}
           />
-          <div className="fixed left-1/2 top-[max(1rem,12%)] z-50 w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 animate-in overflow-hidden rounded-xl border border-border bg-card shadow-elev-3">
-            <div className="border-b border-border/80 p-3">
-              <div className="flex items-center gap-2 rounded-md bg-surface-container px-3">
+          <div className="fixed left-1/2 top-[max(1rem,12%)] z-50 w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 animate-scale-in overflow-hidden rounded-2xl border border-border/70 bg-card shadow-elev-3">
+            <div className="border-b border-border/60 p-3.5">
+              <div className="flex items-center gap-2.5 rounded-xl bg-surface-container px-3.5">
                 <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
                 <input
                   autoFocus
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   placeholder="Search commands..."
-                  className="h-11 min-w-0 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+                  className="h-12 min-w-0 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
                 />
               </div>
             </div>
-            <ul className="max-h-[min(18rem,50dvh)] overflow-y-auto py-1">
+            <ul className="max-h-[min(18rem,50dvh)] overflow-y-auto py-1.5">
               {filtered.map((item) => (
                 <li key={item.href}>
                   <button
