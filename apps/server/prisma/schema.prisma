@@ -249,13 +249,41 @@ model LegalTask {
 }
 
 model ChatSession {
-  id        String   @id @default(cuid())
-  title     String?
-  persona   String   @default("secretary")
-  model     String   @default("deepseek-r1:8b")
-  messages  ChatMessage[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id             String   @id @default(cuid())
+  title          String?
+  persona        String   @default("secretary")
+  model          String   @default("deepseek-r1:8b")
+  sessionSummary String?
+  messages       ChatMessage[]
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+/** Singleton CEO / user card per profile DB (id = "default"). */
+model CeoProfile {
+  id          String   @id @default("default")
+  displayName String?
+  company     String?
+  locale      String?
+  language    String?
+  timezone    String?
+  briefHour   String?
+  notes       String?
+  updatedAt   DateTime @updatedAt
+}
+
+/** Durable user facts for specialists — inject only a recent bounded set. */
+model MemoryFact {
+  id           String   @id @default(cuid())
+  key          String
+  value        String
+  source       String?
+  specialistId String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([key])
+  @@index([updatedAt])
 }
 
 model PendingConfirmation {

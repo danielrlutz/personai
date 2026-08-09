@@ -3,6 +3,13 @@ import { config } from "../config.js";
 import { resolveOllamaHost, streamChat } from "../ollama/client.js";
 import { vramLock } from "../ollama/vram-lock.js";
 import { buildPersonalTodaySummary, type PersonalTodaySummary } from "../life/life-service.js";
+import {
+  formatBriefingUserCare,
+  getCeoProfileCard,
+  listRecentMemoryFacts,
+  type CeoProfileCard,
+  type MemoryFactCard,
+} from "../memory/user-care.js";
 
 export type BriefingSnapshot = {
   greeting: string;
@@ -33,6 +40,11 @@ export type BriefingSnapshot = {
   };
   /** Personal manners / Life pillar — habits, goals, touchpoints (honest empty when unused). */
   personal: PersonalTodaySummary;
+  /** Compact CEO card + bounded memory facts for narrative context. */
+  userCare: {
+    ceo: CeoProfileCard;
+    memoryFacts: MemoryFactCard[];
+  };
 };
 
 function startOfDay(d = new Date()): Date {
@@ -145,9 +157,14 @@ export async function buildSnapshot(prisma: PrismaClient): Promise<BriefingSnaps
   });
 
   const personal = await buildPersonalTodaySummary(prisma);
+  const [ceo, memoryFacts] = await Promise.all([
+    getCeoProfileCard(prisma),
+    listRecentMemoryFacts(prisma),
+  ]);
 
   return {
     greeting: greetingForNow(),
+    userCare: { ceo, memoryFacts },
     finance: {
       budgetRemainingChf: budgetIsTemplateOnly ? null : Math.round((limit - spent) * 100) / 100,
       budgetIsTemplateOnly,
@@ -182,8 +199,12 @@ function snapshotNeedsRefresh(raw: string): boolean {
   try {
     const parsed = JSON.parse(raw) as Partial<BriefingSnapshot>;
     // Refresh cached snapshots that still expose template limits as "remaining",
-    // or that predate the Personal manners pillar.
-    return parsed.finance?.budgetIsTemplateOnly === undefined || !parsed.personal;
+    // that predate the Personal manners pillar, or that lack user-care memory.
+    return (
+      parsed.finance?.budgetIsTemplateOnly === undefined ||
+      !parsed.personal ||
+      !parsed.userCare
+    );
   } catch {
     return true;
   }
@@ -245,6 +266,12 @@ export async function* streamBriefingNarrative(
     data: { status: "GENERATING" },
   });
 
+  const [ceo, facts] = await Promise.all([
+    getCeoProfileCard(prisma),
+    listRecentMemoryFacts(prisma),
+  ]);
+  const userCareBlock = formatBriefingUserCare(ceo, facts);
+
   const release = await vramLock.acquire("REASONING");
   let full = "";
   try {
@@ -254,7 +281,10 @@ Schreibe eine kurze, klare Tagesbriefing-Zusammenfassung auf Deutsch (de-CH).
 Maximal 3 Absätze. Sei konkret und handlungsorientiert. Keine medizinische Diagnose.
 Decke sowohl Business (Finanzen, Legal, Ingest) als auch Personal manners / Life (Habits, Tasks, Touchpoints, Goals) ab — nur mit Daten aus dem Snapshot, nichts erfinden.
 Wenn budgetIsTemplateOnly true ist, erwähne kein verfügbares Budget / Restbudget — die Kategorie-Limits sind nur Vorlagen.
-Wenn personal-Felder leer/null/0 sind, sage ehrlich, dass dort noch nichts erfasst ist.`;
+Wenn personal-Felder leer/null/0 sind, sage ehrlich, dass dort noch nichts erfasst ist.
+Nutze die CEO-Karte und Memory-Facts nur als kompakten Kontext (Name/Locale/bekannte Fakten) — erfinde nichts dazu.
+
+${userCareBlock}`;
 
     for await (const token of streamChat({
       host,

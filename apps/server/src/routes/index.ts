@@ -27,12 +27,14 @@ import { getPrisma } from "../db/prisma-singleton.js";
 import { sendError, sseWrite, withPrisma, getProfileId } from "./helpers.js";
 import { registerLifeRoutes } from "./life.js";
 import { registerTeamRoutes } from "./team.js";
+import { registerMemoryRoutes } from "./memory.js";
 import { registerConfirmationRoutes } from "./confirmations.js";
 import { createConfirmation } from "../confirm/confirm-service.js";
 
 export async function registerRoutes(app: FastifyInstance): Promise<void> {
   await registerLifeRoutes(app);
   await registerTeamRoutes(app);
+  await registerMemoryRoutes(app);
   await registerConfirmationRoutes(app);
 
   app.get("/health", async () => ({

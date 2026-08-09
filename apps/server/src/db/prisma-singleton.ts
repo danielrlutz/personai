@@ -83,6 +83,12 @@ async function seedDefaults(client: PrismaClient): Promise<void> {
       ],
     });
   }
+
+  await client.ceoProfile.upsert({
+    where: { id: "default" },
+    create: { id: "default" },
+    update: {},
+  });
 }
 
 export function getActiveProfileId(): string | null {
