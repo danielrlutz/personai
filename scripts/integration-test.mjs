@@ -199,17 +199,46 @@ async function main() {
   r = await req("POST", "/briefing/generate", { profileId: P, token, body: {} });
   ok("POST /briefing/generate", r.status < 300);
 
+  const ingestStream = await fetch(`${BASE}/ingest/queue/stream?access_token=${encodeURIComponent(token)}`, {
+    method: "GET",
+    headers: {
+      "X-Profile-Id": P,
+      Accept: "text/event-stream",
+      Origin: "http://127.0.0.1:3000",
+    },
+  });
+  const ingestCt = ingestStream.headers.get("content-type") || "";
+  const ingestCors = ingestStream.headers.get("access-control-allow-origin") || "";
+  ok(
+    "GET /ingest/queue/stream SSE + CORS",
+    ingestStream.status === 200 &&
+      ingestCt.includes("text/event-stream") &&
+      ingestCors === "http://127.0.0.1:3000",
+    `${ingestCt} cors=${ingestCors || "missing"}`,
+  );
+  try {
+    await ingestStream.body?.cancel();
+  } catch {
+    /* ignore */
+  }
+
   const res = await fetch(`${BASE}/team/chat/stream`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       "X-Profile-Id": P,
       Authorization: `Bearer ${token}`,
+      Origin: "http://127.0.0.1:3000",
     },
     body: JSON.stringify({ message: "Ping Staff", specialist: "secretary" }),
   });
   const ct = res.headers.get("content-type") || "";
-  ok("POST /team/chat/stream SSE", res.status === 200 && ct.includes("text/event-stream"), ct);
+  const cors = res.headers.get("access-control-allow-origin") || "";
+  ok(
+    "POST /team/chat/stream SSE",
+    res.status === 200 && ct.includes("text/event-stream") && cors === "http://127.0.0.1:3000",
+    `${ct} cors=${cors || "missing"}`,
+  );
   try {
     await res.body?.cancel();
   } catch {

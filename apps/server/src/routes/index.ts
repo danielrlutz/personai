@@ -30,7 +30,7 @@ import {
 } from "../briefing/briefing-service.js";
 import { MedicalReportDocument } from "../export/medical-report.js";
 import { getPrisma } from "../db/prisma-singleton.js";
-import { sendError, sseWrite, withPrisma, getProfileId } from "./helpers.js";
+import { sendError, sseStart, sseWrite, withPrisma, getProfileId } from "./helpers.js";
 import { registerLifeRoutes } from "./life.js";
 import { registerTeamRoutes } from "./team.js";
 import { registerMemoryRoutes } from "./memory.js";
@@ -206,11 +206,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   app.get("/ingest/queue/stream", async (req, reply) => {
     try {
       getProfileId(req);
-      reply.raw.writeHead(200, {
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache",
-        Connection: "keep-alive",
-      });
+      sseStart(reply, req);
 
       const send = async () => {
         try {
@@ -705,11 +701,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   app.get("/briefing/stream", async (req, reply) => {
     try {
       const { prisma } = await withPrisma(req);
-      reply.raw.writeHead(200, {
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache",
-        Connection: "keep-alive",
-      });
+      sseStart(reply, req);
 
       try {
         for await (const token of streamBriefingNarrative(prisma)) {

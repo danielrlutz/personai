@@ -116,6 +116,14 @@ export function apiUrl(path: string): string {
   return `${base}${p}`;
 }
 
+/** Append session token for SSE when headers are stripped (EventSource / proxies). */
+function withAccessTokenQuery(path: string): string {
+  const token = getSessionToken();
+  if (!token) return path;
+  const sep = path.includes("?") ? "&" : "?";
+  return `${path}${sep}access_token=${encodeURIComponent(token)}`;
+}
+
 export function getProfileId(): string | null {
   if (profileIdOverride !== undefined) return profileIdOverride;
   return getStoredProfileId();
@@ -289,7 +297,7 @@ export async function streamSSE(
 
   let res: Response;
   try {
-    res = await fetch(apiUrl(path), {
+    res = await fetch(apiUrl(withAccessTokenQuery(path)), {
       method: options.method ?? "GET",
       headers,
       body: options.body !== undefined ? JSON.stringify(options.body) : undefined,

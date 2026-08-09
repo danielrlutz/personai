@@ -30,6 +30,7 @@ export function BriefingNarrative({ initialNarrative, tier }: BriefingNarrativeP
 
     try {
       abort = await streamSSE("/briefing/stream", {
+        silent: true,
         onEvent: (event, data) => {
           if (event === "token" && typeof data === "object" && data && "token" in data) {
             setNarrative((prev) => prev + String((data as { token: string }).token));

@@ -20,9 +20,11 @@ const statusConfig = {
 
 interface IngestionQueueProps {
   refreshKey?: number;
+  /** Live SSE updates — off on Home to avoid background stream noise. */
+  liveUpdates?: boolean;
 }
 
-export function IngestionQueue({ refreshKey }: IngestionQueueProps) {
+export function IngestionQueue({ refreshKey, liveUpdates = true }: IngestionQueueProps) {
   const [jobs, setJobs] = useState<IngestionJob[]>([]);
   const [vram, setVram] = useState<{
     holder: string | null;
@@ -53,17 +55,24 @@ export function IngestionQueue({ refreshKey }: IngestionQueueProps) {
       setLoading(true);
       try {
         const data = await apiGet<{ jobs: IngestionJob[]; vram?: typeof vram }>("/ingest/queue");
-        if (mounted) {
-          applyQueue(data);
-          setLoading(false);
+        if (!mounted) return;
+        applyQueue(data);
+        setLoading(false);
+
+        if (!liveUpdates) return;
+
+        try {
+          abort = await streamSSE("/ingest/queue/stream", {
+            silent: true,
+            onEvent: (event, payload) => {
+              if (event === "queue" && typeof payload === "object" && payload) {
+                applyQueue(payload as { jobs: IngestionJob[]; vram?: typeof vram });
+              }
+            },
+          });
+        } catch {
+          // GET snapshot is enough when live stream is unavailable.
         }
-        abort = await streamSSE("/ingest/queue/stream", {
-          onEvent: (event, payload) => {
-            if (event === "queue" && typeof payload === "object" && payload) {
-              applyQueue(payload as { jobs: IngestionJob[]; vram?: typeof vram });
-            }
-          },
-        });
       } catch (err) {
         if (mounted) {
           setJobs([]);
@@ -78,7 +87,7 @@ export function IngestionQueue({ refreshKey }: IngestionQueueProps) {
       mounted = false;
       abort?.();
     };
-  }, [applyQueue, refreshKey, reloadToken]);
+  }, [applyQueue, liveUpdates, refreshKey, reloadToken]);
 
   const queuedCount = jobs.filter((j) => j.status === "QUEUED" || j.status === "PROCESSING").length;
 

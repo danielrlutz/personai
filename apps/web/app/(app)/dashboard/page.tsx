@@ -65,7 +65,7 @@ export default function DashboardPage() {
           <LegalTimeline />
         </StaggerItem>
         <StaggerItem>
-          <IngestionQueue />
+          <IngestionQueue liveUpdates={false} />
         </StaggerItem>
       </Stagger>
     </section>
@@ -82,7 +82,7 @@ export default function DashboardPage() {
           <BudgetOverview />
         </StaggerItem>
         <StaggerItem>
-          <IngestionQueue />
+          <IngestionQueue liveUpdates={false} />
         </StaggerItem>
       </Stagger>
     </section>

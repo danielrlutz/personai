@@ -43,11 +43,21 @@ export function getRequestToken(request: FastifyRequest): string | null {
   return (request as AuthedRequest).authToken ?? null;
 }
 
+function extractAccessToken(request: FastifyRequest): string | null {
+  const bearer = extractBearerToken(request.headers.authorization);
+  if (bearer) return bearer;
+  const q = request.query as { access_token?: unknown };
+  if (typeof q?.access_token === "string" && q.access_token.trim()) {
+    return q.access_token.trim();
+  }
+  return null;
+}
+
 export async function registerAuthHook(app: FastifyInstance): Promise<void> {
   app.addHook("onRequest", async (request: FastifyRequest, reply: FastifyReply) => {
     if (isPublicRoute(request.method, request.url)) return;
 
-    const token = extractBearerToken(request.headers.authorization);
+    const token = extractAccessToken(request);
     const session = resolveSession(token);
     if (!session || !token) {
       return reply.status(401).send({

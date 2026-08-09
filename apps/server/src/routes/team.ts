@@ -32,7 +32,7 @@ import {
   ARCHIVE_REFRESHED_KEY,
   ARCHIVE_TAXONOMY_KEY,
 } from "../archive/init-context.js";
-import { sendError, sseWrite, withPrisma } from "./helpers.js";
+import { sendError, sseStart, sseWrite, withPrisma } from "./helpers.js";
 
 type ChatBody = {
   message?: string;
@@ -161,11 +161,7 @@ export async function registerTeamRoutes(app: FastifyInstance): Promise<void> {
       },
     });
 
-    reply.raw.writeHead(200, {
-      "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache",
-      Connection: "keep-alive",
-    });
+    sseStart(reply, req);
     sseWrite(reply, "context", {
       sessionId: session.id,
       specialist: specialistId,
@@ -309,11 +305,7 @@ export async function registerTeamRoutes(app: FastifyInstance): Promise<void> {
       const { prisma } = await withPrisma(req);
       const { userCare } = await loadUserCare(prisma, "forge", null);
 
-      reply.raw.writeHead(200, {
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache",
-        Connection: "keep-alive",
-      });
+      sseStart(reply, req);
 
       try {
         const result = await runForgeQaLoop({

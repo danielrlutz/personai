@@ -1,4 +1,20 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
+
+/** SSE hijacks the raw socket — @fastify/cors never runs, so echo Origin for cross-port clients. */
+export function sseStart(reply: FastifyReply, request: FastifyRequest): void {
+  reply.hijack();
+  const headers: Record<string, string> = {
+    "Content-Type": "text/event-stream",
+    "Cache-Control": "no-cache",
+    Connection: "keep-alive",
+  };
+  const origin = request.headers.origin;
+  if (typeof origin === "string" && origin) {
+    headers["Access-Control-Allow-Origin"] = origin;
+    headers["Vary"] = "Origin";
+  }
+  reply.raw.writeHead(200, headers);
+}
 import { requireProfileId } from "../profiles/registry.js";
 import { getPrisma } from "../db/prisma-singleton.js";
 import { getRequestSession } from "../auth/middleware.js";
