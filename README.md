@@ -9,14 +9,17 @@ Inspired by Harmonia Hermes (one orchestration path, confirm before irreversible
 | Mode | Role |
 |------|------|
 | Staff (`secretary`) | Triage, archive confirms, morning brief |
-| Architect / Forge / QA | Code loop (max 3 retries; ship needs confirm) |
+| Architect / Forge / QA | **Forge ↔ QA loop** (server-orchestrated, max 3 retries; ship needs confirm) |
 | CFO | Invoices, QR → ledger (confirm before write) |
-| Legal Aide | Docs / Fristen (informational) |
+| Legal Aide | Docs / Fristen (informational); `court` routes here |
 | Medical Integrator | Records / timelines (not a diagnosis) |
-| Bio / Mystic / Stylist / Wingman | Coaching personas |
-| Career Strategist | Career HTML→PDF |
+| Bio / Mystic / Stylist / Wingman | Rich coaching personas (CEO/memory/archive aware) |
+| Stylist | Optional **photo upload** → vision notes → coaching |
+| Career Strategist | Career HTML→PDF (confirm before download) |
 
 Open **Team** in the app (`/team?specialist=cfo`). Money and export actions use **Needs your confirmation** before anything is written.
+
+**Per-specialist models:** Forge prefers `OLLAMA_CODER_MODEL` (default `qwen2.5-coder:7b`); Architect / Legal / others use `OLLAMA_REASONING_MODEL`. If the coder model is not pulled, chat falls back to the reasoning model.
 
 Smoke API: `node scripts/integration-test.mjs` (API on `:4000`).
 
@@ -400,11 +403,18 @@ Optimized for **Genius Scan / phone stacks** and **CH-DE** paperwork:
 After deploy (host Ollama or bundled):
 
 ```bash
-pnpm pull-models          # Linux/macOS helper
+pnpm pull-models          # Linux/macOS helper (vision + reasoning + coder)
 # or:
 ollama pull maternion/LightOnOCR-2
 ollama pull deepseek-r1:8b
+ollama pull qwen2.5-coder:7b   # Forge; optional — falls back to reasoning
 ```
+
+| Env | Default | Used by |
+|-----|---------|---------|
+| `OLLAMA_VISION_MODEL` | `maternion/LightOnOCR-2` | Archive OCR + Stylist photo notes |
+| `OLLAMA_REASONING_MODEL` | `deepseek-r1:8b` | Most specialists, Architect, Legal, QA |
+| `OLLAMA_CODER_MODEL` | `qwen2.5-coder:7b` | Forge (fallback → reasoning if missing) |
 
 API image includes **Python 3 + PyMuPDF + poppler-utils** for rasterization. On Windows desktop, install [PyMuPDF](https://pypi.org/project/PyMuPDF/) (`pip install pymupdf`) so scanned PDFs prepare correctly; otherwise the worker falls back to raw PDF (worse for multipage).
 

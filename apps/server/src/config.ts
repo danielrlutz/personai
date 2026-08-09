@@ -28,6 +28,8 @@ export const config = {
   ollamaHost: process.env.OLLAMA_HOST ?? "http://127.0.0.1:11434",
   visionModel: process.env.OLLAMA_VISION_MODEL ?? "maternion/LightOnOCR-2",
   reasoningModel: process.env.OLLAMA_REASONING_MODEL ?? "deepseek-r1:8b",
+  /** Preferred for Forge; falls back to reasoningModel if not pulled. */
+  coderModel: process.env.OLLAMA_CODER_MODEL ?? "qwen2.5-coder:7b",
   licenseTier: (process.env.LICENSE_TIER ?? "pro") as "core" | "pro",
   keepAlive: "0",
 };

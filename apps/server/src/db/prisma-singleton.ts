@@ -93,6 +93,7 @@ async function seedDefaults(client: PrismaClient): Promise<void> {
   const defaults: Record<string, string> = {
     "ollama.visionModel": "maternion/LightOnOCR-2",
     "ollama.reasoningModel": "deepseek-r1:8b",
+    "ollama.coderModel": "qwen2.5-coder:7b",
     "ollama.keepAlive": "0",
     "briefing.preferredTime": "07:00",
     "briefing.locale": "de-CH",

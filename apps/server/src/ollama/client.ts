@@ -508,6 +508,32 @@ export async function* streamChat(opts: {
   }
 }
 
+export async function listInstalledModels(host: string): Promise<string[]> {
+  return withHostFailover(host, async (active) => {
+    const res = await fetch(`${normalizeHost(active)}/api/tags`, {
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!res.ok) return [];
+    const tags = (await res.json()) as { models?: Array<{ name: string }> };
+    return (tags.models ?? []).map((m) => m.name);
+  });
+}
+
+/** True if preferred model (or a tagged variant) is present on the host. */
+export function hostHasModel(installed: string[], preferred: string): boolean {
+  const pref = preferred.trim();
+  if (!pref) return false;
+  const prefBase = pref.split(":")[0]!;
+  return installed.some((name) => {
+    if (name === pref) return true;
+    if (name.startsWith(`${pref}-`)) return true;
+    if (!pref.includes(":") && (name === prefBase || name.startsWith(`${prefBase}:`))) {
+      return true;
+    }
+    return false;
+  });
+}
+
 export async function visionExtract(opts: {
   host: string;
   model: string;
@@ -542,5 +568,41 @@ export async function visionExtract(opts: {
     }
     const data = (await res.json()) as { message?: { content?: string } };
     return data.message?.content ?? "{}";
+  });
+}
+
+/** Free-form vision chat (Stylist appearance notes) — no JSON format constraint. */
+export async function visionDescribe(opts: {
+  host: string;
+  model: string;
+  imageBase64: string;
+  prompt: string;
+  timeoutMs?: number;
+}): Promise<string> {
+  return withHostFailover(opts.host, async (host) => {
+    const res = await fetch(`${normalizeHost(host)}/api/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: opts.model,
+        messages: [
+          {
+            role: "user",
+            content: opts.prompt,
+            images: [opts.imageBase64.replace(/^data:image\/\w+;base64,/, "")],
+          },
+        ],
+        stream: false,
+        keep_alive: 0,
+      }),
+      signal: AbortSignal.timeout(opts.timeoutMs ?? DEFAULT_VISION_TIMEOUT_MS),
+    });
+    if (!res.ok) {
+      throw new Error(
+        formatOllamaHttpError("vision", res.status, await res.text(), host, opts.model),
+      );
+    }
+    const data = (await res.json()) as { message?: { content?: string } };
+    return (data.message?.content ?? "").trim();
   });
 }

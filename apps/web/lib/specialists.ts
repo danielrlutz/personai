@@ -12,12 +12,16 @@ export type SpecialistId =
   | "wingman"
   | "career_strategist";
 
+export type SpecialistModelPref = "reasoning" | "coder";
+
 export interface SpecialistMeta {
   id: SpecialistId;
   label: string;
   shortLabel: string;
   description: string;
   group: "ops" | "code" | "care" | "coaching";
+  modelPref?: SpecialistModelPref;
+  preferredModel?: string;
 }
 
 /** Fallback roster if /specialists is unreachable — keep in sync with server. */

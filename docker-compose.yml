@@ -15,6 +15,7 @@ services:
       OLLAMA_HOST: ${OLLAMA_HOST:-http://host.docker.internal:11434}
       OLLAMA_VISION_MODEL: ${OLLAMA_VISION_MODEL:-maternion/LightOnOCR-2}
       OLLAMA_REASONING_MODEL: ${OLLAMA_REASONING_MODEL:-deepseek-r1:8b}
+      OLLAMA_CODER_MODEL: ${OLLAMA_CODER_MODEL:-qwen2.5-coder:7b}
       LICENSE_TIER: pro
       DATABASE_URL: file:/app/data/profiles/bootstrap/personai.db
       PERSONAI_IN_DOCKER: "1"
