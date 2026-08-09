@@ -321,6 +321,7 @@ class OutboxQueue {
     } catch (err) {
       const { describeApiFailure } = await import("@/lib/api-errors");
       const path = inflight.type === "team-chat" ? "/team/chat/stream" : "/ingest/upload";
+      // describeApiFailure is idempotent when processOp/streamSSE already humanized.
       const message = describeApiFailure(err, { path }).message;
       if (inflight.type === "team-chat") {
         this.emit({

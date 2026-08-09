@@ -76,6 +76,7 @@ export function ForgeQaPanel() {
         }
       },
       onError: (err) => {
+        // streamSSE may already humanize; describeApiFailure is idempotent.
         const message = describeApiFailure(err, { path: "/team/forge-qa/stream" }).message;
         setError(message);
         push({ kind: "error", text: message });
@@ -85,6 +86,7 @@ export function ForgeQaPanel() {
         setGateKey((k) => k + 1);
       },
     }).catch((err) => {
+      // Avoid double-describing when streamSSE already threw a humanized Error.
       const message = describeApiFailure(err, { path: "/team/forge-qa/stream" }).message;
       setError(message);
       setRunning(false);

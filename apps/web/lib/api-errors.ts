@@ -66,6 +66,27 @@ function looksLikeOllama(message: string): boolean {
   );
 }
 
+/** True when an HTTPS page points at an http:// API (browser blocks → Failed to fetch). */
+function isMixedContentApi(apiBase: string): boolean {
+  if (typeof window === "undefined") return false;
+  if (window.location.protocol !== "https:") return false;
+  return /^http:\/\//i.test(apiBase);
+}
+
+/**
+ * streamSSE → outbox processor → queue each used to call describeApiFailure.
+ * If we re-wrap, the serve/8443 help text repeats three times in one toast.
+ */
+function alreadyDescribed(message: string): boolean {
+  const m = message.trim();
+  if (!m) return false;
+  return (
+    /^(Can't reach API at |Mixed content:|Browser blocked the request to |Request timed out talking to API at |Sign-in required|Not allowed \(403\)|Server \d{3}:|Ollama )/i.test(
+      m,
+    ) || /tailscale serve status|mixed content|Serve :8443|--serve-only/i.test(m)
+  );
+}
+
 function extractBodyMessage(body: unknown): string | null {
   if (typeof body === "string" && body.trim()) {
     const trimmed = body.trim();
@@ -109,9 +130,25 @@ function isApiErrorLike(
   );
 }
 
+function kindFromDescribedMessage(message: string): FailureKind {
+  if (/^Mixed content:/i.test(message) || /^Can't reach API at /i.test(message)) return "network";
+  if (/^Browser blocked/i.test(message)) return "cors";
+  if (/^Request timed out/i.test(message)) return "timeout";
+  if (/^Sign-in required|^Not allowed/i.test(message)) return "auth";
+  if (/^Ollama /i.test(message)) return "ollama";
+  if (/^Server \d{3}:/i.test(message)) return "server";
+  return "unknown";
+}
+
+const REACHABILITY_HINT =
+  "If https://HOST:8443 is down (`tailscale serve status` → No serve config), run " +
+  "`HTTPS=1 ./scripts/vps-tailscale.sh --serve-only HOST`, or open http://HOST:3000 " +
+  "with API http://HOST:4000 (browse-only). Unlock the profile if health works but chat returns 401.";
+
 /**
  * Map fetch / ApiError / stream failures to human-readable copy.
  * Network failures always include the API base URL the client tried to call.
+ * Idempotent: already-humanized Error.message is returned once (no triple toast text).
  */
 export function describeApiFailure(
   err: unknown,
@@ -119,6 +156,14 @@ export function describeApiFailure(
 ): DescribedFailure {
   const base = resolveApiBaseForErrors(options?.apiBaseUrl);
   const pathHint = options?.path ? ` (${options.path})` : "";
+
+  if (err instanceof Error && alreadyDescribed(err.message)) {
+    return {
+      kind: kindFromDescribedMessage(err.message),
+      sticky: true,
+      message: err.message.trim(),
+    };
+  }
 
   if (isAbortError(err) || (err instanceof Error && looksLikeTimeout(err.message))) {
     return {
@@ -132,6 +177,10 @@ export function describeApiFailure(
     const status = err.status;
     const fromBody = extractBodyMessage(err.body);
     const raw = (fromBody ?? err.message).trim() || `Request failed (${status})`;
+
+    if (alreadyDescribed(raw)) {
+      return { kind: kindFromDescribedMessage(raw), sticky: true, message: raw };
+    }
 
     if (status === 401 || status === 403) {
       const code =
@@ -189,15 +238,20 @@ export function describeApiFailure(
         message: `Browser blocked the request to ${base}${pathHint} (CORS). Use the Tailscale/LAN API URL and confirm the API is up.`,
       };
     }
+    if (isMixedContentApi(base)) {
+      return {
+        kind: "network",
+        sticky: true,
+        message:
+          `Mixed content: this page is HTTPS but Active API is ${base}${pathHint}. ` +
+          `Browsers block http:// APIs from https:// pages (${raw}). ` +
+          `Prefer https://HOST:8443 via Tailscale Serve, or open http://HOST:3000 with API http://HOST:4000.`,
+      };
+    }
     return {
       kind: "network",
       sticky: true,
-      message:
-        `Can't reach API at ${base}${pathHint} (${raw}). ` +
-        `If Active API is https://…:8443 and \`tailscale serve status\` shows "No serve config", ` +
-        `either run HTTPS=1 ./scripts/vps-tailscale.sh --serve-only HOST, or open http://HOST:3000 ` +
-        `and set API to http://HOST:4000 (Drive setup only — not Install app). ` +
-        `If health works but chat fails with 401, unlock the profile first.`,
+      message: `Can't reach API at ${base}${pathHint} (${raw}). ${REACHABILITY_HINT}`,
     };
   }
 

@@ -1,17 +1,25 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 
-/** SSE hijacks the raw socket — @fastify/cors never runs, so echo Origin for cross-port clients. */
+/**
+ * SSE hijacks the raw socket — @fastify/cors never runs on the 200 response.
+ * Echo Origin (and mirror allowed request headers) so phone/MagicDNS :3000 → :4000
+ * and https://HOST → :8443 streams are not opaque "Failed to fetch" CORS failures.
+ */
 export function sseStart(reply: FastifyReply, request: FastifyRequest): void {
   reply.hijack();
   const headers: Record<string, string> = {
     "Content-Type": "text/event-stream",
     "Cache-Control": "no-cache",
     Connection: "keep-alive",
+    "X-Accel-Buffering": "no",
   };
   const origin = request.headers.origin;
   if (typeof origin === "string" && origin) {
     headers["Access-Control-Allow-Origin"] = origin;
     headers["Vary"] = "Origin";
+    // Match apps/server cors allowedHeaders — some clients re-check on the stream response.
+    headers["Access-Control-Allow-Headers"] =
+      "Content-Type, Accept, X-Profile-Id, Authorization";
   }
   reply.raw.writeHead(200, headers);
 }

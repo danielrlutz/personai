@@ -99,6 +99,7 @@ async function processTeamChat(op: OutboxOp<"team-chat">, emit: ProcessEmit): Pr
         }
       },
       onError: (err) => {
+        // streamSSE may already humanize; describeApiFailure is idempotent.
         streamError = describeApiFailure(err, { path: "/team/chat/stream" }).message;
       },
       onDone: () => {
@@ -113,8 +114,12 @@ async function processTeamChat(op: OutboxOp<"team-chat">, emit: ProcessEmit): Pr
         finish();
       },
     }).catch((err) => {
-      const message = describeApiFailure(err, { path: "/team/chat/stream" }).message;
-      finish(new Error(message));
+      // Prefer message already set by onError; otherwise describe once (idempotent if streamSSE did).
+      if (streamError) {
+        finish(new Error(streamError));
+        return;
+      }
+      finish(new Error(describeApiFailure(err, { path: "/team/chat/stream" }).message));
     });
   });
 
