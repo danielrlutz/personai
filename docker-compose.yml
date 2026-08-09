@@ -18,6 +18,17 @@ services:
       LICENSE_TIER: pro
       DATABASE_URL: file:/app/data/profiles/bootstrap/personai.db
       PERSONAI_IN_DOCKER: "1"
+      # Drive OAuth (Settings → Link Google Drive). Optional — link soft-gates when unset.
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000}
+      PUBLIC_API_URL: ${PUBLIC_API_URL:-${NEXT_PUBLIC_API_URL:-http://localhost:4000}}
+      PUBLIC_WEB_URL: ${PUBLIC_WEB_URL:-http://localhost:3000}
+      GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID:-}
+      GOOGLE_OAUTH_CLIENT_SECRET: ${GOOGLE_OAUTH_CLIENT_SECRET:-}
+      GOOGLE_OAUTH_REDIRECT_URI: ${GOOGLE_OAUTH_REDIRECT_URI:-}
+      GOOGLE_DRIVE_ENABLED: ${GOOGLE_DRIVE_ENABLED:-}
+      GOOGLE_DRIVE_ROOT_FOLDER_ID: ${GOOGLE_DRIVE_ROOT_FOLDER_ID:-}
+      GOOGLE_SERVICE_ACCOUNT_JSON: ${GOOGLE_SERVICE_ACCOUNT_JSON:-}
+      GOOGLE_SERVICE_ACCOUNT_JSON_INLINE: ${GOOGLE_SERVICE_ACCOUNT_JSON_INLINE:-}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped
