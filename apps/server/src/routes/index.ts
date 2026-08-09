@@ -37,11 +37,15 @@ import { registerMemoryRoutes } from "./memory.js";
 import { registerConfirmationRoutes } from "./confirmations.js";
 import { registerAuthRoutes } from "./auth.js";
 import { registerDriveRoutes } from "./drive.js";
+import { registerOpsRoutes } from "./ops.js";
+import { registerProductSettingsRoutes } from "./settings-product.js";
+import { registerTriageRoutes } from "./triage.js";
 import { createConfirmation } from "../confirm/confirm-service.js";
 import { driveStatus } from "../archive/drive.js";
 import { getRequestSession } from "../auth/middleware.js";
 import { assertPasswordStrength } from "../auth/password.js";
 import { createSession } from "../auth/session.js";
+import { writeHostVault } from "../settings/host-vault.js";
 
 export async function registerRoutes(app: FastifyInstance): Promise<void> {
   await registerAuthRoutes(app);
@@ -50,6 +54,9 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   await registerMemoryRoutes(app);
   await registerConfirmationRoutes(app);
   await registerDriveRoutes(app);
+  await registerOpsRoutes(app);
+  await registerProductSettingsRoutes(app);
+  await registerTriageRoutes(app);
 
   app.get("/health", async () => ({
     ok: true,
@@ -64,7 +71,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     return { ...health, vram: vramLock.getState() };
   });
 
-  /** Set Ollama base URL for this API process (in-memory; prefer OLLAMA_HOST in .env for persistence). */
+  /** Set Ollama base URL — persisted in encrypted host vault (Settings-first). */
   app.put<{ Body: { host: string } }>("/ollama/host", async (req, reply) => {
     const raw = req.body?.host?.trim();
     if (!raw) return reply.status(400).send({ error: "host is required" });
@@ -80,14 +87,15 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     const host = raw.replace(/\/$/, "");
     const reachable = await probeOllamaHost(host, 3000);
     setOllamaHostOverride(host);
+    await writeHostVault({ ollamaHost: host });
     const health = await ollamaHealth();
     return {
       ...health,
       reachable,
       vram: vramLock.getState(),
       note: reachable
-        ? "Ollama host updated for this process. Set OLLAMA_HOST in .env to persist across restarts."
-        : "Saved host, but /api/tags was not reachable yet. If the API runs in Docker and Ollama is native, use http://host.docker.internal:11434.",
+        ? "Ollama host saved to encrypted Settings vault (survives restarts)."
+        : "Saved to Settings vault, but /api/tags was not reachable yet. If the API runs in Docker and Ollama is native, use http://host.docker.internal:11434.",
     };
   });
 

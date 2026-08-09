@@ -59,6 +59,17 @@ export function logoutToProfiles(): void {
   if (token) {
     void apiPost("/auth/logout", undefined, { silent: true }).catch(() => undefined);
   }
+  // Security: wipe offline outbox blobs/ops on logout so queued payloads don't linger.
+  if (typeof window !== "undefined") {
+    void import("./outbox")
+      .then(({ getOutbox }) => getOutbox().clearAll?.())
+      .catch(() => undefined);
+    try {
+      localStorage.removeItem("personai.lock.locked");
+    } catch {
+      /* ignore */
+    }
+  }
   clearSession();
   if (typeof window === "undefined") return;
   window.location.replace(PROFILES_PATH);

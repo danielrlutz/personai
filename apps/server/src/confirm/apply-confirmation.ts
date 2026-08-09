@@ -227,6 +227,59 @@ async function applyMedicalExport(prisma, payload) {
   return { export: updated, storagePath };
 }
 
+function monthKey(d = new Date()) {
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+async function applyPremiumInference(prisma, payload) {
+  const key = `premium.usage.${monthKey()}`;
+  const row = await prisma.setting.findUnique({ where: { key } });
+  const prev = row ? Number(JSON.parse(row.value).used ?? 0) : 0;
+  const used = prev + 1;
+  await prisma.setting.upsert({
+    where: { key },
+    create: { key, value: JSON.stringify({ used, updatedAt: new Date().toISOString() }) },
+    update: { value: JSON.stringify({ used, updatedAt: new Date().toISOString() }) },
+  });
+  await prisma.auditLog.create({
+    data: {
+      action: "premium.inference",
+      entity: "PremiumUsage",
+      metadata: JSON.stringify({ used, reason: payload?.reason ?? null }),
+    },
+  });
+  return { used, acknowledged: true };
+}
+
+async function applyCalendarEvent(prisma, payload) {
+  // Stage locally until Google Calendar OAuth write is configured; never invent remote IDs.
+  const event = {
+    title: String(payload.title ?? "Event"),
+    start: String(payload.start ?? ""),
+    end: payload.end ? String(payload.end) : null,
+    description: payload.description ? String(payload.description) : null,
+    stagedAt: new Date().toISOString(),
+  };
+  const key = "calendar.staged_events";
+  const row = await prisma.setting.findUnique({ where: { key } });
+  const prev = row ? JSON.parse(row.value) : [];
+  const list = Array.isArray(prev) ? prev : [];
+  list.unshift(event);
+  await prisma.setting.upsert({
+    where: { key },
+    create: { key, value: JSON.stringify(list.slice(0, 100)) },
+    update: { value: JSON.stringify(list.slice(0, 100)) },
+  });
+  await prisma.auditLog.create({
+    data: {
+      action: "calendar.event_staged",
+      entity: "CalendarEvent",
+      metadata: JSON.stringify(event),
+    },
+  });
+  return { staged: true, event };
+}
+
 export async function resolveConfirmation(prisma, id, decision) {
   const pending = await getConfirmation(prisma, id);
   if (!pending) throw new Error("Confirmation not found");
@@ -265,6 +318,12 @@ export async function resolveConfirmation(prisma, id, decision) {
     case "forge.ship":
     case "premium.spend":
       result = { acknowledged: true, action: pending.action, payload };
+      break;
+    case "premium.inference":
+      result = await applyPremiumInference(prisma, payload);
+      break;
+    case "calendar.event":
+      result = await applyCalendarEvent(prisma, payload);
       break;
     default:
       throw new Error(`Unsupported action: ${pending.action}`);

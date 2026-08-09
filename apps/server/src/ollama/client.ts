@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import { config } from "../config.js";
+import { resolveProductConfig } from "../settings/host-vault.js";
 
 export type OllamaSlot = "VISION" | "REASONING";
 
@@ -25,11 +26,13 @@ let cachedAt = 0;
 let resolveInFlight: Promise<string> | null = null;
 
 export function modelForSlot(slot: OllamaSlot): string {
-  return slot === "VISION" ? config.visionModel : config.reasoningModel;
+  const product = resolveProductConfig();
+  return slot === "VISION" ? product.visionModel : product.reasoningModel;
 }
 
 export function getConfiguredOllamaHost(): string {
-  return (hostOverride ?? config.ollamaHost).replace(/\/$/, "");
+  const product = resolveProductConfig();
+  return (hostOverride ?? product.ollamaHost ?? config.ollamaHost).replace(/\/$/, "");
 }
 
 /** Runtime override (settings UI). Does not rewrite process.env permanently. */

@@ -44,6 +44,54 @@ export async function registerConfirmationRoutes(app) {
             return sendError(reply, err);
         }
     });
+    /** Edit archive naming / category on a pending confirm before approve (US-2.x). */
+    app.patch("/confirmations/:id", async (req, reply) => {
+        try {
+            const { prisma } = await withPrisma(req);
+            const pending = await prisma.pendingConfirmation.findUnique({
+                where: { id: req.params.id },
+            });
+            if (!pending) return reply.status(404).send({ error: "Confirmation not found" });
+            if (pending.status !== "pending") {
+                return reply.status(400).send({ error: `Already ${pending.status}` });
+            }
+            const body = req.body ?? {};
+            const payload = JSON.parse(pending.payload || "{}");
+            if (typeof body.archiveName === "string" && body.archiveName.trim()) {
+                payload.archiveName = body.archiveName.trim();
+            }
+            if (body.archiveCategory != null && !Number.isNaN(Number(body.archiveCategory))) {
+                payload.archiveCategory = Number(body.archiveCategory);
+            }
+            if (typeof body.summary === "string" && body.summary.trim()) {
+                // allow explicit summary override
+            }
+            const archiveName = payload.archiveName ?? "document";
+            const archiveCategory = payload.archiveCategory ?? 9;
+            const summary =
+                typeof body.summary === "string" && body.summary.trim()
+                    ? body.summary.trim()
+                    : pending.action === "archive.commit" || pending.action === "ledger.write"
+                        ? `File as ${archiveName} (folder ${archiveCategory})`
+                        : pending.summary;
+            const updated = await prisma.pendingConfirmation.update({
+                where: { id: pending.id },
+                data: {
+                    payload: JSON.stringify(payload),
+                    summary,
+                },
+            });
+            return {
+                confirmation: {
+                    ...updated,
+                    payload,
+                },
+            };
+        }
+        catch (err) {
+            return sendError(reply, err);
+        }
+    });
     app.get("/archive/documents", async (req, reply) => {
         try {
             const { prisma } = await withPrisma(req);

@@ -3,8 +3,9 @@
  * When credentials / folder IDs are missing, callers get a disabled status — never fake files.
  *
  * Link modes:
- * - service_account: env JSON (+ optional per-profile root folder prefs)
- * - oauth: env client id/secret + per-profile refresh token from Settings → Link Google Drive
+ * - service_account: Settings vault JSON (+ optional per-profile root folder prefs)
+ * - oauth: Settings vault client id/secret + per-profile refresh token from Link Google Drive
+ * Env remains bootstrap-only fallback.
  */
 import crypto from "node:crypto";
 import fs from "node:fs";
@@ -12,6 +13,7 @@ import fsp from "node:fs/promises";
 import path from "node:path";
 import { ARCHIVE_TAXONOMY } from "../specialists/roster.js";
 import { getActiveProfileId } from "../db/prisma-singleton.js";
+import { resolveProductConfig } from "../settings/host-vault.js";
 import {
   readDriveOauthStore,
   readDrivePrefs,
@@ -61,9 +63,10 @@ type ServiceAccount = {
 let cachedToken: { accessToken: string; expiresAt: number; key: string } | null = null;
 
 function oauthRedirectUriFromEnv(): string | null {
-  const explicit = process.env.GOOGLE_OAUTH_REDIRECT_URI?.trim();
+  const product = resolveProductConfig();
+  const explicit = product.googleOauthRedirectUri;
   if (explicit) return explicit.replace(/\/$/, "");
-  const publicApi = process.env.PUBLIC_API_URL?.trim() || process.env.NEXT_PUBLIC_API_URL?.trim();
+  const publicApi = product.publicApiUrl;
   if (publicApi) {
     return `${publicApi.replace(/\/$/, "")}/archive/drive/oauth/callback`;
   }
@@ -71,11 +74,7 @@ function oauthRedirectUriFromEnv(): string | null {
 }
 
 function webAppBaseUrl(): string {
-  return (
-    process.env.PUBLIC_WEB_URL?.trim() ||
-    process.env.WEB_APP_URL?.trim() ||
-    "http://127.0.0.1:3000"
-  ).replace(/\/$/, "");
+  return resolveProductConfig().publicWebUrl;
 }
 
 export function getWebAppBaseUrl(): string {
@@ -84,30 +83,15 @@ export function getWebAppBaseUrl(): string {
 
 export function loadDriveConfig(profileId?: string | null): DriveConfig {
   const pid = profileId ?? getActiveProfileId();
-  const folderIds: Record<number, string> = {};
-  const jsonMap = process.env.GOOGLE_DRIVE_FOLDERS?.trim();
-  if (jsonMap) {
-    try {
-      const parsed = JSON.parse(jsonMap) as Record<string, string>;
-      for (const [k, v] of Object.entries(parsed)) {
-        const n = Number(k);
-        if (Number.isFinite(n) && v) folderIds[n] = String(v).trim();
-      }
-    } catch {
-      // ignore invalid JSON
-    }
-  }
-  for (let i = 1; i <= 10; i++) {
-    const v = process.env[`GOOGLE_DRIVE_FOLDER_${i}`]?.trim();
-    if (v) folderIds[i] = v;
-  }
+  const product = resolveProductConfig();
+  const folderIds: Record<number, string> = { ...product.googleDriveFolderIds };
 
   const serviceAccountPath = process.env.GOOGLE_SERVICE_ACCOUNT_JSON?.trim() || null;
-  const serviceAccountJson = process.env.GOOGLE_SERVICE_ACCOUNT_JSON_INLINE?.trim() || null;
-  const oauthClientId = process.env.GOOGLE_OAUTH_CLIENT_ID?.trim() || null;
-  const oauthClientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET?.trim() || null;
+  const serviceAccountJson = product.googleServiceAccountJson;
+  const oauthClientId = product.googleOauthClientId;
+  const oauthClientSecret = product.googleOauthClientSecret;
   const envOauthRefresh = process.env.GOOGLE_OAUTH_REFRESH_TOKEN?.trim() || null;
-  const envRoot = process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID?.trim() || null;
+  const envRoot = product.googleDriveRootFolderId;
 
   const storedOauth = pid ? readDriveOauthStore(pid) : null;
   const prefs = pid ? readDrivePrefs(pid) : null;

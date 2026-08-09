@@ -1,11 +1,12 @@
 /**
- * Per-profile Google Drive OAuth tokens + root folder preference.
- * Client id/secret still come from env; refresh token is user-linked.
+ * Per-profile Google Drive OAuth tokens — sealed at rest (AES-GCM with host vault key).
+ * Legacy plaintext drive-oauth.json is migrated on first read, then removed.
  */
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
-import { profileDir } from "../config.js";
+import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
+import { profileDir, config } from "../config.js";
 
 export type DriveOauthStore = {
   refreshToken: string;
@@ -25,21 +26,86 @@ export type OauthPending = {
 
 const pendingByState = new Map<string, OauthPending>();
 const PENDING_TTL_MS = 15 * 60 * 1000;
+const ALGO = "aes-256-gcm";
+const IV_LEN = 12;
 
-function storePath(profileId: string): string {
+function legacyPath(profileId: string): string {
   return path.join(profileDir(profileId), "drive-oauth.json");
 }
 
-export function readDriveOauthStore(profileId: string): DriveOauthStore | null {
-  const p = storePath(profileId);
-  if (!fs.existsSync(p)) return null;
-  try {
-    const raw = JSON.parse(fs.readFileSync(p, "utf-8")) as DriveOauthStore;
-    if (!raw?.refreshToken) return null;
-    return raw;
-  } catch {
-    return null;
+function sealedPath(profileId: string): string {
+  return path.join(profileDir(profileId), "drive-oauth.enc");
+}
+
+function hostVaultKeyPath(): string {
+  return path.join(config.dataDir, ".host-vault.key");
+}
+
+function ensureSealKey(): Buffer {
+  const kp = hostVaultKeyPath();
+  if (fs.existsSync(kp)) {
+    return Buffer.from(fs.readFileSync(kp, "utf-8").trim(), "hex");
   }
+  fs.mkdirSync(config.dataDir, { recursive: true });
+  const key = randomBytes(32);
+  fs.writeFileSync(kp, key.toString("hex"), { encoding: "utf-8", mode: 0o600 });
+  try {
+    fs.chmodSync(kp, 0o600);
+  } catch {
+    /* windows */
+  }
+  return key;
+}
+
+function encryptStore(data: DriveOauthStore, key: Buffer): Buffer {
+  const iv = randomBytes(IV_LEN);
+  const cipher = createCipheriv(ALGO, key, iv);
+  const plaintext = Buffer.from(JSON.stringify(data), "utf-8");
+  const ciphertext = Buffer.concat([cipher.update(plaintext), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  return Buffer.concat([Buffer.from("PAO1"), Buffer.from([1]), iv, tag, ciphertext]);
+}
+
+function decryptStore(blob: Buffer, key: Buffer): DriveOauthStore {
+  if (blob.subarray(0, 4).toString("utf8") !== "PAO1") throw new Error("Not sealed oauth");
+  const iv = blob.subarray(5, 5 + IV_LEN);
+  const tag = blob.subarray(5 + IV_LEN, 5 + IV_LEN + 16);
+  const ciphertext = blob.subarray(5 + IV_LEN + 16);
+  const decipher = createDecipheriv(ALGO, key, iv);
+  decipher.setAuthTag(tag);
+  const plain = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+  return JSON.parse(plain.toString("utf-8")) as DriveOauthStore;
+}
+
+export function readDriveOauthStore(profileId: string): DriveOauthStore | null {
+  const sealed = sealedPath(profileId);
+  const key = ensureSealKey();
+  if (fs.existsSync(sealed)) {
+    try {
+      return decryptStore(fs.readFileSync(sealed), key);
+    } catch {
+      return null;
+    }
+  }
+  // Migrate legacy plaintext once
+  const legacy = legacyPath(profileId);
+  if (fs.existsSync(legacy)) {
+    try {
+      const raw = JSON.parse(fs.readFileSync(legacy, "utf-8")) as DriveOauthStore;
+      if (raw?.refreshToken) {
+        writeDriveOauthStore(profileId, raw);
+        try {
+          fs.unlinkSync(legacy);
+        } catch {
+          /* ignore */
+        }
+        return raw;
+      }
+    } catch {
+      return null;
+    }
+  }
+  return null;
 }
 
 export function writeDriveOauthStore(profileId: string, data: DriveOauthStore): void {
@@ -49,12 +115,22 @@ export function writeDriveOauthStore(profileId: string, data: DriveOauthStore): 
     ...data,
     updatedAt: new Date().toISOString(),
   };
-  fs.writeFileSync(storePath(profileId), JSON.stringify(next, null, 2), "utf-8");
+  const key = ensureSealKey();
+  fs.writeFileSync(sealedPath(profileId), encryptStore(next, key), { mode: 0o600 });
+  const legacy = legacyPath(profileId);
+  if (fs.existsSync(legacy)) {
+    try {
+      fs.unlinkSync(legacy);
+    } catch {
+      /* ignore */
+    }
+  }
 }
 
 export function clearDriveOauthStore(profileId: string): void {
-  const p = storePath(profileId);
-  if (fs.existsSync(p)) fs.unlinkSync(p);
+  for (const p of [sealedPath(profileId), legacyPath(profileId)]) {
+    if (fs.existsSync(p)) fs.unlinkSync(p);
+  }
 }
 
 export function createOauthPending(profileId: string, returnTo: string): string {
@@ -79,7 +155,6 @@ function prunePending(): void {
   }
 }
 
-/** Separate tiny store for SA/root folder override when using service account. */
 export type DrivePrefsStore = {
   rootFolderId?: string | null;
   updatedAt: string;

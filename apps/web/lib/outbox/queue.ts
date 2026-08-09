@@ -288,6 +288,17 @@ class OutboxQueue {
     }
   }
 
+  /** Wipe all pending ops + blobs (logout / lock). */
+  async clearAll(): Promise<void> {
+    await this.ready;
+    const snapshot = [...this.ops];
+    for (const op of snapshot) {
+      await this.removeOp(op);
+    }
+    this.ops = [];
+    this.emit({ kind: "changed", ops: [] });
+  }
+
   private async runOne(opId: string): Promise<void> {
     const op = this.ops.find((o) => o.id === opId);
     if (!op || op.status !== "pending") return;
@@ -358,6 +369,7 @@ export function getOutbox(): OutboxQueue {
       dismiss: async () => undefined,
       dismissTeamChat: async () => undefined,
       drain: async () => undefined,
+      clearAll: async () => undefined,
     } as unknown as OutboxQueue;
   }
   if (!globalThis.__personaiOutbox) {
