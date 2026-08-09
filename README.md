@@ -1,12 +1,30 @@
 # PersonAI OS
 
-Privacy-first local operating system for freelancers — finance, legal tasks, medical history, and AI briefings. Data stays on disk (SQLite per profile). AI runs via local Ollama.
+Local-first **pocket team** for Swiss/CH-DE freelancers — twelve specialist modes, archive OCR with confirm gates, finance/legal/medical ops, morning brief, and local Ollama. Data stays on disk (SQLite per profile).
+
+Inspired by Harmonia Hermes (one orchestration path, confirm before irreversible writes) — implemented **in-app**, not as Telegram bots or n8n.
+
+## Pocket team (Team)
+
+| Mode | Role |
+|------|------|
+| Staff (`secretary`) | Triage, archive confirms, morning brief |
+| Architect / Forge / QA | Code loop (max 3 retries; ship needs confirm) |
+| CFO | Invoices, QR → ledger (confirm before write) |
+| Legal Aide | Docs / Fristen (informational) |
+| Medical Integrator | Records / timelines (not a diagnosis) |
+| Bio / Mystic / Stylist / Wingman | Coaching personas |
+| Career Strategist | Career HTML→PDF |
+
+Open **Team** in the app (`/team?specialist=cfo`). Money-adjacent and export actions use **Confirm before write**.
+
+Smoke API: `node scripts/integration-test.mjs` (API on `:4000`).
 
 ## Stack
 
 - **Web**: Next.js (static export), React, Tailwind, Framer Motion
-- **Server**: Fastify sidecar + Prisma + SQLite
-- **Desktop**: Tauri v2 (spawns Node sidecar)
+- **Server**: Fastify sidecar + Prisma + SQLite (one orchestration path)
+- **Desktop**: Tauri v2 (spawns Node sidecar) — MSI / NSIS
 - **AI**: Ollama (`maternion/LightOnOCR-2`, `deepseek-r1:8b`) with VRAM semaphore
 - **Deploy**: Docker Compose (dev + VPS with Caddy)
 
@@ -133,6 +151,12 @@ docker compose -f docker-compose.prod.yml up -d --build
 Edit `Caddyfile` hostnames before production TLS.
 
 ## Desktop (Tauri)
+
+### Windows download (v0.5.1)
+
+- [MSI installer](https://github.com/danielrlutz/personai/releases/download/v0.5.1/PersonAI.OS_0.5.1_x64_en-US.msi)
+- [NSIS setup EXE](https://github.com/danielrlutz/personai/releases/download/v0.5.1/PersonAI.OS_0.5.1_x64-setup.exe)
+- [Release notes](https://github.com/danielrlutz/personai/releases/tag/v0.5.1)
 
 ```bash
 # Install toolchain first (recommended)

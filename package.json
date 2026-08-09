@@ -1,7 +1,7 @@
 {
   "name": "personai-os",
   "private": true,
-  "version": "0.5.0",
+  "version": "0.5.1",
   "packageManager": "pnpm@9.15.0",
   "scripts": {
     "dev": "pnpm --parallel --filter @personai/server --filter @personai/web dev",

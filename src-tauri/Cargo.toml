@@ -1,6 +1,6 @@
 [package]
 name = "personai-os"
-version = "0.5.0"
+version = "0.5.1"
 description = "PersonAI OS — Privacy-First Life Management Suite"
 authors = ["PersonAI"]
 edition = "2021"
