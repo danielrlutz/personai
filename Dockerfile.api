@@ -4,30 +4,31 @@ RUN corepack enable && apt-get update \
   && apt-get install -y --no-install-recommends openssl ca-certificates \
   && rm -rf /var/lib/apt/lists/*
 
-FROM base AS deps
-COPY package.json pnpm-workspace.yaml ./
+FROM base AS build
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
 COPY apps/server/package.json apps/server/package.json
 RUN pnpm install --filter @personai/server... --frozen-lockfile=false
-
-FROM base AS build
-COPY --from=deps /app/node_modules /app/node_modules
-COPY --from=deps /app/apps/server/node_modules /app/apps/server/node_modules
-COPY package.json pnpm-workspace.yaml tsconfig.base.json ./
+# Source only — .dockerignore excludes host node_modules/dist so install tree stays intact
 COPY apps/server ./apps/server
 WORKDIR /app/apps/server
 ENV DATABASE_URL="file:./prisma/dev.db"
-RUN npx prisma generate && pnpm build
+RUN pnpm exec prisma generate && pnpm build
+WORKDIR /app
+# Flatten workspace hoisting into a portable prod tree Node can resolve (fastify, etc.).
+# dist/ is gitignored so pnpm deploy may omit it — copy dist + prisma explicitly.
+RUN pnpm --filter @personai/server deploy --prod /deploy \
+  && cp -r apps/server/dist /deploy/dist \
+  && cp -r apps/server/prisma /deploy/prisma \
+  && cd /deploy \
+  && CLIENT_VER=$(node -p "require('@prisma/client/package.json').version") \
+  && npx --yes "prisma@$CLIENT_VER" generate
 
 FROM base AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=4000
 ENV DATA_DIR=/app/data
-COPY --from=build /app/apps/server/dist ./dist
-COPY --from=build /app/apps/server/package.json ./package.json
-COPY --from=build /app/apps/server/prisma ./prisma
-COPY --from=build /app/apps/server/node_modules ./node_modules
-COPY --from=build /app/node_modules ./root_node_modules
+COPY --from=build /deploy ./
 RUN mkdir -p /app/data
 EXPOSE 4000
 CMD ["node", "dist/index.js"]
