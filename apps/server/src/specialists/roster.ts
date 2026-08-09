@@ -1,4 +1,10 @@
 import { config } from "../config.js";
+import {
+  archiveDatePrefix,
+  safeEnum,
+  sanitizeArchiveEntity,
+  sanitizeExtension,
+} from "../lib/safe-data.js";
 import { roleForSpecialistId, type ModelRole } from "./model-catalog.js";
 
 const SHARED = `OPERATING CONTEXT: You are part of PersonAI, a local Swiss/CH-DE-aware personal ops layer. Prefer the user's language. Prefer Swiss-German cultural awareness when locale points to Switzerland (AHV, Krankenkasse, Fristen, QR-Rechnung, Behörden, Gerichte).
@@ -259,21 +265,30 @@ export function suggestArchiveCategory(documentType: string): number {
   }
 }
 
+const ARCHIVE_DOC_TYPES = [
+  "BILL",
+  "MEDICAL_RECORD",
+  "LEGAL",
+  "CONTRACT",
+  "RECEIPT",
+  "OFFICIAL",
+  "OTHER",
+] as const;
+
 export function suggestArchiveName(parts: {
   date?: string | null;
   documentType?: string | null;
   entity?: string | null;
   extension?: string | null;
 }): string {
-  const date = (parts.date || new Date().toISOString().slice(0, 10)).replace(/[^\d-]/g, "");
-  const docType = (parts.documentType || "OTHER").replace(/[^\w]/g, "") || "OTHER";
-  const entityRaw = (parts.entity || "Unknown")
-    .replace(/[^\wÄÖÜäöüéèêà.-]+/g, "_")
-    .replace(/_+/g, "_");
-  const entity = entityRaw.slice(0, 48) || "Unknown";
-  const ext = (parts.extension || ".pdf").startsWith(".")
-    ? parts.extension || ".pdf"
-    : `.${parts.extension || "pdf"}`;
+  const date = archiveDatePrefix(parts.date);
+  const docType = safeEnum(
+    String(parts.documentType ?? "OTHER").replace(/[^\w]/g, "") || "OTHER",
+    ARCHIVE_DOC_TYPES,
+    "OTHER",
+  );
+  const entity = sanitizeArchiveEntity(parts.entity);
+  const ext = sanitizeExtension(parts.extension);
   return `${date}_${docType}_${entity}${ext}`;
 }
 

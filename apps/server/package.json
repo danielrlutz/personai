@@ -9,7 +9,8 @@
     "start": "node dist/index.js",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
-    "lint": "tsc -p tsconfig.json --noEmit"
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "test": "tsx src/ingest/swiss-qr.test.ts && tsx src/lib/safe-data.test.ts"
   },
   "dependencies": {
     "@fastify/cors": "^10.0.2",
