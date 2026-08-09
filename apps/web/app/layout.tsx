@@ -1,9 +1,16 @@
 import type { Metadata, Viewport } from "next";
-import { GeistSans } from "geist/font/sans";
+import { Plus_Jakarta_Sans } from "next/font/google";
 import { GeistMono } from "geist/font/mono";
 import { ApiBootstrap } from "@/components/shared/ApiBootstrap";
 import { ServiceWorkerRegister } from "@/components/shared/ServiceWorkerRegister";
 import "@/styles/globals.css";
+
+const plusJakarta = Plus_Jakarta_Sans({
+  subsets: ["latin"],
+  variable: "--font-plus-jakarta",
+  display: "swap",
+  weight: ["400", "500", "600", "700"],
+});
 
 export const metadata: Metadata = {
   title: "PersonAI OS",
@@ -31,7 +38,9 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="de-CH" className="dark">
-      <body className={`${GeistSans.variable} ${GeistMono.variable} font-sans antialiased`}>
+      <body
+        className={`${plusJakarta.variable} ${GeistMono.variable} font-sans antialiased`}
+      >
         <ServiceWorkerRegister />
         <ApiBootstrap>{children}</ApiBootstrap>
       </body>

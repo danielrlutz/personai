@@ -24,20 +24,36 @@
   --success: 142 45% 42%;
   --warning: 38 92% 50%;
 
-  /* Material shape — 8–12px */
-  --radius: 0.5rem;
-  --radius-lg: 0.75rem;
+  /* Airbnb-calm shape — soft but Material-adjacent */
+  --radius: 0.625rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.25rem;
 
-  --sidebar-width: 16rem;
+  --sidebar-width: 16.5rem;
   --nav-rail-width: 4.5rem;
-  --header-height: 3.5rem;
+  --header-height: 3.75rem;
 
-  /* Material elevation (dark theme) */
-  --elevation-1: 0 1px 2px 0 rgba(0, 0, 0, 0.3), 0 1px 3px 1px rgba(0, 0, 0, 0.15);
-  --elevation-2: 0 1px 2px 0 rgba(0, 0, 0, 0.3), 0 2px 6px 2px rgba(0, 0, 0, 0.15);
-  --elevation-3: 0 4px 8px 3px rgba(0, 0, 0, 0.15), 0 1px 3px 0 rgba(0, 0, 0, 0.3);
+  /* Soft refined elevation (dark hospitality, not flat Material hard edges) */
+  --elevation-1:
+    0 1px 2px rgba(0, 0, 0, 0.28),
+    0 2px 8px rgba(0, 0, 0, 0.18);
+  --elevation-2:
+    0 2px 4px rgba(0, 0, 0, 0.28),
+    0 8px 24px rgba(0, 0, 0, 0.22);
+  --elevation-3:
+    0 4px 12px rgba(0, 0, 0, 0.3),
+    0 16px 40px rgba(0, 0, 0, 0.28);
 
-  /* Material motion — keep snappy for first paint / page enter */
-  --motion-duration: 150ms;
-  --motion-easing: cubic-bezier(0.2, 0, 0, 1);
+  /* Atmospheric wash — subtle blue depth, not purple glow */
+  --atmosphere-top: hsl(214 40% 18% / 0.35);
+  --atmosphere-mid: hsl(0 0% 12.5% / 0);
+  --atmosphere-spot: hsl(214 89% 51% / 0.06);
+
+  /* Hospitable motion — calm ease-out, still snappy enough for UI */
+  --motion-duration: 180ms;
+  --motion-duration-slow: 320ms;
+  --motion-duration-enter: 420ms;
+  --motion-easing: cubic-bezier(0.22, 1, 0.36, 1);
+  --motion-easing-emphasized: cubic-bezier(0.2, 0, 0, 1);
+  --motion-stagger: 45ms;
 }

@@ -51,9 +51,10 @@ const config: Config = {
         lg: "var(--radius-lg)",
         md: "var(--radius)",
         sm: "calc(var(--radius) - 2px)",
+        xl: "var(--radius-xl)",
       },
       fontFamily: {
-        sans: ["var(--font-geist-sans)", "system-ui", "sans-serif"],
+        sans: ["var(--font-plus-jakarta)", "system-ui", "sans-serif"],
         mono: ["var(--font-geist-mono)", "monospace"],
       },
       boxShadow: {
@@ -62,11 +63,13 @@ const config: Config = {
         "elev-3": "var(--elevation-3)",
       },
       transitionDuration: {
-        md: "150ms",
-        "md-slow": "240ms",
+        md: "180ms",
+        "md-slow": "320ms",
+        enter: "420ms",
       },
       transitionTimingFunction: {
-        md: "cubic-bezier(0.2, 0, 0, 1)",
+        md: "cubic-bezier(0.22, 1, 0.36, 1)",
+        "md-emphasized": "cubic-bezier(0.2, 0, 0, 1)",
       },
     },
   },
