@@ -6,6 +6,9 @@
 #   ./scripts/vps-up.sh api          # api only
 #   ./scripts/vps-up.sh all          # full stack (default)
 #
+# Phone / Tailscale MagicDNS (bakes NEXT_PUBLIC_API_URL + health checks):
+#   ./scripts/vps-tailscale.sh debi9.tail8175e6.ts.net
+#
 # Unsets COMPOSE_FILE / COMPOSE_PROFILES (stale .env or shell can pull in
 # docker-compose.ollama.yml), strips leftover ollama from override, removes
 # leftover containers, points API at host.docker.internal, then up --build.

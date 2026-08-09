@@ -15,7 +15,12 @@ import {
   type OllamaHealth,
   type ProfileRegistry,
 } from "@/lib/api-client";
-import { getStoredProfileId, getStoredApiBaseUrl, setStoredApiBaseUrl, getPlatform } from "@/lib/platform";
+import {
+  getStoredProfileId,
+  getStoredApiBaseUrl,
+  normalizeApiBaseUrl,
+  getPlatform,
+} from "@/lib/platform";
 import { getActiveProfileId, logoutToProfiles } from "@/lib/session";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -49,6 +54,8 @@ const emptyCeo: CeoProfile = {
 
 export default function SettingsPage() {
   const [apiUrl, setApiUrl] = useState("");
+  const [apiNote, setApiNote] = useState<string | null>(null);
+  const [apiTesting, setApiTesting] = useState(false);
   const [license, setLicense] = useState<LicenseInfo | null>(null);
   const [profileName, setProfileName] = useState("");
   const [saved, setSaved] = useState(false);
@@ -109,11 +116,41 @@ export default function SettingsPage() {
     void refreshMemory();
   }, []);
 
-  const saveApiUrl = () => {
-    setStoredApiBaseUrl(apiUrl);
-    setApiBaseUrl(apiUrl);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+  const saveApiUrl = async () => {
+    const normalized = normalizeApiBaseUrl(apiUrl);
+    if (!normalized) {
+      setApiNote("Enter a URL like http://debi9.tail8175e6.ts.net:4000 (no trailing slash).");
+      return;
+    }
+    setApiUrl(normalized);
+    setApiBaseUrl(normalized);
+    setApiTesting(true);
+    setApiNote(null);
+    setSaved(false);
+    try {
+      const res = await fetch(`${normalized}/health`, { method: "GET" });
+      if (!res.ok) {
+        throw new Error(`Health check returned ${res.status}`);
+      }
+      const body = (await res.json()) as { ok?: boolean };
+      if (!body.ok) throw new Error("Health check did not return ok");
+      setSaved(true);
+      setApiNote(`Connected to ${normalized}. Reloading so all pages use this API…`);
+      window.setTimeout(() => {
+        window.location.reload();
+      }, 600);
+    } catch (err) {
+      setApiNote(
+        `${err instanceof Error ? err.message : "Failed to fetch"} — URL saved anyway. ` +
+          `On phone use MagicDNS FQDN http://HOST.tailnet.ts.net:4000 (no trailing slash). ` +
+          `Clear site data if the build baked a wrong NEXT_PUBLIC_API_URL.`,
+      );
+      // Still persist so override wins over a bad baked-in env after reload
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+    } finally {
+      setApiTesting(false);
+    }
   };
 
   const saveOllamaHost = async () => {
@@ -202,11 +239,29 @@ export default function SettingsPage() {
             <Server className="h-4 w-4 text-primary" />
             API Server
           </CardTitle>
-          <CardDescription>Node sidecar endpoint (default http://localhost:4000)</CardDescription>
+          <CardDescription>
+            Overrides the baked-in build URL (localStorage). Phone via Tailscale:{" "}
+            <span className="font-mono text-foreground">http://debi9.tail8175e6.ts.net:4000</span> — no
+            trailing slash. Takes effect even when NEXT_PUBLIC_API_URL was wrong at image build.
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <Input value={apiUrl} onChange={(e) => setApiUrl(e.target.value)} placeholder="http://localhost:4000" />
-          <Button onClick={saveApiUrl}>{saved ? "Saved!" : "Save API URL"}</Button>
+          <Input
+            value={apiUrl}
+            onChange={(e) => setApiUrl(e.target.value)}
+            placeholder="http://debi9.tail8175e6.ts.net:4000"
+            inputMode="url"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+          />
+          <Button onClick={() => void saveApiUrl()} disabled={apiTesting || !apiUrl.trim()}>
+            {apiTesting ? "Testing…" : saved ? "Saved!" : "Save & test API URL"}
+          </Button>
+          {apiNote ? <p className="text-xs text-muted-foreground">{apiNote}</p> : null}
+          <p className="text-xs text-muted-foreground">
+            Active: <span className="font-mono text-foreground">{getApiBaseUrl()}</span>
+          </p>
         </CardContent>
       </Card>
 

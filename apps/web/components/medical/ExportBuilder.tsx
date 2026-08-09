@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { FileDown } from "lucide-react";
-import { apiGet, getApiBaseUrl, getProfileId } from "@/lib/api-client";
+import { apiGet, apiUrl, getProfileId } from "@/lib/api-client";
 import type { ComplaintLog } from "@/lib/api-client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -51,7 +51,7 @@ export function ExportBuilder() {
         .filter((c) => selected.has(c.id))
         .flatMap((c) => c.analyses?.map((a) => a.id) ?? []);
 
-      const res = await fetch(`${getApiBaseUrl()}/medical/export`, {
+      const res = await fetch(apiUrl("/medical/export"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

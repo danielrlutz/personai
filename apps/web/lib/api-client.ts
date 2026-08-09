@@ -2,6 +2,7 @@ import {
   clearStoredProfileId,
   getStoredApiBaseUrl,
   getStoredProfileId,
+  normalizeApiBaseUrl,
   setStoredApiBaseUrl,
   setStoredProfileId,
 } from "./platform";
@@ -10,6 +11,9 @@ const DEFAULT_API_BASE = "http://localhost:4000";
 
 /** undefined = use storage; null = explicitly logged out; string = active override */
 let profileIdOverride: string | null | undefined = undefined;
+
+/** In-memory override so Settings save takes effect before next full reload. */
+let apiBaseUrlOverride: string | null | undefined = undefined;
 
 export class ApiError extends Error {
   constructor(
@@ -22,17 +26,37 @@ export class ApiError extends Error {
   }
 }
 
+function resolveEnvApiBase(): string {
+  return normalizeApiBaseUrl(process.env.NEXT_PUBLIC_API_URL ?? "") ?? DEFAULT_API_BASE;
+}
+
 export function getApiBaseUrl(): string {
   if (typeof window !== "undefined") {
+    if (apiBaseUrlOverride !== undefined && apiBaseUrlOverride !== null) {
+      return apiBaseUrlOverride;
+    }
     const stored = getStoredApiBaseUrl();
     if (stored) return stored;
   }
-  return process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") ?? DEFAULT_API_BASE;
+  return resolveEnvApiBase();
 }
 
 export function setApiBaseUrl(url: string): void {
   if (typeof window === "undefined") return;
-  setStoredApiBaseUrl(url);
+  const normalized = normalizeApiBaseUrl(url);
+  apiBaseUrlOverride = normalized;
+  if (normalized) {
+    setStoredApiBaseUrl(normalized);
+  } else {
+    setStoredApiBaseUrl("");
+  }
+}
+
+/** Join base + path without double slashes; path should start with `/`. */
+export function apiUrl(path: string): string {
+  const base = getApiBaseUrl().replace(/\/+$/, "");
+  const p = path.startsWith("/") ? path : `/${path}`;
+  return `${base}${p}`;
 }
 
 export function getProfileId(): string | null {
@@ -83,7 +107,7 @@ async function parseResponse<T>(res: Response): Promise<T> {
 }
 
 export async function apiGet<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${getApiBaseUrl()}${path}`, {
+  const res = await fetch(apiUrl(path), {
     ...init,
     method: "GET",
     headers: buildHeaders(init?.headers),
@@ -92,7 +116,7 @@ export async function apiGet<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export async function apiPost<T>(path: string, body?: unknown, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${getApiBaseUrl()}${path}`, {
+  const res = await fetch(apiUrl(path), {
     ...init,
     method: "POST",
     headers: buildHeaders(init?.headers),
@@ -102,7 +126,7 @@ export async function apiPost<T>(path: string, body?: unknown, init?: RequestIni
 }
 
 export async function apiPatch<T>(path: string, body?: unknown, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${getApiBaseUrl()}${path}`, {
+  const res = await fetch(apiUrl(path), {
     ...init,
     method: "PATCH",
     headers: buildHeaders(init?.headers),
@@ -112,7 +136,7 @@ export async function apiPatch<T>(path: string, body?: unknown, init?: RequestIn
 }
 
 export async function apiPut<T>(path: string, body?: unknown, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${getApiBaseUrl()}${path}`, {
+  const res = await fetch(apiUrl(path), {
     ...init,
     method: "PUT",
     headers: buildHeaders(init?.headers),
@@ -122,7 +146,7 @@ export async function apiPut<T>(path: string, body?: unknown, init?: RequestInit
 }
 
 export async function apiDelete<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${getApiBaseUrl()}${path}`, {
+  const res = await fetch(apiUrl(path), {
     ...init,
     method: "DELETE",
     headers: buildHeaders(init?.headers),
@@ -133,7 +157,7 @@ export async function apiDelete<T>(path: string, init?: RequestInit): Promise<T>
 export async function apiUpload<T>(path: string, formData: FormData, init?: RequestInit): Promise<T> {
   const headers = buildHeaders(init?.headers);
   headers.delete("Content-Type");
-  const res = await fetch(`${getApiBaseUrl()}${path}`, {
+  const res = await fetch(apiUrl(path), {
     ...init,
     method: "POST",
     headers,
@@ -153,7 +177,7 @@ export async function streamSSE(path: string, options: SSEHandler & { method?: s
   const headers = buildHeaders();
   headers.set("Accept", "text/event-stream");
 
-  const res = await fetch(`${getApiBaseUrl()}${path}`, {
+  const res = await fetch(apiUrl(path), {
     method: options.method ?? "GET",
     headers,
     body: options.body !== undefined ? JSON.stringify(options.body) : undefined,

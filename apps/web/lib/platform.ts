@@ -39,14 +39,32 @@ export function clearStoredProfileId(): void {
   window.dispatchEvent(new CustomEvent("personai:profile-changed", { detail: { profileId: null } }));
 }
 
+/** Normalize API base: trim, drop trailing slash(es). Empty → null. */
+export function normalizeApiBaseUrl(url: string): string | null {
+  const trimmed = url.trim().replace(/\/+$/, "");
+  return trimmed.length > 0 ? trimmed : null;
+}
+
 export function getStoredApiBaseUrl(): string | null {
   if (typeof window === "undefined") return null;
-  return localStorage.getItem(API_URL_STORAGE_KEY);
+  const raw = localStorage.getItem(API_URL_STORAGE_KEY);
+  if (!raw) return null;
+  const normalized = normalizeApiBaseUrl(raw);
+  // Heal legacy values stored with a trailing slash
+  if (normalized && normalized !== raw) {
+    localStorage.setItem(API_URL_STORAGE_KEY, normalized);
+  }
+  return normalized;
 }
 
 export function setStoredApiBaseUrl(url: string): void {
   if (typeof window === "undefined") return;
-  localStorage.setItem(API_URL_STORAGE_KEY, url.replace(/\/$/, ""));
+  const normalized = normalizeApiBaseUrl(url);
+  if (!normalized) {
+    localStorage.removeItem(API_URL_STORAGE_KEY);
+    return;
+  }
+  localStorage.setItem(API_URL_STORAGE_KEY, normalized);
 }
 
 export { PROFILE_STORAGE_KEY, API_URL_STORAGE_KEY };

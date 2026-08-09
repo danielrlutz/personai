@@ -168,3 +168,4 @@ fi
 echo "✓ API up without compose ollama"
 echo "  OLLAMA_HOST should be host.docker.internal — check: grep OLLAMA_HOST .env"
 echo "  Health: curl -sS http://127.0.0.1:4000/health || curl -sS http://127.0.0.1:\${API_PORT:-4000}/health"
+echo "  Phone / Tailscale (api+web, MagicDNS bake-in): ./scripts/vps-tailscale.sh debi9.tail8175e6.ts.net"

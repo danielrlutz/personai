@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { FileText } from "lucide-react";
-import { getApiBaseUrl, getProfileId } from "@/lib/api-client";
+import { apiUrl, getProfileId } from "@/lib/api-client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,7 +33,7 @@ export function CareerPdfPanel() {
         })
         .filter((s) => s.heading);
 
-      const res = await fetch(`${getApiBaseUrl()}/career/pdf`, {
+      const res = await fetch(apiUrl("/career/pdf"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

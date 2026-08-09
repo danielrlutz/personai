@@ -201,24 +201,31 @@ docker compose -f docker-compose.prod.yml -f docker-compose.ollama.yml up -d --b
 
 Edit `Caddyfile` hostnames before production TLS.
 
-### Tailscale / MagicDNS (phone → VPS `:3000`)
+### Phone via Tailscale (MagicDNS)
 
-The web image is a **static Next.js export**. `NEXT_PUBLIC_API_URL` is baked in at **image build** time — changing `.env` alone is not enough; rebuild `web`.
-
-Prefer the **full MagicDNS FQDN** (Android often cannot resolve short Tailscale names):
+One-liner after `git` is current (prefer full MagicDNS FQDN — Android often fails on short names like `debi9`):
 
 ```bash
-cd /etc/personaios   # or ~/personai
-# short ok on some clients:  http://debi9:4000
-# prefer FQDN on phones:     http://debi9.tail8175e6.ts.net:4000
-export NEXT_PUBLIC_API_URL=http://debi9.tail8175e6.ts.net:4000
-# persist in .env as well
-grep -q '^NEXT_PUBLIC_API_URL=' .env \
-  && sed -i "s|^NEXT_PUBLIC_API_URL=.*|NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}|" .env \
-  || echo "NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}" >> .env
-
-COMPOSE_FILE= COMPOSE_PROFILES= docker compose up -d --build web
+cd /etc/personaios && git fetch && git reset --hard origin/main
+./scripts/vps-tailscale.sh debi9.tail8175e6.ts.net
+# force clean rebuild if needed:
+# NO_CACHE=1 ./scripts/vps-tailscale.sh debi9.tail8175e6.ts.net
 ```
+
+What the script does: sets `NEXT_PUBLIC_API_URL=http://HOST:4000` (no trailing slash), `OLLAMA_HOST=http://host.docker.internal:11434`, clears `COMPOSE_FILE` / `COMPOSE_PROFILES`, rebuilds **api + web**, then health-checks `:4000/health` (and `/health/`) plus `:3000`.
+
+| Surface | URL |
+|---------|-----|
+| Phone browser / PWA | `http://debi9.tail8175e6.ts.net:3000` |
+| API (Settings override) | `http://debi9.tail8175e6.ts.net:4000` |
+
+**On the phone after rebuild:**
+
+1. Chrome → site settings for that origin → **Delete site data** (clears bad Service Worker / old shell). If installed as PWA, uninstall the shortcut first.
+2. Open `http://debi9.tail8175e6.ts.net:3000`
+3. **Settings → API Server** → set `http://debi9.tail8175e6.ts.net:4000` (**no trailing slash**) → Save & test. This localStorage override wins even if the image was built with `localhost:4000`.
+
+The web image is a **static Next.js export** — `NEXT_PUBLIC_API_URL` is baked at **image build** time; `.env` alone is not enough without rebuild (or the Settings override above).
 
 PersonAI routes are `/`, `/profiles/`, `/dashboard/`, etc. There is **no** `/auth` route. There are **no** SvelteKit `/_app/immutable/...` assets — only Next `/_next/static/...`.
 
@@ -245,12 +252,7 @@ curl -sI http://127.0.0.1:3000/api/config | head -8
 curl -s http://127.0.0.1:3000/_app/version.json | head -c 200; echo
 ```
 
-3. On **Android Chrome** for that origin (`http://debi9….ts.net:3000`):
-   - Menu → **Delete site data** / clear storage for that site, **or**
-   - `chrome://serviceworker-internals` → unregister workers for that origin, then hard refresh
-   - If installed as PWA: uninstall the shortcut, clear site data, reopen the URL
-
-4. Rebuild web with MagicDNS API URL (section above), then reopen the site.
+3. Clear phone site data (section above), then re-run `./scripts/vps-tailscale.sh …` if needed.
 
 ## Desktop (Tauri)
 

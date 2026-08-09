@@ -44,6 +44,12 @@ async function main() {
   let r = await req("GET", "/health");
   ok("GET /health", r.status === 200 && r.json?.ok);
 
+  r = await req("GET", "/health/");
+  ok("GET /health/ (trailing slash)", r.status === 200 && r.json?.ok);
+
+  r = await req("GET", "/profiles/");
+  ok("GET /profiles/ (trailing slash)", r.status === 200 && Array.isArray(r.json?.profiles));
+
   r = await req("GET", "/ollama/health");
   ok("GET /ollama/health", r.status === 200);
 

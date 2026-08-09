@@ -12,8 +12,20 @@ import fs from "node:fs";
 async function bootstrap() {
   fs.mkdirSync(config.dataDir, { recursive: true });
 
-  const app = Fastify({ logger: true, bodyLimit: 50 * 1024 * 1024 });
-  await app.register(cors, { origin: true });
+  // ignoreTrailingSlash: phones / proxies often hit /health/ or /profiles/
+  const app = Fastify({
+    logger: true,
+    bodyLimit: 50 * 1024 * 1024,
+    ignoreTrailingSlash: true,
+  });
+  // Reflect request Origin (Tailscale MagicDNS :3000 → :4000, localhost, etc.)
+  await app.register(cors, {
+    origin: true,
+    methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Accept", "X-Profile-Id", "Authorization"],
+    exposedHeaders: ["Content-Type"],
+    maxAge: 86400,
+  });
   await app.register(multipart, { limits: { fileSize: 40 * 1024 * 1024 } });
   // Allow empty JSON POSTs (e.g. /briefing/generate)
   app.addContentTypeParser("application/json", { parseAs: "string" }, (req, body, done) => {
