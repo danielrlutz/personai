@@ -19,14 +19,14 @@ import { Button } from "@/components/ui/button";
 import { OllamaStatusIndicator } from "@/components/shared/OllamaStatusIndicator";
 
 const navItems = [
-  { href: "/dashboard", label: "Home", icon: LayoutDashboard },
-  { href: "/life", label: "Life", icon: Sparkles },
-  { href: "/team", label: "Team", icon: Users },
-  { href: "/ingest", label: "Archive", icon: Upload },
-  { href: "/finance", label: "Finance", icon: Wallet },
-  { href: "/legal", label: "Legal", icon: Scale },
-  { href: "/medical", label: "Medical", icon: HeartPulse },
-  { href: "/settings", label: "Settings", icon: Settings },
+  { href: "/dashboard/", label: "Home", icon: LayoutDashboard },
+  { href: "/life/", label: "Life", icon: Sparkles },
+  { href: "/team/", label: "Team", icon: Users },
+  { href: "/ingest/", label: "Archive", icon: Upload },
+  { href: "/finance/", label: "Finance", icon: Wallet },
+  { href: "/legal/", label: "Legal", icon: Scale },
+  { href: "/medical/", label: "Medical", icon: HeartPulse },
+  { href: "/settings/", label: "Settings", icon: Settings },
 ];
 
 interface SidebarProps {
@@ -46,7 +46,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
     >
       <div className="flex h-[var(--header-height)] items-center justify-between border-b border-border/80 px-3">
         {!collapsed && (
-          <Link href="/dashboard" className="flex items-center gap-2.5 min-w-0">
+          <Link href="/dashboard/" className="flex items-center gap-2.5 min-w-0">
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground">
               <span className="text-sm font-medium">P</span>
             </div>
@@ -60,7 +60,8 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
 
       <nav className={cn("flex-1 space-y-1 p-2", collapsed && "px-1.5")}>
         {navItems.map(({ href, label, icon: Icon }) => {
-          const active = pathname === href || pathname.startsWith(`${href}/`);
+          const base = href.replace(/\/+$/, "");
+          const active = pathname === href || pathname === base || pathname.startsWith(`${base}/`);
           return (
             <Link
               key={href}

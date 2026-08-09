@@ -8,7 +8,7 @@ export default function HomePage() {
   const router = useRouter();
   useEffect(() => {
     const profileId = requireProfile();
-    router.replace(profileId ? "/dashboard" : "/profiles");
+    router.replace(profileId ? "/dashboard/" : "/profiles/");
   }, [router]);
   return (
     <div className="flex min-h-screen items-center justify-center bg-background">

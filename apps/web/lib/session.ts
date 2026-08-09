@@ -1,8 +1,9 @@
 import { apiPost, getProfileId, setProfileId } from "./api-client";
 import { getStoredProfileId } from "./platform";
 
-const PROFILES_PATH = "/profiles";
-const HOME_PATH = "/dashboard";
+/** Trailing slashes match next.config trailingSlash + static export dirs. */
+const PROFILES_PATH = "/profiles/";
+const HOME_PATH = "/dashboard/";
 
 /** Current client profile id (in-memory override or storage). */
 export function getActiveProfileId(): string | null {

@@ -12,16 +12,16 @@ import { logoutToProfiles, requireProfile } from "@/lib/session";
 import { cn } from "@/lib/utils";
 
 const commandItems = [
-  { label: "Home", href: "/dashboard", keys: "G D" },
-  { label: "Life / Personal", href: "/life", keys: "G E" },
-  { label: "Pocket team", href: "/team", keys: "G T" },
-  { label: "Archive documents", href: "/ingest", keys: "G A" },
-  { label: "Finance overview", href: "/finance", keys: "G F" },
-  { label: "Transactions", href: "/finance/transactions", keys: "G X" },
-  { label: "CFO mode", href: "/team?specialist=cfo", keys: "G C" },
-  { label: "Legal tasks", href: "/legal", keys: "G L" },
-  { label: "Medical log", href: "/medical", keys: "G M" },
-  { label: "Settings", href: "/settings", keys: "G S" },
+  { label: "Home", href: "/dashboard/", keys: "G D" },
+  { label: "Life / Personal", href: "/life/", keys: "G E" },
+  { label: "Pocket team", href: "/team/", keys: "G T" },
+  { label: "Archive documents", href: "/ingest/", keys: "G A" },
+  { label: "Finance overview", href: "/finance/", keys: "G F" },
+  { label: "Transactions", href: "/finance/transactions/", keys: "G X" },
+  { label: "CFO mode", href: "/team/?specialist=cfo", keys: "G C" },
+  { label: "Legal tasks", href: "/legal/", keys: "G L" },
+  { label: "Medical log", href: "/medical/", keys: "G M" },
+  { label: "Settings", href: "/settings/", keys: "G S" },
   { label: "Switch profile", href: "__logout__", keys: "G P" },
 ];
 
@@ -47,7 +47,7 @@ export function AppShell({ children }: AppShellProps) {
     const profileId = requireProfile();
     if (!profileId) {
       setGate("redirecting");
-      router.replace("/profiles");
+      router.replace("/profiles/");
       return;
     }
     setProfileId(profileId);
@@ -57,7 +57,7 @@ export function AppShell({ children }: AppShellProps) {
       const detail = (event as CustomEvent<{ profileId: string | null }>).detail;
       if (!detail?.profileId) {
         setGate("redirecting");
-        router.replace("/profiles");
+        router.replace("/profiles/");
       }
     };
     window.addEventListener("personai:profile-changed", onProfileChanged);

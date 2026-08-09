@@ -229,6 +229,8 @@ The web image is a **static Next.js export** — `NEXT_PUBLIC_API_URL` is baked 
 
 PersonAI routes are `/`, `/profiles/`, `/dashboard/`, etc. There is **no** `/auth` route. There are **no** SvelteKit `/_app/immutable/...` assets — only Next `/_next/static/...`.
 
+Login navigates with a **relative** `/dashboard/` (trailing slash). nginx uses `absolute_redirect off` so directory redirects never rewrite the phone onto `:80` / `localhost` (that looked like `ERR_CONNECTION_REFUSED` after profile select).
+
 ### Troubleshooting: `/_app/immutable` 404 or redirect to `/auth`
 
 If nginx/web logs show `/_app/immutable/nodes/...` 404s, or the phone navigates to `/auth?redirect=...`, the browser is almost certainly running a **different app** (or an old Service Worker / site cache) on the same MagicDNS origin — not PersonAI.

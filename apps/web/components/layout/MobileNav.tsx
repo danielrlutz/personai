@@ -6,12 +6,12 @@ import { LayoutDashboard, Sparkles, Users, Upload, Wallet, HeartPulse } from "lu
 import { cn } from "@/lib/utils";
 
 const items = [
-  { href: "/dashboard", label: "Home", icon: LayoutDashboard },
-  { href: "/life", label: "Life", icon: Sparkles },
-  { href: "/team", label: "Team", icon: Users },
-  { href: "/ingest", label: "Archive", icon: Upload },
-  { href: "/finance", label: "Finance", icon: Wallet },
-  { href: "/medical", label: "Medical", icon: HeartPulse },
+  { href: "/dashboard/", label: "Home", icon: LayoutDashboard },
+  { href: "/life/", label: "Life", icon: Sparkles },
+  { href: "/team/", label: "Team", icon: Users },
+  { href: "/ingest/", label: "Archive", icon: Upload },
+  { href: "/finance/", label: "Finance", icon: Wallet },
+  { href: "/medical/", label: "Medical", icon: HeartPulse },
 ];
 
 export function MobileNav() {
@@ -24,7 +24,8 @@ export function MobileNav() {
     >
       <ul className="flex items-stretch justify-around px-1 pt-1">
         {items.map(({ href, label, icon: Icon }) => {
-          const active = pathname === href || pathname.startsWith(`${href}/`);
+          const base = href.replace(/\/+$/, "");
+          const active = pathname === href || pathname === base || pathname.startsWith(`${base}/`);
           return (
             <li key={href} className="flex-1">
               <Link

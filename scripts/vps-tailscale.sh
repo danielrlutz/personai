@@ -210,6 +210,21 @@ curl -sS "http://127.0.0.1:4000/health/" || true
 echo ""
 echo "Web / (expect HTML, not empty):"
 curl -sS -o /dev/null -w "HTTP %{http_code}\n" "http://127.0.0.1:3000/" || true
+echo "Web /dashboard (no slash) → Location must be relative /dashboard/ (not :80):"
+dash_hdrs="$(curl -sSI "http://127.0.0.1:3000/dashboard" 2>/dev/null || true)"
+echo "$dash_hdrs" | head -8
+if echo "$dash_hdrs" | grep -qiE '^Location:[[:space:]]*https?://[^/]+:80/'; then
+  echo "x FAIL: absolute redirect to :80 — phone would get ERR_CONNECTION_REFUSED" >&2
+  exit 1
+fi
+if echo "$dash_hdrs" | grep -qiE '^Location:[[:space:]]*https?://(localhost|127\.0\.0\.1)'; then
+  echo "x FAIL: redirect to localhost — phone would get ERR_CONNECTION_REFUSED" >&2
+  exit 1
+fi
+loc_line="$(echo "$dash_hdrs" | grep -i '^Location:' | head -1 || true)"
+if [[ -n "$loc_line" ]] && ! echo "$loc_line" | grep -qiE '^Location:[[:space:]]*/dashboard/?'; then
+  echo "! Unexpected Location (want relative /dashboard/): $loc_line"
+fi
 echo "Web /_app (expect real 404, not index.html):"
 curl -sS -o /dev/null -w "HTTP %{http_code}\n" "http://127.0.0.1:3000/_app/immutable/x.js" || true
 body_snip="$(curl -sS "http://127.0.0.1:3000/_app/version.json" 2>/dev/null | head -c 120 || true)"

@@ -77,7 +77,7 @@ export function BriefingActionItems({ snapshot }: BriefingActionItemsProps) {
   if (actions.length === 0) {
     actions.push({
       label: "All caught up — review your dashboard",
-      href: "/dashboard",
+      href: "/dashboard/",
       done: true,
     });
   }
