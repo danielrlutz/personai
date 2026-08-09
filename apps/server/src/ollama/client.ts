@@ -127,6 +127,49 @@ export async function probeOllamaHost(host: string, timeoutMs = PROBE_TIMEOUT_MS
   }
 }
 
+/** Human-readable Ollama HTTP failures for SSE / API clients. */
+export function formatOllamaHttpError(
+  kind: "chat" | "stream" | "vision",
+  status: number,
+  bodyText: string,
+  host: string,
+  model: string,
+): string {
+  const snippet = bodyText.trim().replace(/\s+/g, " ").slice(0, 240);
+  const lower = snippet.toLowerCase();
+  if (status === 404 || /not found|no such model|model .+ does not exist/i.test(snippet)) {
+    return `Ollama model missing: "${model}" on ${host}. Pull it (ollama pull ${model}) or change the reasoning/vision model in settings.`;
+  }
+  if (/out of memory|vram|cuda|insufficient memory|requires more/i.test(lower)) {
+    return `Ollama VRAM/memory exhausted for "${model}" on ${host}. Unload other models or use a smaller model. ${snippet}`;
+  }
+  if (!status || status === 0) {
+    return `Ollama offline or unreachable at ${host} (${kind}). Is Ollama running?`;
+  }
+  return `Ollama ${kind} failed (${status}) for "${model}" at ${host}: ${snippet || "no details"}`;
+}
+
+/** Map connection / runtime errors to readable chat failures. */
+export function humanizeOllamaError(err: unknown, host?: string, model?: string): string {
+  const hostLabel = host ? ` at ${host}` : "";
+  const modelLabel = model ? ` (model ${model})` : "";
+  if (err instanceof Error) {
+    const msg = err.message;
+    if (/^Ollama /i.test(msg)) return msg;
+    if (isConnectionError(err) || /fetch failed|econnrefused/i.test(msg)) {
+      return `Ollama offline or unreachable${hostLabel}${modelLabel}. Start Ollama on the host or fix OLLAMA_HOST.`;
+    }
+    if (/timed?\s*out|timeout|aborterror/i.test(msg)) {
+      return `Ollama timed out${hostLabel}${modelLabel}. The model may be loading or overloaded.`;
+    }
+    if (/vram|out of memory|cuda/i.test(msg)) {
+      return `Ollama VRAM/memory issue${modelLabel}: ${msg}`;
+    }
+    return msg;
+  }
+  return String(err);
+}
+
 function isConnectionError(err: unknown): boolean {
   if (!(err instanceof Error)) return false;
   const msg = err.message.toLowerCase();
@@ -384,7 +427,7 @@ export async function chatCompletion(opts: {
       signal: AbortSignal.timeout(opts.timeoutMs ?? DEFAULT_CHAT_TIMEOUT_MS),
     });
     if (!res.ok) {
-      throw new Error(`Ollama chat failed: ${res.status} ${await res.text()}`);
+      throw new Error(formatOllamaHttpError("chat", res.status, await res.text(), host, opts.model));
     }
     const data = (await res.json()) as { message?: { content?: string } };
     return data.message?.content ?? "";
@@ -412,7 +455,10 @@ async function* streamChatOnce(opts: {
     signal: opts.signal,
   });
   if (!res.ok || !res.body) {
-    throw new Error(`Ollama stream failed: ${res.status} ${await res.text()}`);
+    const bodyText = res.body ? await res.text() : "no response body";
+    throw new Error(
+      formatOllamaHttpError("stream", res.status, bodyText, opts.host, opts.model),
+    );
   }
 
   markHostHealthy(opts.host);
@@ -490,7 +536,9 @@ export async function visionExtract(opts: {
       signal: AbortSignal.timeout(opts.timeoutMs ?? DEFAULT_VISION_TIMEOUT_MS),
     });
     if (!res.ok) {
-      throw new Error(`Ollama vision failed: ${res.status} ${await res.text()}`);
+      throw new Error(
+        formatOllamaHttpError("vision", res.status, await res.text(), host, opts.model),
+      );
     }
     const data = (await res.json()) as { message?: { content?: string } };
     return data.message?.content ?? "{}";

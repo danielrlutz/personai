@@ -1,6 +1,10 @@
 /** Global toast/snackbar store — usable outside React (API client, outbox). */
 
+import { describeApiFailure, type DescribedFailure } from "./api-errors";
+
 export type ToastType = "error" | "success" | "info" | "warning";
+export type { DescribedFailure };
+export { describeApiFailure };
 
 export interface ToastItem {
   id: string;
@@ -133,54 +137,18 @@ export const toast = {
   warning: makeHelper("warning"),
 };
 
-function isApiErrorLike(
-  err: unknown,
-): err is { name: string; message: string; status: number } {
-  if (typeof err !== "object" || err === null) return false;
-  const o = err as Record<string, unknown>;
-  return (
-    o.name === "ApiError" &&
-    typeof o.message === "string" &&
-    typeof o.status === "number"
-  );
-}
-
 /** Readable snackbar copy for fetch / ApiError failures. */
-export function notifyApiFailure(err: unknown, options?: { sticky?: boolean; title?: string }): void {
-  const { message, sticky } = describeApiFailure(err);
+export function notifyApiFailure(
+  err: unknown,
+  options?: { sticky?: boolean; title?: string; path?: string; apiBaseUrl?: string },
+): void {
+  const { message, sticky } = describeApiFailure(err, {
+    path: options?.path,
+    apiBaseUrl: options?.apiBaseUrl,
+  });
   toast.error(message, {
     title: options?.title ?? "Request failed",
     sticky: options?.sticky ?? sticky,
     dedupeKey: `api:${message}`,
   });
-}
-
-export function describeApiFailure(err: unknown): { message: string; sticky: boolean } {
-  if (err instanceof TypeError) {
-    return {
-      message: "Couldn't reach the API (Failed to fetch). Check connection and Settings → API URL.",
-      sticky: true,
-    };
-  }
-
-  if (isApiErrorLike(err)) {
-    const status = err.status;
-    const base = err.message.trim() || `Request failed (${status})`;
-    if (status >= 500 || status === 401 || status === 403) {
-      return { message: base, sticky: true };
-    }
-    return { message: base, sticky: false };
-  }
-
-  if (err instanceof Error) {
-    if (/failed to fetch|networkerror|load failed|fetch failed/i.test(err.message)) {
-      return {
-        message: "Couldn't reach the API (Failed to fetch). Check connection and Settings → API URL.",
-        sticky: true,
-      };
-    }
-    return { message: err.message || "Something went wrong", sticky: false };
-  }
-
-  return { message: "Something went wrong", sticky: false };
 }

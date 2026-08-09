@@ -279,7 +279,9 @@ class OutboxQueue {
       await this.removeOp(inflight);
       this.emit({ kind: "changed", ops: this.snapshot() });
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Operation failed";
+      const { describeApiFailure } = await import("@/lib/api-errors");
+      const path = inflight.type === "team-chat" ? "/team/chat/stream" : "/ingest/upload";
+      const message = describeApiFailure(err, { path }).message;
       if (inflight.type === "team-chat") {
         this.emit({
           kind: "team-chat-progress",

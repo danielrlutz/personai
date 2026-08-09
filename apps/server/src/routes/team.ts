@@ -6,7 +6,7 @@ import {
   getSpecialist,
   resolveSpecialistId,
 } from "../specialists/roster.js";
-import { resolveOllamaHost, streamChat } from "../ollama/client.js";
+import { humanizeOllamaError, resolveOllamaHost, streamChat } from "../ollama/client.js";
 import { vramLock } from "../ollama/vram-lock.js";
 import {
   HISTORY_WINDOW,
@@ -94,8 +94,9 @@ export async function registerTeamRoutes(app: FastifyInstance): Promise<void> {
       sseWrite(reply, "context", { waiting: true, reason });
     });
     let full = "";
+    let ollamaHost = "";
     try {
-      const host = await resolveOllamaHost();
+      ollamaHost = await resolveOllamaHost();
       // Recent N messages (newest first from DB), then chronological for the model.
       const historyDesc = await prisma.chatMessage.findMany({
         where: { sessionId: session.id },
@@ -105,7 +106,7 @@ export async function registerTeamRoutes(app: FastifyInstance): Promise<void> {
       const history = historyDesc.reverse();
 
       for await (const token of streamChat({
-        host,
+        host: ollamaHost,
         model: config.reasoningModel,
         messages: [
           {
@@ -140,9 +141,8 @@ export async function registerTeamRoutes(app: FastifyInstance): Promise<void> {
         specialist: specialistId,
       });
     } catch (err) {
-      sseWrite(reply, "error", {
-        message: err instanceof Error ? err.message : String(err),
-      });
+      const message = humanizeOllamaError(err, ollamaHost || undefined, config.reasoningModel);
+      sseWrite(reply, "error", { message, error: message });
     } finally {
       await release();
       reply.raw.end();

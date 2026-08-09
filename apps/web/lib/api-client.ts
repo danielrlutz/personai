@@ -43,12 +43,20 @@ function splitInit(init?: ApiRequestInit): { request: RequestInit; silent: boole
   return { request, silent: Boolean(silent) };
 }
 
-async function runNotified<T>(fn: () => Promise<T>, silent: boolean): Promise<T> {
+async function runNotified<T>(
+  fn: () => Promise<T>,
+  silent: boolean,
+  path?: string,
+): Promise<T> {
   try {
     return await fn();
   } catch (err) {
-    if (!silent) notifyApiFailure(err);
-    throw err;
+    const described = describeApiFailure(err, { path, apiBaseUrl: getApiBaseUrl() });
+    if (!silent) notifyApiFailure(err, { path, apiBaseUrl: getApiBaseUrl() });
+    if (err instanceof ApiError) {
+      throw new ApiError(described.message, err.status, err.body);
+    }
+    throw new Error(described.message, { cause: err });
   }
 }
 
@@ -195,7 +203,7 @@ export async function apiGet<T>(path: string, init?: ApiRequestInit): Promise<T>
       headers: buildHeaders(request.headers),
     });
     return parseResponse<T>(res, path);
-  }, silent);
+  }, silent, path);
 }
 
 export async function apiPost<T>(path: string, body?: unknown, init?: ApiRequestInit): Promise<T> {
@@ -208,7 +216,7 @@ export async function apiPost<T>(path: string, body?: unknown, init?: ApiRequest
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
     return parseResponse<T>(res, path);
-  }, silent);
+  }, silent, path);
 }
 
 export async function apiPatch<T>(path: string, body?: unknown, init?: ApiRequestInit): Promise<T> {
@@ -221,7 +229,7 @@ export async function apiPatch<T>(path: string, body?: unknown, init?: ApiReques
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
     return parseResponse<T>(res, path);
-  }, silent);
+  }, silent, path);
 }
 
 export async function apiPut<T>(path: string, body?: unknown, init?: ApiRequestInit): Promise<T> {
@@ -234,7 +242,7 @@ export async function apiPut<T>(path: string, body?: unknown, init?: ApiRequestI
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
     return parseResponse<T>(res, path);
-  }, silent);
+  }, silent, path);
 }
 
 export async function apiDelete<T>(path: string, init?: ApiRequestInit): Promise<T> {
@@ -246,7 +254,7 @@ export async function apiDelete<T>(path: string, init?: ApiRequestInit): Promise
       headers: buildHeaders(request.headers),
     });
     return parseResponse<T>(res, path);
-  }, silent);
+  }, silent, path);
 }
 
 export async function apiUpload<T>(path: string, formData: FormData, init?: ApiRequestInit): Promise<T> {
@@ -261,7 +269,7 @@ export async function apiUpload<T>(path: string, formData: FormData, init?: ApiR
       body: formData,
     });
     return parseResponse<T>(res, path);
-  }, silent);
+  }, silent, path);
 }
 
 export type SSEHandler = {
@@ -297,7 +305,7 @@ export async function streamSSE(
   if (!res.ok) {
     let parsedErr: unknown;
     try {
-      await parseResponse<never>(res);
+      await parseResponse<never>(res, path);
     } catch (err) {
       parsedErr = err;
     }

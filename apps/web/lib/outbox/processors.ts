@@ -1,4 +1,5 @@
 import { apiUpload, streamSSE } from "@/lib/api-client";
+import { describeApiFailure, describeStreamError } from "@/lib/api-errors";
 import { idbGetBlob } from "./idb";
 import type {
   IngestUploadPayload,
@@ -71,14 +72,11 @@ async function processTeamChat(op: OutboxOp<"team-chat">, emit: ProcessEmit): Pr
           });
         }
         if (event === "error") {
-          streamError =
-            typeof data === "object" && data && "message" in data
-              ? String((data as { message: unknown }).message)
-              : "Chat error";
+          streamError = describeStreamError(data);
         }
       },
       onError: (err) => {
-        streamError = err.message;
+        streamError = describeApiFailure(err, { path: "/team/chat/stream" }).message;
       },
       onDone: () => {
         if (streamError) {
@@ -86,13 +84,14 @@ async function processTeamChat(op: OutboxOp<"team-chat">, emit: ProcessEmit): Pr
           return;
         }
         if (!assistantContent.trim()) {
-          finish(new Error("No reply received"));
+          finish(new Error("No reply received from the specialist — Ollama may have returned an empty response."));
           return;
         }
         finish();
       },
     }).catch((err) => {
-      finish(err instanceof Error ? err : new Error(String(err)));
+      const message = describeApiFailure(err, { path: "/team/chat/stream" }).message;
+      finish(new Error(message));
     });
   });
 
