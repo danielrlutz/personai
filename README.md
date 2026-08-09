@@ -244,6 +244,8 @@ docker compose -f docker-compose.yml -f docker-compose.ollama.yml up -d --build
 
 ## VPS deploy
 
+**Full step-by-step guide:** [docs/VPS-SETUP.md](docs/VPS-SETUP.md) — prerequisites, `.env` (required or not), first install, updates, Tailscale phone access, verify, troubleshooting.
+
 Prefer `./install.sh` (detects native Ollama and wires `host.docker.internal`).
 
 **Recovery when `:11434` is already in use** (stale profile / override / `COMPOSE_FILE` still starting compose ollama):
@@ -286,10 +288,35 @@ One-liner after `git` is current (prefer full MagicDNS FQDN — Android often fa
 
 ```bash
 cd /etc/personaios && git fetch && git reset --hard origin/main
+./scripts/vps-verify.sh
 ./scripts/vps-tailscale.sh debi9.tail8175e6.ts.net
 # force clean rebuild if needed:
 # NO_CACHE=1 ./scripts/vps-tailscale.sh debi9.tail8175e6.ts.net
+# then unlock password on phone + Settings → API URL if UI still says Failed to fetch
 ```
+
+### VPS verify (“Failed to fetch” checklist)
+
+```bash
+cd /etc/personaios
+./scripts/vps-verify.sh debi9.tail8175e6.ts.net
+```
+
+Paste-ready from the VPS:
+
+```bash
+curl -sS http://127.0.0.1:4000/health
+curl -sS -o /dev/null -w 'web %{http_code}\n' http://127.0.0.1:3000/
+curl -sS http://debi9.tail8175e6.ts.net:4000/health
+curl -sS -o /dev/null -w 'web-ts %{http_code}\n' http://debi9.tail8175e6.ts.net:3000/
+```
+
+Paste-ready on the phone (browser address bar):
+
+- UI: `http://debi9.tail8175e6.ts.net:3000`
+- API health: `http://debi9.tail8175e6.ts.net:4000/health`
+
+If health works but Messages/team chat fails: unlock the profile on `/profiles/` (Bearer session), then Settings → API URL = `http://debi9.tail8175e6.ts.net:4000` (no trailing slash).
 
 What the script does: sets `NEXT_PUBLIC_API_URL=http://HOST:4000` (no trailing slash), `OLLAMA_HOST=http://host.docker.internal:11434`, clears `COMPOSE_FILE` / `COMPOSE_PROFILES`, rebuilds **api + web**, then health-checks `:4000/health` (and `/health/`) plus `:3000`.
 
