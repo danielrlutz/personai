@@ -99,7 +99,7 @@ When prompted:
 3. **Data dir:** `/etc/personaios/data` (persistent — never wiped by updater).
 4. **Ports:** web `3000`, API `4000` (defaults).
 5. **Tier:** `pro` (OCR + team chat).
-6. **Domain/TLS:** leave blank for Tailscale-only HTTP; or set domain + Caddy HTTPS for public internet.
+6. **Domain/TLS:** leave blank for Tailscale-only (use `HTTPS=1 ./scripts/vps-tailscale.sh` later for Chrome PWA install); or set a public domain + Caddy HTTPS.
 7. **Pull models:** yes (if Ollama is up).
 8. **Start stack:** yes.
 
@@ -234,11 +234,17 @@ COMPOSE_PROFILES=
 # Do NOT set COMPOSE_FILE= unless you intentionally want bundled Ollama every time
 
 # --- Web → API URL (baked into web image at BUILD time) ---
-# No trailing slash. Use full MagicDNS FQDN for Android:
+# No trailing slash. Use full MagicDNS FQDN for Android.
+# HTTP (browse-only; Chrome will NOT Install app / PWA):
 NEXT_PUBLIC_API_URL=http://debi9.tail8175e6.ts.net:4000
-# OAuth redirect derivation / server-side links:
 PUBLIC_API_URL=http://debi9.tail8175e6.ts.net:4000
 PUBLIC_WEB_URL=http://debi9.tail8175e6.ts.net:3000
+# HTTPS via Tailscale Serve (PWA-installable) — set by:
+#   HTTPS=1 ./scripts/vps-tailscale.sh debi9.tail8175e6.ts.net
+# NEXT_PUBLIC_API_URL=https://debi9.tail8175e6.ts.net:8443
+# PUBLIC_API_URL=https://debi9.tail8175e6.ts.net:8443
+# PUBLIC_WEB_URL=https://debi9.tail8175e6.ts.net
+# PERSONAI_TAILSCALE_HTTPS=1
 
 LICENSE_TIER=pro
 
@@ -254,7 +260,10 @@ PERSONAI_TLS=no
 # OAuth (preferred):
 # GOOGLE_OAUTH_CLIENT_ID=
 # GOOGLE_OAUTH_CLIENT_SECRET=
+# HTTP redirect:
 # GOOGLE_OAUTH_REDIRECT_URI=http://debi9.tail8175e6.ts.net:4000/archive/drive/oauth/callback
+# HTTPS / Tailscale Serve redirect (must match Google Cloud authorized URI):
+# GOOGLE_OAUTH_REDIRECT_URI=https://debi9.tail8175e6.ts.net:8443/archive/drive/oauth/callback
 # PUBLIC_WEB_URL must match the web UI (post-link redirect).
 # Service account (headless) — Docker only mounts ./data → /app/data:
 #   put JSON under data/ and set path inside the container, or use INLINE:
@@ -286,33 +295,87 @@ PERSONAI_TLS=no
 
 Your VPS hostname example: **`debi9.tail8175e6.ts.net`**
 
+### Chrome PWA installability (secure context)
+
+Chrome treats a site as **installable** only in a [**secure context**](https://developer.mozilla.org/en-US/docs/Web/Security/Secure_Contexts):
+
+| Origin | Install app (real PWA)? |
+|--------|-------------------------|
+| `https://…` (valid TLS) | Yes — if manifest + service worker criteria are met |
+| `http://localhost` / `http://127.0.0.1` | Yes (dev exception) |
+| `http://debi9.tail8175e6.ts.net:3000` | **No** — WireGuard ≠ browser HTTPS |
+
+**Add to Home screen / shortcut on HTTP is not a PWA** (no proper SW scope / installability). Use Tailscale Serve HTTPS below.
+
+### Recommended: HTTPS via Tailscale Serve (PWA)
+
+Minimal path — no public DNS, no Caddy, no mkcert. Tailscale provisions `*.ts.net` certificates.
+
 | Surface | URL |
 |---------|-----|
-| Phone browser / PWA | `http://debi9.tail8175e6.ts.net:3000` |
-| API (health / Settings) | `http://debi9.tail8175e6.ts.net:4000` |
-| API health check | `http://debi9.tail8175e6.ts.net:4000/health` |
+| Phone browser / **Install app** | `https://debi9.tail8175e6.ts.net` |
+| API (Settings / baked URL) | `https://debi9.tail8175e6.ts.net:8443` |
+| API health | `https://debi9.tail8175e6.ts.net:8443/health` |
+| OAuth redirect URI | `https://debi9.tail8175e6.ts.net:8443/archive/drive/oauth/callback` |
 
-### One-liner rebuild for phone
+`:8443` avoids clashing with Docker publishing `0.0.0.0:4000`. Loopback HTTP `:3000` / `:4000` stay up for host curls.
+
+#### One-liner (ralph@debi9)
 
 ```bash
+# 1) Once per tailnet: https://login.tailscale.com/admin/dns → Enable HTTPS
 cd /etc/personaios
 git fetch && git reset --hard origin/main
 ./scripts/vps-verify.sh debi9.tail8175e6.ts.net
-./scripts/vps-tailscale.sh debi9.tail8175e6.ts.net
+HTTPS=1 ./scripts/vps-tailscale.sh debi9.tail8175e6.ts.net
+# equivalent: ./scripts/vps-tailscale.sh --https debi9.tail8175e6.ts.net
+tailscale serve status
 ```
 
-### On the phone (after rebuild)
+Manual Serve (if you only need proxy, stack already healthy):
 
-1. **Chrome → Site settings → Delete site data** for `http://debi9.tail8175e6.ts.net:3000`  
-   (clears stale Service Worker / wrong shell). Uninstall PWA shortcut first if installed.
-2. Open `http://debi9.tail8175e6.ts.net:3000`
-3. Go to **`/profiles/`** → **unlock** with your profile password (required for team chat / API calls).
-4. If still broken: **Settings → API Server** → set `http://debi9.tail8175e6.ts.net:4000` (**no trailing slash**) → Save & test.  
-   Or use **Use this host's API** button.
+```bash
+sudo tailscale serve reset
+sudo tailscale serve --bg --https=443 http://127.0.0.1:3000
+sudo tailscale serve --bg --https=8443 http://127.0.0.1:4000
+```
+
+Then bake HTTPS URLs + recreate (script does this when `HTTPS=1`):
+
+```bash
+# .env (no trailing slash on API URL)
+NEXT_PUBLIC_API_URL=https://debi9.tail8175e6.ts.net:8443
+PUBLIC_API_URL=https://debi9.tail8175e6.ts.net:8443
+PUBLIC_WEB_URL=https://debi9.tail8175e6.ts.net
+GOOGLE_OAUTH_REDIRECT_URI=https://debi9.tail8175e6.ts.net:8443/archive/drive/oauth/callback
+COMPOSE_PROFILES= docker compose build web api && COMPOSE_PROFILES= docker compose up -d
+```
+
+#### On the phone (HTTPS / Install app)
+
+1. Phone on the same Tailscale tailnet as `debi9`.
+2. Chrome → open **`https://debi9.tail8175e6.ts.net`** (no `:3000`).
+3. Delete site data for any old **`http://…:3000`** origin; uninstall bogus shortcuts.
+4. Unlock on `/profiles/`.
+5. Settings → API Server → `https://debi9.tail8175e6.ts.net:8443` if needed → Save & test.
+6. Chrome menu → **Install app** (or Install PersonAI). Homescreeen shortcut from HTTP does not count.
+
+If OAuth is configured, add the **HTTPS** redirect URI in Google Cloud (exact match).
+
+### Browse-only HTTP (not installable)
+
+| Surface | URL |
+|---------|-----|
+| Phone browser | `http://debi9.tail8175e6.ts.net:3000` |
+| API | `http://debi9.tail8175e6.ts.net:4000` |
+
+```bash
+./scripts/vps-tailscale.sh debi9.tail8175e6.ts.net   # HTTP bake-in
+```
 
 **Android:** always use the **full** `*.ts.net` FQDN — short names like `debi9` often fail.
 
-**Security:** Tailscale encrypts transit, but PersonAI still requires password + session. Tailscale ACLs alone are not enough.
+**Security:** Tailscale encrypts transit; browsers still require HTTPS for PWA APIs. PersonAI still requires password + session.
 
 ---
 
@@ -453,16 +516,24 @@ Or via install.sh: `--ollama=new-docker`
 
 ---
 
-## 10. Optional: Caddy HTTPS (public internet)
+## 10. Tailscale HTTPS vs Caddy vs mkcert
+
+| Path | When to use | Notes |
+|------|-------------|-------|
+| **`tailscale serve` (recommended)** | Phone PWA on MagicDNS | Auto TLS for `*.ts.net`; `HTTPS=1 ./scripts/vps-tailscale.sh` |
+| **Caddy + `docker-compose.prod.yml`** | Public internet hostname | Let's Encrypt; not needed for tailnet-only |
+| **mkcert / self-signed** | Lab only | Phone must trust the CA; painful on Android — avoid |
+
+### Optional: Caddy HTTPS (public internet)
 
 For a real domain (not Tailscale-only):
 
 1. During install, set `--domain=app.example.com --tls=yes`
 2. Or edit `Caddyfile` and use `docker-compose.prod.yml`
-3. Set `NEXT_PUBLIC_API_URL=https://api.app.example.com`
+3. Set `NEXT_PUBLIC_API_URL=https://api.app.example.com` and matching `PUBLIC_WEB_URL`
 4. Rebuild web: `docker compose -f docker-compose.prod.yml build web && docker compose -f docker-compose.prod.yml up -d`
 
-Tailscale-only phone access does **not** require HTTPS.
+For **Tailscale phone PWA**, prefer Serve (§6) over Caddy.
 
 ---
 
@@ -472,7 +543,8 @@ Tailscale-only phone access does **not** require HTTPS.
 |--------|---------|
 | `install.sh` | Fresh install or update; writes `.env`, override, starts stack |
 | `setup.sh --mode=vps` | Wizard → delegates to `install.sh` |
-| `scripts/vps-tailscale.sh HOST` | Bake MagicDNS API URL, rebuild api+web, health-check |
+| `scripts/vps-tailscale.sh HOST` | Bake MagicDNS API/web URLs, rebuild api+web, health-check |
+| `HTTPS=1 ./scripts/vps-tailscale.sh HOST` | Same + Tailscale Serve TLS + HTTPS env (PWA) |
 | `scripts/vps-verify.sh HOST` | Git SHA, compose ps, health curls, OAuth env, phone checklist |
 | `scripts/vps-recover-api.sh` | Reset to no-compose-ollama, fix stale `.env`/override |
 | `scripts/vps-up.sh` | Start stack with host Ollama hygiene (no Tailscale bake-in) |

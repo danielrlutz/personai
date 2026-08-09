@@ -4,18 +4,49 @@
 # Usage (from install dir, e.g. /etc/personaios):
 #   ./scripts/vps-tailscale.sh debi9.tail8175e6.ts.net
 #   ./scripts/vps-tailscale.sh                 # auto-detect MagicDNS name
+#   HTTPS=1 ./scripts/vps-tailscale.sh debi9.tail8175e6.ts.net
+#   ./scripts/vps-tailscale.sh --https debi9.tail8175e6.ts.net
 #   NO_CACHE=1 ./scripts/vps-tailscale.sh …   # force --no-cache rebuild
 #
-# Sets NEXT_PUBLIC_API_URL=http://HOST:4000 (no trailing slash), points Ollama
-# at host-gateway, clears COMPOSE_FILE/PROFILES, rebuilds api+web, health-checks
-# :4000/health and :3000.
+# Default (HTTP): sets NEXT_PUBLIC_API_URL=http://HOST:4000 — fine for browsing
+# inside the tailnet, but Chrome will NOT offer "Install app" (PWA) on plain HTTP
+# (secure context required; localhost is the only HTTP exception).
+#
+# HTTPS=1 / --https (recommended for phone PWA):
+#   - Enables Tailscale Serve with auto TLS on MagicDNS
+#   - Web:  https://HOST          → 127.0.0.1:3000  (port 443)
+#   - API:  https://HOST:8443     → 127.0.0.1:4000  (avoids clash with Docker :4000)
+#   - Sets NEXT_PUBLIC_API_URL / PUBLIC_API_URL / PUBLIC_WEB_URL (+ OAuth redirect)
+#
+# Prerequisite for HTTPS: Tailscale admin → DNS → Enable HTTPS certificates
+#   https://login.tailscale.com/admin/dns
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 NO_CACHE="${NO_CACHE:-0}"
-MAGICDNS_ARG="${1:-}"
+HTTPS="${HTTPS:-${PERSONAI_TAILSCALE_HTTPS:-0}}"
+MAGICDNS_ARG=""
+
+for arg in "$@"; do
+  case "$arg" in
+    --https|-https) HTTPS=1 ;;
+    --http|-http) HTTPS=0 ;;
+    -h|--help)
+      sed -n '2,24p' "$0" | sed 's/^# \{0,1\}//'
+      exit 0
+      ;;
+    *)
+      if [[ -z "$MAGICDNS_ARG" ]]; then
+        MAGICDNS_ARG="$arg"
+      else
+        echo "x Unexpected argument: $arg" >&2
+        exit 1
+      fi
+      ;;
+  esac
+done
 
 # ---------------------------------------------------------------------------
 # Helpers (aligned with vps-up.sh)
@@ -87,6 +118,46 @@ normalize_host() {
   printf '%s' "$h"
 }
 
+ts_serve() {
+  # Prefer non-interactive; fall back without --yes for older CLI builds.
+  if tailscale serve --help 2>&1 | grep -qE -- '--yes'; then
+    tailscale serve --bg --yes "$@"
+  else
+    tailscale serve --bg "$@"
+  fi
+}
+
+configure_tailscale_https() {
+  local host="$1"
+  if ! command -v tailscale >/dev/null 2>&1; then
+    echo "x tailscale CLI not found — install Tailscale on this host first" >&2
+    exit 1
+  fi
+
+  echo "› Configuring Tailscale Serve (HTTPS for PWA installability)…"
+  echo "  Admin prerequisite: DNS → Enable HTTPS certificates"
+  echo "  https://login.tailscale.com/admin/dns"
+  echo "  Web  https://${host}       → http://127.0.0.1:3000"
+  echo "  API  https://${host}:8443  → http://127.0.0.1:4000"
+  echo "  (8443 avoids binding clash with Docker publishing 0.0.0.0:4000)"
+
+  # Clear prior Serve mounts so we own 443 + 8443 predictably.
+  tailscale serve reset >/dev/null 2>&1 || true
+
+  if ! ts_serve --https=443 http://127.0.0.1:3000; then
+    echo "x Failed to bind Tailscale Serve on :443" >&2
+    echo "  If prompted about HTTPS, enable certificates in the admin console, then re-run." >&2
+    exit 1
+  fi
+  if ! ts_serve --https=8443 http://127.0.0.1:4000; then
+    echo "x Failed to bind Tailscale Serve on :8443" >&2
+    exit 1
+  fi
+
+  echo "› tailscale serve status:"
+  tailscale serve status || true
+}
+
 echo "=== PersonAI Tailscale / phone rebuild ==="
 echo "dir=$ROOT"
 
@@ -94,6 +165,7 @@ HOST="$(normalize_host "${MAGICDNS_ARG:-$(detect_magicdns)}")"
 if [[ -z "$HOST" ]]; then
   echo "x Could not detect MagicDNS hostname. Pass it explicitly:" >&2
   echo "  ./scripts/vps-tailscale.sh debi9.tail8175e6.ts.net" >&2
+  echo "  HTTPS=1 ./scripts/vps-tailscale.sh debi9.tail8175e6.ts.net" >&2
   exit 1
 fi
 
@@ -103,13 +175,33 @@ if [[ "$HOST" != *.ts.net ]] && [[ -z "${MAGICDNS_ARG:-}" ]]; then
   echo "  Re-run: ./scripts/vps-tailscale.sh debi9.tail8175e6.ts.net"
 fi
 
-API_URL="http://${HOST}:4000"
-API_URL="${API_URL%/}"
-WEB_URL="http://${HOST}:3000"
+if [[ "$HTTPS" == "1" || "$HTTPS" == "yes" || "$HTTPS" == "true" ]]; then
+  HTTPS=1
+else
+  HTTPS=0
+fi
+
+if [[ "$HTTPS" -eq 1 ]]; then
+  API_URL="https://${HOST}:8443"
+  API_URL="${API_URL%/}"
+  WEB_URL="https://${HOST}"
+  OAUTH_REDIRECT="https://${HOST}:8443/archive/drive/oauth/callback"
+else
+  API_URL="http://${HOST}:4000"
+  API_URL="${API_URL%/}"
+  WEB_URL="http://${HOST}:3000"
+  OAUTH_REDIRECT="http://${HOST}:4000/archive/drive/oauth/callback"
+fi
 
 echo "› MagicDNS host: $HOST"
+echo "› HTTPS mode:    $([[ "$HTTPS" -eq 1 ]] && echo ON || echo OFF)"
 echo "› NEXT_PUBLIC_API_URL=$API_URL"
-echo "› Web (phone):   $WEB_URL"
+echo "› PUBLIC_WEB_URL=$WEB_URL"
+if [[ "$HTTPS" -eq 0 ]]; then
+  echo "! Chrome Install app / PWA requires a secure context (HTTPS)."
+  echo "  HTTP on *.ts.net is fine for browsing, but NOT installable."
+  echo "  Re-run with: HTTPS=1 ./scripts/vps-tailscale.sh $HOST"
+fi
 
 # ---------------------------------------------------------------------------
 # .env hygiene
@@ -118,6 +210,24 @@ strip_env_kv COMPOSE_FILE
 set_env_kv COMPOSE_PROFILES ""
 set_env_kv OLLAMA_HOST "http://host.docker.internal:11434"
 set_env_kv NEXT_PUBLIC_API_URL "$API_URL"
+set_env_kv PUBLIC_API_URL "$API_URL"
+set_env_kv PUBLIC_WEB_URL "$WEB_URL"
+set_env_kv PERSONAI_TAILSCALE_HTTPS "$([[ "$HTTPS" -eq 1 ]] && echo 1 || echo 0)"
+
+# Keep OAuth redirect aligned with the API origin when HTTPS toggles (or first set).
+# Do not overwrite a custom redirect that points at a different host.
+existing_redir="$(grep -E '^GOOGLE_OAUTH_REDIRECT_URI=' .env 2>/dev/null | head -1 | cut -d= -f2- | tr -d '\r' || true)"
+if [[ -z "$existing_redir" ]] \
+  || [[ "$existing_redir" == *"://${HOST}:"* ]] \
+  || [[ "$existing_redir" == *"://${HOST}/"* ]] \
+  || [[ "$existing_redir" == *"localhost"* ]] \
+  || [[ "$existing_redir" == *"127.0.0.1"* ]]; then
+  set_env_kv GOOGLE_OAUTH_REDIRECT_URI "$OAUTH_REDIRECT"
+  echo "› GOOGLE_OAUTH_REDIRECT_URI=$OAUTH_REDIRECT"
+  echo "  (also add this exact URI in Google Cloud → OAuth client → Authorized redirect URIs)"
+else
+  echo "! Leaving custom GOOGLE_OAUTH_REDIRECT_URI=$existing_redir"
+fi
 
 # ---------------------------------------------------------------------------
 # Compose file set — never include docker-compose.ollama.yml
@@ -157,7 +267,7 @@ fi
 
 echo "› COMPOSE_FILE='${COMPOSE_FILE-}' COMPOSE_PROFILES='${COMPOSE_PROFILES-}'"
 echo "› Files: ${COMPOSE_BASE[*]}"
-grep -E '^(COMPOSE_FILE|COMPOSE_PROFILES|OLLAMA_HOST|NEXT_PUBLIC_API_URL)=' .env 2>/dev/null || true
+grep -E '^(COMPOSE_FILE|COMPOSE_PROFILES|OLLAMA_HOST|NEXT_PUBLIC_API_URL|PUBLIC_API_URL|PUBLIC_WEB_URL|PERSONAI_TAILSCALE_HTTPS|GOOGLE_OAUTH_REDIRECT_URI)=' .env 2>/dev/null || true
 
 SERVICES="$(COMPOSE_FILE= COMPOSE_PROFILES= docker compose "${COMPOSE_BASE[@]}" config --services 2>/dev/null || true)"
 echo "› config --services:"
@@ -243,9 +353,27 @@ if [[ "$ok_web" -ne 1 ]]; then
   exit 1
 fi
 
+# ---------------------------------------------------------------------------
+# Tailscale Serve (HTTPS / PWA)
+# ---------------------------------------------------------------------------
+if [[ "$HTTPS" -eq 1 ]]; then
+  configure_tailscale_https "$HOST"
+  echo ""
+  echo "HTTPS probe (from this host via MagicDNS):"
+  curl -sS -o /dev/null -w "web  %{http_code}  $WEB_URL/\n" --connect-timeout 5 --max-time 15 "$WEB_URL/" || true
+  curl -sS -o /dev/null -w "api  %{http_code}  $API_URL/health\n" --connect-timeout 5 --max-time 15 "$API_URL/health" || true
+fi
+
 echo ""
 echo "✓ Tailscale stack ready"
 echo "  Phone open:     $WEB_URL"
 echo "  Settings API:   $API_URL"
+if [[ "$HTTPS" -eq 1 ]]; then
+  echo "  PWA install:    Chrome → open $WEB_URL → menu → Install app"
+  echo "  (Add to Home screen / shortcut on plain HTTP is NOT a real PWA.)"
+  echo "  OAuth redirect: $OAUTH_REDIRECT"
+else
+  echo "  PWA install:    unavailable over HTTP — use HTTPS=1 for Install app"
+fi
 echo "  If phone still fails: Chrome → Delete site data for $WEB_URL, then set Settings API URL to $API_URL"
 echo "  HEAD: $(git rev-parse --short HEAD 2>/dev/null || echo n/a)"

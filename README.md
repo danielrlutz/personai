@@ -110,9 +110,9 @@ Check status: `GET /archive/drive` (includes `linked` + archive context) or `dri
 
 | Path | Recommendation |
 |------|----------------|
-| **Tailscale MagicDNS** `http://HOST:3000` → `http://HOST:4000` | Common and OK **inside the tailnet**. WireGuard protects the path; PersonAI still requires password + session. Prefer full FQDN on Android. |
+| **Tailscale HTTP** `http://HOST:3000` → `http://HOST:4000` | Fine for browsing inside the tailnet. **Not** a Chrome-installable PWA (no secure context). |
+| **Tailscale HTTPS (PWA)** | `HTTPS=1 ./scripts/vps-tailscale.sh HOST` → Tailscale Serve: `https://HOST` + API `https://HOST:8443`. Required for **Install app**. |
 | **Public internet** | Terminate **HTTPS** with Caddy (`docker-compose.prod.yml` + `Caddyfile`). Do not expose bare `:4000` to the world. |
-| **Optional TLS on Tailscale** | You can put Caddy in front of MagicDNS hostnames; not required for phone-on-tailnet HTTP. |
 
 ### What is still out of scope (honest)
 
@@ -298,15 +298,23 @@ Edit `Caddyfile` hostnames before production TLS.
 
 ### Phone via Tailscale (MagicDNS)
 
-One-liner after `git` is current (prefer full MagicDNS FQDN — Android often fails on short names like `debi9`):
+**Chrome Install app** needs HTTPS (secure context). Plain `http://HOST:3000` will not show a real PWA install — use Tailscale Serve:
 
 ```bash
+# Once: https://login.tailscale.com/admin/dns → Enable HTTPS
 cd /etc/personaios && git fetch && git reset --hard origin/main
 ./scripts/vps-verify.sh
+HTTPS=1 ./scripts/vps-tailscale.sh debi9.tail8175e6.ts.net
+# Phone: https://debi9.tail8175e6.ts.net  → Chrome → Install app
+# API:   https://debi9.tail8175e6.ts.net:8443
+```
+
+Browse-only HTTP (not installable):
+
+```bash
 ./scripts/vps-tailscale.sh debi9.tail8175e6.ts.net
 # force clean rebuild if needed:
 # NO_CACHE=1 ./scripts/vps-tailscale.sh debi9.tail8175e6.ts.net
-# then unlock password on phone + Settings → API URL if UI still says Failed to fetch
 ```
 
 ### VPS verify (“Failed to fetch” checklist)
@@ -332,20 +340,18 @@ Paste-ready on the phone (browser address bar):
 
 If health works but Messages/team chat fails: unlock the profile on `/profiles/` (Bearer session), then Settings → API URL = `http://debi9.tail8175e6.ts.net:4000` (no trailing slash).
 
-What the script does: sets `NEXT_PUBLIC_API_URL=http://HOST:4000` (no trailing slash), `OLLAMA_HOST=http://host.docker.internal:11434`, clears `COMPOSE_FILE` / `COMPOSE_PROFILES`, rebuilds **api + web**, then health-checks `:4000/health` (and `/health/`) plus `:3000`.
+What the script does: sets `NEXT_PUBLIC_API_URL` / `PUBLIC_API_URL` / `PUBLIC_WEB_URL` (HTTP `:4000`/`:3000` or HTTPS `:8443` + origin), `OLLAMA_HOST=http://host.docker.internal:11434`, clears `COMPOSE_FILE` / `COMPOSE_PROFILES`, rebuilds **api + web**, health-checks loopback, and with `HTTPS=1` configures **Tailscale Serve**.
 
-Still recommend baking via `vps-tailscale.sh`. If UI and API share the same MagicDNS hostname, the phone also works without a manual Settings override: when `NEXT_PUBLIC_API_URL` is unset and nothing is stored, the web client defaults to `http://<current-hostname>:4000` (localhost stays for desktop/Tauri).
+| Surface | HTTP (browse) | HTTPS (Install app) |
+|---------|---------------|---------------------|
+| Phone | `http://debi9.tail8175e6.ts.net:3000` | `https://debi9.tail8175e6.ts.net` |
+| API | `http://debi9.tail8175e6.ts.net:4000` | `https://debi9.tail8175e6.ts.net:8443` |
 
-| Surface | URL |
-|---------|-----|
-| Phone browser / PWA | `http://debi9.tail8175e6.ts.net:3000` |
-| API (auto / Settings) | `http://debi9.tail8175e6.ts.net:4000` |
+**On the phone after HTTPS rebuild:**
 
-**On the phone after rebuild:**
-
-1. Chrome → site settings for that origin → **Delete site data** (clears bad Service Worker / old shell). If installed as PWA, uninstall the shortcut first.
-2. Open `http://debi9.tail8175e6.ts.net:3000`
-3. If the app still cannot reach the API, **Settings → API Server** → use **Use this host's API** (or set `http://debi9.tail8175e6.ts.net:4000`, **no trailing slash**) → Save & test. This localStorage override wins even if the image was built with `localhost:4000`.
+1. Chrome → delete site data for old `http://…:3000` origins; remove fake shortcuts.
+2. Open `https://debi9.tail8175e6.ts.net` → unlock → Chrome → **Install app**.
+3. If API fails: **Settings → API Server** → `https://debi9.tail8175e6.ts.net:8443` (**no trailing slash**) → Save & test.
 
 The web image is a **static Next.js export** — `NEXT_PUBLIC_API_URL` is baked at **image build** time; `.env` alone is not enough without rebuild (hostname fallback and Settings override still work without a bake-in).
 

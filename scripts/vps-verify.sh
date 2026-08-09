@@ -144,8 +144,9 @@ if command -v docker >/dev/null 2>&1; then
 fi
 
 section ".env — API URL / OAuth / Ollama"
+TS_HTTPS=0
 if [[ -f .env ]]; then
-  grep -E '^(NEXT_PUBLIC_API_URL|PUBLIC_API_URL|PUBLIC_WEB_URL|OLLAMA_HOST|PERSONAI_OLLAMA_MODE|COMPOSE_FILE|COMPOSE_PROFILES)=' .env 2>/dev/null || true
+  grep -E '^(NEXT_PUBLIC_API_URL|PUBLIC_API_URL|PUBLIC_WEB_URL|OLLAMA_HOST|PERSONAI_OLLAMA_MODE|PERSONAI_TAILSCALE_HTTPS|COMPOSE_FILE|COMPOSE_PROFILES)=' .env 2>/dev/null || true
   echo ""
   for key in GOOGLE_OAUTH_CLIENT_ID GOOGLE_OAUTH_CLIENT_SECRET GOOGLE_OAUTH_REDIRECT_URI; do
     if grep -qE "^${key}=.+" .env 2>/dev/null; then
@@ -161,27 +162,71 @@ if [[ -f .env ]]; then
     fi
   done
   NEXT_URL="$(grep -E '^NEXT_PUBLIC_API_URL=' .env 2>/dev/null | head -1 | cut -d= -f2- | tr -d '\r' || true)"
+  WEB_URL_ENV="$(grep -E '^PUBLIC_WEB_URL=' .env 2>/dev/null | head -1 | cut -d= -f2- | tr -d '\r' || true)"
+  if [[ "$NEXT_URL" == https://* ]] || [[ "$WEB_URL_ENV" == https://* ]] \
+    || grep -qE '^PERSONAI_TAILSCALE_HTTPS=1' .env 2>/dev/null; then
+    TS_HTTPS=1
+  fi
   if [[ "$NEXT_URL" == *"localhost"* || "$NEXT_URL" == *"127.0.0.1"* ]]; then
     bad "NEXT_PUBLIC_API_URL points at localhost — phone browsers will Failed to fetch"
-    note "Fix: ./scripts/vps-tailscale.sh $MAGICDNS"
+    note "Fix: ./scripts/vps-tailscale.sh $MAGICDNS   # or HTTPS=1 for PWA"
     FAIL=1
   elif [[ -n "$NEXT_URL" ]]; then
     ok "NEXT_PUBLIC_API_URL=$NEXT_URL"
   else
     note "NEXT_PUBLIC_API_URL unset — web falls back to hostname:4000 or Settings override"
   fi
+  if [[ "$TS_HTTPS" -eq 1 ]]; then
+    ok "HTTPS / PWA mode indicated in .env"
+    if [[ "$NEXT_URL" != https://* ]]; then
+      note "PERSONAI_TAILSCALE_HTTPS=1 but NEXT_PUBLIC_API_URL is not https — re-run HTTPS=1 ./scripts/vps-tailscale.sh"
+    fi
+  else
+    note "HTTP bake-in — Chrome Install app unavailable (need secure context)"
+    note "PWA path: HTTPS=1 ./scripts/vps-tailscale.sh $MAGICDNS"
+  fi
 else
   bad "No .env in $ROOT"
   FAIL=1
 fi
 
+section "Tailscale Serve (HTTPS / PWA)"
+if command -v tailscale >/dev/null 2>&1; then
+  tailscale serve status 2>/dev/null || note "tailscale serve status failed (Serve not configured?)"
+  if [[ "$TS_HTTPS" -eq 1 ]]; then
+    HTTPS_WEB="https://${MAGICDNS}"
+    HTTPS_API="https://${MAGICDNS}:8443"
+    code_w="$(curl -sS -o /dev/null -w "%{http_code}" --connect-timeout 3 --max-time 10 "$HTTPS_WEB/" 2>/dev/null || echo 000)"
+    code_a="$(curl -sS -o /dev/null -w "%{http_code}" --connect-timeout 3 --max-time 10 "$HTTPS_API/health" 2>/dev/null || echo 000)"
+    note "$HTTPS_WEB/ → HTTP $code_w"
+    note "$HTTPS_API/health → HTTP $code_a"
+    if [[ "$code_w" =~ ^(200|301|302|304)$ ]]; then
+      ok "HTTPS web via Serve"
+    else
+      bad "HTTPS web not reachable — enable Tailscale HTTPS certs + re-run HTTPS=1 ./scripts/vps-tailscale.sh"
+      FAIL=1
+    fi
+    if [[ "$code_a" == "200" ]]; then
+      ok "HTTPS API via Serve :8443"
+    else
+      bad "HTTPS API :8443/health failed"
+      FAIL=1
+    fi
+  fi
+else
+  note "tailscale CLI not installed on this host"
+fi
+
 section "Auth / Failed-to-fetch checklist"
 cat <<EOF
+Chrome PWA: Install app requires HTTPS (secure context). HTTP *:3000 is browse-only.
+
 Common causes when UI says "Failed to fetch" after login:
 
   1) Wrong API URL baked/stored
      - Web image bakes NEXT_PUBLIC_API_URL at build time
-     - Phone must call http://${MAGICDNS}:4000 (not localhost)
+     - HTTP phone:  http://${MAGICDNS}:4000
+     - HTTPS phone: https://${MAGICDNS}:8443
      - Settings → API Server → set that URL (no trailing slash) → Save & test
 
   2) Profile not unlocked (no Bearer)
@@ -192,28 +237,31 @@ Common causes when UI says "Failed to fetch" after login:
      - docker compose ps  (api + web Up)
      - curl http://127.0.0.1:4000/health
 
-  4) CORS (rare — API reflects Origin)
-     - Confirm web origin is http://${MAGICDNS}:3000 and API is :4000
+  4) Mixed content (HTTPS page → HTTP API)
+     - PUBLIC_WEB_URL https://… must pair with https://…:8443 API
 
 Paste-ready checks FROM the VPS:
   curl -sS http://127.0.0.1:4000/health
   curl -sS -o /dev/null -w 'web %{http_code}\\n' http://127.0.0.1:3000/
   curl -sS http://${MAGICDNS}:4000/health
   curl -sS -o /dev/null -w 'web-ts %{http_code}\\n' http://${MAGICDNS}:3000/
+  curl -sS -o /dev/null -w 'web-https %{http_code}\\n' https://${MAGICDNS}/
+  curl -sS https://${MAGICDNS}:8443/health
 
-Paste-ready checks FROM the phone (Safari/Chrome address bar or Termux):
-  http://${MAGICDNS}:3000
-  http://${MAGICDNS}:4000/health
+Paste-ready FROM the phone:
+  HTTPS (Install app):  https://${MAGICDNS}
+  HTTPS API health:     https://${MAGICDNS}:8443/health
+  HTTP browse-only:     http://${MAGICDNS}:3000
 
 Authenticated check (after unlock — replace TOKEN):
   curl -sS -H "Authorization: Bearer TOKEN" -H "X-Profile-Id: PROFILE_ID" \\
     http://127.0.0.1:4000/team/specialists | head -c 200; echo
 
-Recovery:
+Recovery (PWA):
   cd $ROOT && git fetch && git reset --hard origin/main
-  ./scripts/vps-verify.sh
-  ./scripts/vps-tailscale.sh ${MAGICDNS}
-  # then unlock password on phone + Settings API URL if needed
+  ./scripts/vps-verify.sh ${MAGICDNS}
+  HTTPS=1 ./scripts/vps-tailscale.sh ${MAGICDNS}
+  # phone: https://${MAGICDNS} → Install app; Settings API = https://${MAGICDNS}:8443
 EOF
 
 section "Result"

@@ -9,7 +9,7 @@ It uses the same labels you see on screen.
 
 1. Open PersonAI:
    - **Desktop:** launch the PersonAI app.
-   - **Phone / PWA:** open the web address your host gave you (on Tailscale, usually something like `http://…:3000` — see the example box at the end).
+   - **Phone / PWA:** open the **HTTPS** address your host gave you (Tailscale Serve, e.g. `https://….ts.net` — see the example box). Plain `http://…:3000` works for browsing but Chrome will **not** offer **Install app**.
 2. You land on the account screen: **Sign in — your data is password-protected**.
 3. Pick your account, or tap **Use another account** to create one.
 
@@ -247,23 +247,39 @@ You do **not** need SSH for normal Drive linking or day-to-day config once the a
 
 ---
 
-## Example: Tailscale MagicDNS (`debi9`)
+## Example: Tailscale MagicDNS (`debi9`) — HTTPS for Install app
 
 Use your own hostname if different. Full `*.ts.net` names work more reliably on Android than short names.
 
-```text
-Web / PWA:   http://debi9.tail8175e6.ts.net:3000
-API:         http://debi9.tail8175e6.ts.net:4000
-API health:  http://debi9.tail8175e6.ts.net:4000/health
+Chrome only shows **Install app** on a secure origin (`https://…`, or localhost). Tailscale WireGuard does **not** count as HTTPS for that check. “Add to Home screen” on HTTP is a shortcut, not a PWA.
 
-Product vault → Public web URL:  http://debi9.tail8175e6.ts.net:3000
-Product vault → Public API URL:  http://debi9.tail8175e6.ts.net:4000
+On the VPS (once HTTPS is enabled in the Tailscale admin DNS page):
 
-Google OAuth authorized redirect URI (exact):
-http://debi9.tail8175e6.ts.net:4000/archive/drive/oauth/callback
+```bash
+cd /etc/personaios
+HTTPS=1 ./scripts/vps-tailscale.sh debi9.tail8175e6.ts.net
 ```
 
-On the phone: open the web URL → `/profiles/` → **Unlock** → if needed **Settings → API Server** → set the API URL → **Save & test API URL**.
+Then on the phone:
+
+```text
+Web / Install app:  https://debi9.tail8175e6.ts.net
+API:                https://debi9.tail8175e6.ts.net:8443
+API health:         https://debi9.tail8175e6.ts.net:8443/health
+
+Product vault → Public web URL:  https://debi9.tail8175e6.ts.net
+Product vault → Public API URL:  https://debi9.tail8175e6.ts.net:8443
+
+Google OAuth authorized redirect URI (exact):
+https://debi9.tail8175e6.ts.net:8443/archive/drive/oauth/callback
+```
+
+1. Open **`https://debi9.tail8175e6.ts.net`** (no `:3000`).
+2. `/profiles/` → **Unlock**.
+3. If needed: **Settings → API Server** → `https://debi9.tail8175e6.ts.net:8443` → **Save & test**.
+4. Chrome menu → **Install app**.
+
+Browse-only HTTP (not installable): `http://debi9.tail8175e6.ts.net:3000` / API `:4000`.
 
 ---
 
