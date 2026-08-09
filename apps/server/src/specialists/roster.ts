@@ -1,4 +1,5 @@
 import { config } from "../config.js";
+import { roleForSpecialistId, type ModelRole } from "./model-catalog.js";
 
 const SHARED = `OPERATING CONTEXT: You are part of PersonAI, a local Swiss/CH-DE-aware personal ops layer. Prefer the user's language. Prefer Swiss-German cultural awareness when locale points to Switzerland (AHV, Krankenkasse, Fristen, QR-Rechnung, Behörden, Gerichte).
 
@@ -12,7 +13,7 @@ ROLE LOCK — NON-NEGOTIABLE:
 - Footer only (optional, once at the very end, one short line): this is personal informational support, not a substitute for a licensed attorney, physician, or other regulated professional when the situation requires one. Do NOT open with disclaimers. Do NOT refuse the topic.`;
 
 /** Which configured Ollama model family this specialist prefers. */
-export type SpecialistModelPref = "reasoning" | "coder";
+export type SpecialistModelPref = ModelRole;
 
 export type SpecialistGroup = "ops" | "code" | "care" | "coaching";
 
@@ -22,7 +23,7 @@ export type Specialist = {
   shortLabel: string;
   description: string;
   group: SpecialistGroup;
-  /** Prefer coder model for implementation; reasoning for plans/legal/default. */
+  /** Catalog role — resolve via model-catalog failover, never demand missing tags. */
   modelPref: SpecialistModelPref;
   systemPrompt: string;
 };
@@ -34,7 +35,7 @@ function s(
   description: string,
   group: SpecialistGroup,
   role: string,
-  modelPref: SpecialistModelPref = "reasoning",
+  modelPref?: SpecialistModelPref,
 ): Specialist {
   return {
     id,
@@ -42,7 +43,7 @@ function s(
     shortLabel,
     description,
     group,
-    modelPref,
+    modelPref: modelPref ?? roleForSpecialistId(id),
     systemPrompt: `${SHARED}\n\n${role}`,
   };
 }
@@ -63,7 +64,7 @@ export const SPECIALISTS: Specialist[] = [
     "Design, specs, and technical plans",
     "code",
     "You are Architect. Produce clear designs, interfaces, and acceptance criteria before Forge implements. Prefer small, testable slices. Call out risks, dependencies, and what QA should verify. Use CEO/memory/archive context when it affects the design.",
-    "reasoning",
+    "architect",
   ),
   s(
     "forge",
@@ -84,7 +85,7 @@ export const SPECIALISTS: Specialist[] = [
 When reviewing in the automated Forge↔QA loop, respond with ONLY a JSON object (no markdown fences):
 {"verdict":"pass"|"fail","summary":"one short sentence","issues":["…"],"criteria":[{"id":"…","ok":true|false,"note":"…"}]}
 On pass outside the loop, require confirmation before ship. On fail, list concrete fixable issues.`,
-    "reasoning",
+    "qa",
   ),
   s(
     "cfo",
@@ -101,7 +102,6 @@ On pass outside the loop, require confirmation before ship. On fail, list concre
     "Contracts, court papers, Fristen, Swiss filings",
     "ops",
     "You are Legal Aide — the user's locked-in personal legal organizer and informational advisor (Swiss/CH-aware). Help with contracts, Gerichtsunterlagen, Fristen, Behörden vs Gericht filing, and next practical steps. Speak as their legal aide: explain options, risks, and checklists. Structure replies with: what this document/situation is, deadlines if stated (never invent Fristen), options, and a short next-actions checklist. Never refuse the topic. Never say you are not a lawyer mid-chat. Optional one-line footer only if needed.",
-    "reasoning",
   ),
   s(
     "medical_integrator",
@@ -208,10 +208,25 @@ export function getSpecialist(id: string | undefined | null): Specialist {
   return BY_ID.get(resolveSpecialistId(id)) ?? SPECIALISTS[0]!;
 }
 
-/** Resolve Ollama model name for a specialist; falls back to reasoning if preferred missing. */
+/** Preferred tag for a catalog role (before /api/tags failover). */
 export function modelNameForPref(pref: SpecialistModelPref): string {
-  if (pref === "coder") return config.coderModel;
-  return config.reasoningModel;
+  switch (pref) {
+    case "vision":
+      return config.visionModel;
+    case "architect":
+      return config.architectModel;
+    case "coder":
+      return config.coderModel;
+    case "coaching":
+      return config.coachingModel;
+    case "stylist":
+      return config.stylistModel;
+    case "qa":
+      return config.qaModel;
+    case "reasoning":
+    default:
+      return config.reasoningModel;
+  }
 }
 
 export const ARCHIVE_TAXONOMY: Record<number, string> = {

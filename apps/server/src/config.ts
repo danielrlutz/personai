@@ -26,10 +26,16 @@ export const config = {
   port: Number(process.env.PORT ?? 4000),
   dataDir: path.resolve(process.env.DATA_DIR ?? path.join(repoRoot, "data")),
   ollamaHost: process.env.OLLAMA_HOST ?? "http://127.0.0.1:11434",
-  visionModel: process.env.OLLAMA_VISION_MODEL ?? "maternion/LightOnOCR-2",
+  /** Defaults match models already pulled on Daniel's host — see model-catalog.ts */
+  visionModel: process.env.OLLAMA_VISION_MODEL ?? "maternion/LightOnOCR-2:latest",
   reasoningModel: process.env.OLLAMA_REASONING_MODEL ?? "deepseek-r1:8b",
-  /** Preferred for Forge; falls back to reasoningModel if not pulled. */
-  coderModel: process.env.OLLAMA_CODER_MODEL ?? "qwen2.5-coder:7b",
+  architectModel: process.env.OLLAMA_ARCHITECT_MODEL ?? "deepseek-r1:14b",
+  /** Forge: prefer instruct-q5 tag, failover to qwen2.5-coder:14b then deepseek-r1:8b */
+  coderModel:
+    process.env.OLLAMA_CODER_MODEL ?? "qwen2.5-coder:14b-instruct-q5_K_M",
+  coachingModel: process.env.OLLAMA_COACHING_MODEL ?? "llama3.1:8b",
+  stylistModel: process.env.OLLAMA_STYLIST_MODEL ?? "gemma4:e4b",
+  qaModel: process.env.OLLAMA_QA_MODEL ?? "deepseek-r1:8b",
   licenseTier: (process.env.LICENSE_TIER ?? "pro") as "core" | "pro",
   keepAlive: "0",
 };

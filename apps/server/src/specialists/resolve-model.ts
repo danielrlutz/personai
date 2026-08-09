@@ -1,40 +1,93 @@
-import { config } from "../config.js";
-import { hostHasModel, listInstalledModels } from "../ollama/client.js";
-import { getSpecialist, modelNameForPref, type SpecialistModelPref } from "./roster.js";
+import { listInstalledModels } from "../ollama/client.js";
+import { resolveProductConfig } from "../settings/host-vault.js";
+import {
+  MODEL_DEFAULTS,
+  MODEL_ROLE_CANDIDATES,
+  pickInstalledModel,
+  roleForSpecialistId,
+  type ModelRole,
+} from "./model-catalog.js";
 
 export type ResolvedSpecialistModel = {
   model: string;
-  pref: SpecialistModelPref;
+  role: ModelRole;
   preferredModel: string;
   fallback: boolean;
+  /** @deprecated use role — kept for older clients */
+  pref: "reasoning" | "coder" | "coaching" | "architect" | "qa" | "stylist";
 };
 
+function configuredCandidates(role: ModelRole): string[] {
+  const product = resolveProductConfig();
+  const primary =
+    role === "vision"
+      ? product.visionModel
+      : role === "architect"
+        ? product.architectModel ?? MODEL_DEFAULTS.architectModel
+        : role === "coder"
+          ? product.coderModel
+          : role === "coaching"
+            ? product.coachingModel ?? MODEL_DEFAULTS.coachingModel
+            : role === "stylist"
+              ? product.stylistModel ?? MODEL_DEFAULTS.stylistModel
+              : role === "qa"
+                ? product.qaModel ?? MODEL_DEFAULTS.qaModel
+                : product.reasoningModel;
+
+  const catalog = MODEL_ROLE_CANDIDATES[role];
+  const ordered = [primary, ...catalog.filter((c) => c !== primary)];
+  return ordered;
+}
+
 /**
- * Pick Ollama model for a specialist.
- * Uses roster modelPref (coder vs reasoning); falls back to config.reasoningModel if preferred missing.
+ * Pick Ollama model for a specialist from the known catalog.
+ * Never demands missing tags like qwen2.5-coder:7b — fails over within pulled list.
  */
 export async function resolveSpecialistModel(
   host: string,
   specialistId: string,
 ): Promise<ResolvedSpecialistModel> {
-  const specialist = getSpecialist(specialistId);
-  const pref = specialist.modelPref;
-  const preferredModel = modelNameForPref(pref);
-  if (preferredModel === config.reasoningModel) {
-    return { model: preferredModel, pref, preferredModel, fallback: false };
-  }
+  const role = roleForSpecialistId(specialistId);
+  const candidates = configuredCandidates(role);
+  const preferredModel = candidates[0] ?? MODEL_DEFAULTS.reasoningModel;
+
+  let installed: string[] = [];
   try {
-    const installed = await listInstalledModels(host);
-    if (hostHasModel(installed, preferredModel)) {
-      return { model: preferredModel, pref, preferredModel, fallback: false };
-    }
+    installed = await listInstalledModels(host);
   } catch {
-    // treat as missing → fallback
+    installed = [];
   }
+
+  const picked = pickInstalledModel(installed, candidates, MODEL_DEFAULTS.reasoningModel);
   return {
-    model: config.reasoningModel,
-    pref,
+    model: picked.model,
+    role,
     preferredModel,
-    fallback: true,
+    fallback: picked.fallback || picked.model !== preferredModel,
+    pref: role === "coder" ? "coder" : role === "coaching" ? "coaching" : role === "architect" ? "architect" : role === "qa" ? "qa" : role === "stylist" ? "stylist" : "reasoning",
+  };
+}
+
+/** Resolve vision OCR model from catalog. */
+export async function resolveVisionModel(host: string): Promise<ResolvedSpecialistModel> {
+  const candidates = configuredCandidates("vision");
+  const preferredModel = candidates[0]!;
+  let installed: string[] = [];
+  try {
+    installed = await listInstalledModels(host);
+  } catch {
+    installed = [];
+  }
+  const picked = pickInstalledModel(
+    installed,
+    candidates,
+    MODEL_DEFAULTS.reasoningModel,
+  );
+  return {
+    model: picked.model,
+    role: "vision",
+    preferredModel,
+    fallback: picked.fallback || picked.model !== preferredModel,
+    pref: "reasoning",
   };
 }
