@@ -22,10 +22,15 @@ function ensureDatabase(profileId: string): void {
   const dbPath = profileDbPath(profileId);
   // Always push so existing profiles pick up new models (e.g. Personal manners / Life).
   const url = `file:${dbPath}`;
-  execSync(`npx prisma db push --schema "${schemaPath}" --skip-generate`, {
+  const cwd = path.resolve(__dirname, "../..");
+  // Prefer the image-local CLI (prod Docker ships prisma as a dependency). Never bare
+  // `npx prisma` — that can download a newer CLI that dropped --skip-generate.
+  const localBin = path.join(cwd, "node_modules", ".bin", "prisma");
+  const cli = fs.existsSync(localBin) ? `"${localBin}"` : "npx --no-install prisma";
+  execSync(`${cli} db push --schema "${schemaPath}" --skip-generate`, {
     env: { ...process.env, DATABASE_URL: url },
     stdio: "pipe",
-    cwd: path.resolve(__dirname, "../.."),
+    cwd,
   });
 }
 

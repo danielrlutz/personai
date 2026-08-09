@@ -20,8 +20,7 @@ RUN pnpm --filter @personai/server deploy --prod /deploy \
   && cp -r apps/server/dist /deploy/dist \
   && cp -r apps/server/prisma /deploy/prisma \
   && cd /deploy \
-  && CLIENT_VER=$(node -p "require('@prisma/client/package.json').version") \
-  && npx --yes "prisma@$CLIENT_VER" generate
+  && ./node_modules/.bin/prisma generate
 
 FROM base AS runner
 WORKDIR /app
