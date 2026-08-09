@@ -11,6 +11,7 @@ import {
   HeartPulse,
   Settings,
   Users,
+  Activity,
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
@@ -27,6 +28,7 @@ const primaryNav = [
   { href: "/finance/", label: "Finance", icon: Wallet },
   { href: "/legal/", label: "Legal", icon: Scale },
   { href: "/medical/", label: "Medical", icon: HeartPulse },
+  { href: "/activity/", label: "Activity", icon: Activity },
 ];
 
 const settingsItem = { href: "/settings/", label: "Settings", icon: Settings };
@@ -83,10 +85,10 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
       <div className="flex h-[var(--header-height)] items-center justify-between border-b border-border/60 px-3">
         {!collapsed && (
           <Link href="/dashboard/" className="group flex min-w-0 items-center gap-2.5">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-elev-1 transition-transform duration-md ease-md group-hover:scale-[1.03]">
-              <span className="text-sm font-semibold">P</span>
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border bg-surface-container-high text-primary shadow-elev-1">
+              <span className="font-display text-base leading-none">Ai</span>
             </div>
-            <span className="truncate text-[15px] font-semibold tracking-tight">PersonAI</span>
+            <span className="truncate font-display text-[17px] tracking-tight">PersonAI</span>
           </Link>
         )}
         <Button variant="ghost" size="icon" onClick={onToggle} className="h-9 w-9 shrink-0">

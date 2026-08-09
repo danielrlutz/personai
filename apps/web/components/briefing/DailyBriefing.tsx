@@ -1,16 +1,20 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { RefreshCw, Sun } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 import { apiGet, apiPost, type DailyBriefing } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { BriefingSnapshotCards } from "./BriefingSnapshotCards";
 import { BriefingNarrative } from "./BriefingNarrative";
 import { BriefingActionItems } from "./BriefingActionItems";
 import { useUsageMode } from "@/lib/usage-mode";
 
-export function DailyBriefing() {
+interface DailyBriefingProps {
+  /** Home composition: greeting + narrative + actions — no KPI card grid. */
+  compact?: boolean;
+}
+
+export function DailyBriefing({ compact = false }: DailyBriefingProps) {
   const { usageMode } = useUsageMode();
   const [briefing, setBriefing] = useState<DailyBriefing | null>(null);
   const [loading, setLoading] = useState(true);
@@ -46,23 +50,14 @@ export function DailyBriefing() {
   };
 
   if (loading) {
-    return (
-      <div className="space-y-4">
-        <Skeleton className="h-28 w-full rounded-2xl" />
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="h-32 rounded-2xl" />
-          ))}
-        </div>
-      </div>
-    );
+    return <Skeleton className="h-28 w-full rounded-2xl" />;
   }
 
   if (error || !briefing) {
     return (
-      <div className="rounded-2xl border border-destructive/30 bg-destructive/10 p-6 text-center">
+      <div className="rounded-2xl border border-destructive/30 bg-destructive/10 p-5 text-center">
         <p className="text-sm text-destructive">{error ?? "Briefing unavailable"}</p>
-        <Button className="mt-4" size="sm" onClick={() => void load()}>
+        <Button className="mt-3" size="sm" onClick={() => void load()}>
           Retry
         </Button>
       </div>
@@ -70,49 +65,37 @@ export function DailyBriefing() {
   }
 
   return (
-    <div className="space-y-5">
-      <div className="surface-card relative animate-in overflow-hidden p-6 sm:p-7">
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-x-0 top-0 h-24 opacity-80"
-          style={{
-            background:
-              "radial-gradient(480px 120px at 12% 0%, hsl(214 89% 51% / 0.12), transparent 70%)",
-          }}
-        />
-        <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <div className="space-y-4">
+      <div className="rounded-2xl border border-border bg-card p-5 shadow-elev-1">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
-            <div className="mb-2 flex items-center gap-2 text-primary">
-              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary-container">
-                <Sun className="h-4 w-4 text-primary-on-container" />
-              </span>
-              <span className="md-label-large">Daily briefing</span>
-            </div>
-            <h2 className="truncate text-[1.65rem] font-semibold tracking-tight sm:text-[1.85rem]">
-              {briefing.snapshot.greeting}
-            </h2>
-            <p className="mt-1.5 md-body-medium text-muted-foreground">
+            <h3 className="font-display text-2xl tracking-tight">{briefing.snapshot.greeting}</h3>
+            <p className="mt-1 text-sm text-muted-foreground">
               {new Date(briefing.briefingDate).toLocaleDateString("de-CH", {
                 weekday: "long",
                 day: "numeric",
                 month: "long",
-                year: "numeric",
               })}
             </p>
           </div>
           <Button variant="outline" size="sm" onClick={() => void regenerate()} disabled={regenerating}>
             <RefreshCw className={`h-4 w-4 ${regenerating ? "animate-spin" : ""}`} />
-            Refresh snapshot
+            Refresh
           </Button>
         </div>
       </div>
 
-      <BriefingSnapshotCards snapshot={briefing.snapshot} usageMode={usageMode} />
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        <BriefingNarrative initialNarrative={briefing.narrative} tier={briefing.tier} />
-        <BriefingActionItems snapshot={briefing.snapshot} usageMode={usageMode} />
-      </div>
+      {!compact ? (
+        <div className="grid gap-4 lg:grid-cols-2">
+          <BriefingNarrative initialNarrative={briefing.narrative} tier={briefing.tier} />
+          <BriefingActionItems snapshot={briefing.snapshot} usageMode={usageMode} />
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <BriefingNarrative initialNarrative={briefing.narrative} tier={briefing.tier} />
+          <BriefingActionItems snapshot={briefing.snapshot} usageMode={usageMode} />
+        </div>
+      )}
     </div>
   );
 }

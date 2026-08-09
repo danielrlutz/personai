@@ -15,71 +15,43 @@ import type { DriveStatus } from "@/lib/api-client";
 export default function IngestPage() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [drive, setDrive] = useState<DriveStatus | null>(null);
-  const [driveReady, setDriveReady] = useState(false);
 
   useEffect(() => {
-    void fetchDriveStatus()
-      .then(setDrive)
-      .finally(() => setDriveReady(true));
+    void fetchDriveStatus().then(setDrive).catch(() => setDrive(null));
   }, []);
 
   const linked = Boolean(drive?.linked);
-  const driveLoading = !driveReady;
 
   return (
     <PageEnter className="mx-auto max-w-4xl space-y-6">
       <div className="page-header min-w-0">
-        <h1 className="page-title">Archive</h1>
+        <h1 className="font-display text-3xl tracking-tight sm:text-4xl">Archive</h1>
         <p className="page-subtitle">
-          Scan a whole mailbox PDF, split/OCR/name/file with confirms. Payments wait for your OK.
+          OCR names files locally first. Edit DocType / Entity / category in Needs confirmation —
+          Confirm files; Decline keeps staging only (no Drive write).
         </p>
-        <details className="mt-3 max-w-xl rounded-xl border border-border/70 bg-surface-container/50 px-3.5 py-2.5 text-sm">
-          <summary className="cursor-pointer select-none font-medium text-foreground/90">
-            How naming works
-          </summary>
-          <div className="mt-2 space-y-2 text-muted-foreground">
-            <p>
-              Suggested names look like{" "}
-              <span className="font-mono text-xs text-foreground/80">
-                2026-08-09_Bill_Swisscom
-              </span>{" "}
-              — date, document type, then who it is from or about.
-            </p>
-            <p>
-              Court / Gerichtsunterlagen go to Legal (08). Behörden stay Official (01). Amounts that
-              would change your ledger still need confirmation below.
-            </p>
-          </div>
-        </details>
       </div>
-      {driveLoading ? (
-        <p className="text-sm text-muted-foreground">Checking Google Drive link…</p>
-      ) : !linked ? (
-        <div className="rounded-2xl border border-border/70 bg-surface-container/60 px-4 py-5">
-          <div className="flex items-start gap-3">
-            <HardDrive className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
-            <div className="space-y-3">
-              <p className="text-sm font-medium tracking-tight">
-                Archive filing needs Google Drive linked
-              </p>
-              <p className="text-sm text-muted-foreground">
-                Sign in is done — next link Drive in Settings. Until then, use Pocket team for
-                personal advice (specialists will say they lack archive context).
-              </p>
-              <Button asChild size="sm">
-                <Link href="/settings/?focus=drive">Open Drive settings</Link>
-              </Button>
-            </div>
+
+      {!linked ? (
+        <div className="flex items-start gap-3 rounded-2xl border border-border bg-card px-4 py-4">
+          <HardDrive className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
+          <div className="space-y-2 text-sm">
+            <p className="font-medium">Local archive works without Drive</p>
+            <p className="text-muted-foreground">
+              Confirm still writes to this profile&apos;s disk. Link Google Drive in Settings when you
+              want cloud copies.
+            </p>
+            <Button asChild size="sm" variant="outline">
+              <Link href="/settings/?focus=drive">Drive settings</Link>
+            </Button>
           </div>
         </div>
-      ) : (
-        <>
-          <ConfirmGate refreshKey={refreshKey} onResolved={() => setRefreshKey((k) => k + 1)} />
-          <FileDropzone onUploaded={() => setRefreshKey((k) => k + 1)} />
-          <OutboxPendingStrip types={["ingest-upload"]} hideTeamChat />
-          <IngestionQueue refreshKey={refreshKey} />
-        </>
-      )}
+      ) : null}
+
+      <ConfirmGate refreshKey={refreshKey} onResolved={() => setRefreshKey((k) => k + 1)} />
+      <FileDropzone onUploaded={() => setRefreshKey((k) => k + 1)} />
+      <OutboxPendingStrip types={["ingest-upload"]} hideTeamChat />
+      <IngestionQueue refreshKey={refreshKey} />
     </PageEnter>
   );
 }

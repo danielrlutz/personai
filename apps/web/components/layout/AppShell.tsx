@@ -14,7 +14,8 @@ import { getStoredSessionToken } from "@/lib/platform";
 import { cn } from "@/lib/utils";
 
 const commandItems = [
-  { label: "Home", href: "/dashboard/", keys: "G D" },
+  { label: "Home / triage", href: "/dashboard/", keys: "G D" },
+  { label: "Activity audit", href: "/activity/", keys: "G Y" },
   { label: "Life / Personal", href: "/life/", keys: "G E" },
   { label: "Medical log", href: "/medical/", keys: "G M" },
   { label: "Pocket team", href: "/team/", keys: "G T" },
@@ -23,6 +24,7 @@ const commandItems = [
   { label: "Ask finance", href: "/team/?specialist=cfo", keys: "G C" },
   { label: "Legal tasks", href: "/legal/", keys: "G L" },
   { label: "Archive documents", href: "/ingest/", keys: "G A" },
+  { label: "Setup wizard", href: "/setup/", keys: "G W" },
   { label: "Settings", href: "/settings/", keys: "G S" },
   { label: "Switch profile", href: "__logout__", keys: "G P" },
 ];
@@ -115,8 +117,8 @@ export function AppShell({ children }: AppShellProps) {
       <div className="relative z-[1] flex min-w-0 flex-1 flex-col overflow-hidden">
         <header className="surface-panel flex h-[var(--header-height)] shrink-0 items-center justify-between gap-3 border-b px-4 sm:px-6">
           <div className="flex min-w-0 items-center gap-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-elev-1 md:hidden">
-              <span className="text-sm font-semibold">P</span>
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border bg-surface-container-high text-primary md:hidden">
+              <span className="font-display text-base leading-none">Ai</span>
             </div>
             <button
               type="button"
