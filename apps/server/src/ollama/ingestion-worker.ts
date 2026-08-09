@@ -5,6 +5,11 @@ import { getPrisma, getActiveProfileId } from "../db/prisma-singleton.js";
 import { config, profileUploadsDir } from "../config.js";
 import { resolveOllamaHost, visionExtract } from "./client.js";
 import { vramLock } from "./vram-lock.js";
+import { createConfirmation } from "../confirm/confirm-service.js";
+import {
+  suggestArchiveCategory,
+  suggestArchiveName,
+} from "../specialists/roster.js";
 
 export const ingestionEvents = new EventEmitter();
 
@@ -95,35 +100,86 @@ async function processJob(profileId: string, jobId: string): Promise<void> {
     });
 
     const docType = String(structured.documentType ?? "OTHER");
+    const entity = String(
+      structured.creditorName ?? structured.vendor ?? structured.provider ?? "Unknown",
+    );
+    const archiveName = suggestArchiveName({
+      date: structured.date ? String(structured.date) : null,
+      documentType: docType,
+      entity,
+    });
+    const archiveCategory = suggestArchiveCategory(docType);
+    const deadline = structured.dueDate ? new Date(String(structured.dueDate)) : null;
+
+    const docUpdate: {
+      documentType?: "BILL" | "MEDICAL_RECORD" | "LEGAL" | "CONTRACT" | "RECEIPT" | "OTHER";
+      archiveName: string;
+      archiveCategory: number;
+      deadline: Date | null;
+    } = { archiveName, archiveCategory, deadline };
     if (["BILL", "MEDICAL_RECORD", "LEGAL", "CONTRACT", "RECEIPT", "OTHER"].includes(docType)) {
-      await prisma.document.update({
-        where: { id: job.documentId },
-        data: { documentType: docType as "BILL" | "MEDICAL_RECORD" | "LEGAL" | "CONTRACT" | "RECEIPT" | "OTHER" },
-      });
+      docUpdate.documentType = docType as
+        | "BILL"
+        | "MEDICAL_RECORD"
+        | "LEGAL"
+        | "CONTRACT"
+        | "RECEIPT"
+        | "OTHER";
     }
+    await prisma.document.update({
+      where: { id: job.documentId },
+      data: docUpdate,
+    });
 
     if (structured.amount && structured.iban) {
-      await prisma.qRBill.create({
-        data: {
-          creditorName: String(structured.creditorName ?? structured.vendor ?? "Unknown"),
+      await createConfirmation(prisma, {
+        action: "ledger.write",
+        summary: `Commit QR bill ${entity} · ${structured.amount} ${structured.currency ?? "CHF"} → archive ${archiveName}`,
+        entity: "Document",
+        entityId: job.documentId,
+        payload: {
+          kind: "qr_bill",
+          documentId: job.documentId,
+          creditorName: entity,
           iban: String(structured.iban),
           amount: Number(structured.amount),
           currency: String(structured.currency ?? "CHF"),
           reference: structured.reference ? String(structured.reference) : null,
-          dueDate: structured.dueDate ? new Date(String(structured.dueDate)) : null,
-          documentId: job.documentId,
-          status: "PENDING",
+          dueDate: structured.dueDate ? String(structured.dueDate) : null,
+          archiveName,
+          archiveCategory,
         },
       });
     } else if (structured.amount && structured.vendor) {
-      await prisma.transaction.create({
-        data: {
+      await createConfirmation(prisma, {
+        action: "ledger.write",
+        summary: `Commit expense ${entity} · ${structured.amount} ${structured.currency ?? "CHF"} → archive ${archiveName}`,
+        entity: "Document",
+        entityId: job.documentId,
+        payload: {
+          kind: "transaction",
+          documentId: job.documentId,
           type: "EXPENSE",
           amount: Number(structured.amount),
           currency: String(structured.currency ?? "CHF"),
-          description: String(structured.vendor),
-          date: structured.date ? new Date(String(structured.date)) : new Date(),
+          description: entity,
+          date: structured.date ? String(structured.date) : new Date().toISOString(),
+          archiveName,
+          archiveCategory,
+        },
+      });
+    } else {
+      await createConfirmation(prisma, {
+        action: "archive.commit",
+        summary: `Archive as ${archiveName} (cat ${archiveCategory})${deadline ? ` · Frist ${deadline.toISOString().slice(0, 10)}` : ""}`,
+        entity: "Document",
+        entityId: job.documentId,
+        payload: {
           documentId: job.documentId,
+          archiveName,
+          archiveCategory,
+          deadline: deadline ? deadline.toISOString() : null,
+          createFristenTask: Boolean(deadline),
         },
       });
     }
