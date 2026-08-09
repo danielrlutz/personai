@@ -332,19 +332,31 @@ HTTPS=1 ./scripts/vps-tailscale.sh debi9.tail8175e6.ts.net
 tailscale serve status
 ```
 
-Manual Serve (if you only need proxy, stack already healthy):
+#### Recovery: `tailscale serve status` → **No serve config**
+
+Serve was never set or was cleared. Loopback `:3000`/`:4000` can be healthy while `https://HOST` and `:8443` fail with “Could not connect”.
+
+**A) Quick path — HTTP for Drive today (not Install app):**
+
+```text
+Phone → http://debi9.tail8175e6.ts.net:3000
+Settings → API Server → http://debi9.tail8175e6.ts.net:4000 → Save & test
+```
+
+**B) Full path — restore Serve for PWA (no rebuild if stack is up):**
 
 ```bash
+cd /etc/personaios
+HTTPS=1 ./scripts/vps-tailscale.sh --serve-only debi9.tail8175e6.ts.net
+# manual:
 sudo tailscale serve reset
 sudo tailscale serve --bg --yes --https=443 3000
 sudo tailscale serve --bg --yes --https=8443 4000
-# equivalents: http://127.0.0.1:3000 / http://127.0.0.1:4000
 sudo tailscale serve status
-curl -sS https://debi9.tail8175e6.ts.net:8443/health
-curl -sS http://debi9.tail8175e6.ts.net:4000/health
+curl -skS https://debi9.tail8175e6.ts.net:8443/health
 ```
 
-If `:8443/health` fails but `:4000/health` works, recreate Serve (above) or re-run `HTTPS=1 ./scripts/vps-tailscale.sh …`. Temporary Drive setup: phone → `http://HOST:3000` + API `http://HOST:4000` (not PWA).
+If the web image still bakes a stale API URL, run the full bake+rebuild (`HTTPS=1 ./scripts/vps-tailscale.sh HOST`).
 
 Then bake HTTPS URLs + recreate (script does this when `HTTPS=1`):
 
@@ -551,6 +563,7 @@ For **Tailscale phone PWA**, prefer Serve (§6) over Caddy.
 | `setup.sh --mode=vps` | Wizard → delegates to `install.sh` |
 | `scripts/vps-tailscale.sh HOST` | Bake MagicDNS API/web URLs, rebuild api+web, health-check |
 | `HTTPS=1 ./scripts/vps-tailscale.sh HOST` | Same + Tailscale Serve TLS + HTTPS env (PWA) |
+| `HTTPS=1 ./scripts/vps-tailscale.sh --serve-only HOST` | Recreate Serve only when status is “No serve config” |
 | `scripts/vps-verify.sh HOST` | Git SHA, compose ps, health curls, OAuth env, phone checklist |
 | `scripts/vps-recover-api.sh` | Reset to no-compose-ollama, fix stale `.env`/override |
 | `scripts/vps-up.sh` | Start stack with host Ollama hygiene (no Tailscale bake-in) |

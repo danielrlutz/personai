@@ -194,8 +194,9 @@ export function describeApiFailure(
       sticky: true,
       message:
         `Can't reach API at ${base}${pathHint} (${raw}). ` +
-        `HTTPS/PWA: https://<magicdns>:8443 (Serve). HTTP browse: http://<magicdns>:4000. ` +
-        `If Serve :8443 is down, open http://HOST:3000 temporarily for Drive setup (not Install app). ` +
+        `If Active API is https://…:8443 and \`tailscale serve status\` shows "No serve config", ` +
+        `either run HTTPS=1 ./scripts/vps-tailscale.sh --serve-only HOST, or open http://HOST:3000 ` +
+        `and set API to http://HOST:4000 (Drive setup only — not Install app). ` +
         `If health works but chat fails with 401, unlock the profile first.`,
     };
   }

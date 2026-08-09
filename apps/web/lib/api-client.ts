@@ -126,6 +126,74 @@ export async function probeApiHealth(
   }
 }
 
+export type PreferApiResult = {
+  baseUrl: string;
+  switched: boolean;
+  /** Human hint when HTTPS Serve is down or mixed content blocks HTTP API. */
+  reason?: string;
+  /** True when the page is HTTPS and cannot call http://:4000 (open HTTP Settings). */
+  needsHttpUi?: boolean;
+};
+
+/**
+ * Prefer a reachable API when Active/baked URL points at dead Serve :8443.
+ * On http://HOST:3000, auto-switches to http://HOST:4000 when that health succeeds.
+ * On https:// pages, does not mutate (mixed content) — sets needsHttpUi instead.
+ */
+export async function preferReachableApiBaseUrl(
+  timeoutMs = 3500,
+): Promise<PreferApiResult> {
+  const active = getApiBaseUrl();
+  const activeProbe = await probeApiHealth(active, timeoutMs);
+  if (activeProbe.ok) return { baseUrl: active, switched: false };
+
+  const httpApi = getHttpFallbackApiBaseUrl();
+  const httpSettings = getHttpFallbackSettingsUrl();
+  const serveHint =
+    "Tailscale Serve may have no config (`tailscale serve status` → No serve config).";
+
+  if (typeof window !== "undefined" && window.location.protocol === "https:") {
+    return {
+      baseUrl: active,
+      switched: false,
+      needsHttpUi: true,
+      reason:
+        `HTTPS API unreachable (${activeProbe.error ?? "failed"}). ${serveHint} ` +
+        (httpSettings
+          ? `Temporary Drive setup: open ${httpSettings} with API ${httpApi} (not PWA).`
+          : `Open http://HOST:3000 and set API to http://HOST:4000.`),
+    };
+  }
+
+  if (!httpApi || httpApi === active) {
+    return {
+      baseUrl: active,
+      switched: false,
+      reason: `${activeProbe.error ?? "API unreachable"}. ${serveHint}`,
+    };
+  }
+
+  const httpProbe = await probeApiHealth(httpApi, timeoutMs);
+  if (!httpProbe.ok) {
+    return {
+      baseUrl: active,
+      switched: false,
+      reason:
+        `HTTPS API (${active}) failed (${activeProbe.error ?? "failed"}); ` +
+        `HTTP fallback ${httpApi} also failed (${httpProbe.error ?? "unreachable"}). ${serveHint}`,
+    };
+  }
+
+  setApiBaseUrl(httpApi);
+  return {
+    baseUrl: httpApi,
+    switched: true,
+    reason:
+      `HTTPS API unreachable — switched to ${httpApi}. ${serveHint} ` +
+      `Re-enable with: HTTPS=1 ./scripts/vps-tailscale.sh --serve-only <host>`,
+  };
+}
+
 export function getApiBaseUrl(): string {
   if (typeof window !== "undefined") {
     if (apiBaseUrlOverride !== undefined && apiBaseUrlOverride !== null) {

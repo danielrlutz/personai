@@ -6,6 +6,7 @@
 #   ./scripts/vps-tailscale.sh                 # auto-detect MagicDNS name
 #   HTTPS=1 ./scripts/vps-tailscale.sh debi9.tail8175e6.ts.net
 #   ./scripts/vps-tailscale.sh --https debi9.tail8175e6.ts.net
+#   HTTPS=1 ./scripts/vps-tailscale.sh --serve-only debi9.tail8175e6.ts.net
 #   NO_CACHE=1 ./scripts/vps-tailscale.sh …   # force --no-cache rebuild
 #
 # Default (HTTP): sets NEXT_PUBLIC_API_URL=http://HOST:4000 — fine for browsing
@@ -18,6 +19,9 @@
 #   - API:  https://HOST:8443     → 127.0.0.1:4000  (avoids clash with Docker :4000)
 #   - Sets NEXT_PUBLIC_API_URL / PUBLIC_API_URL / PUBLIC_WEB_URL (+ OAuth redirect)
 #
+# --serve-only (with HTTPS=1): recreate Tailscale Serve only — no docker rebuild.
+#   Use when `tailscale serve status` prints "No serve config" but api/web are healthy.
+#
 # Prerequisite for HTTPS: Tailscale admin → DNS → Enable HTTPS certificates
 #   https://login.tailscale.com/admin/dns
 set -euo pipefail
@@ -27,14 +31,16 @@ cd "$ROOT"
 
 NO_CACHE="${NO_CACHE:-0}"
 HTTPS="${HTTPS:-${PERSONAI_TAILSCALE_HTTPS:-0}}"
+SERVE_ONLY=0
 MAGICDNS_ARG=""
 
 for arg in "$@"; do
   case "$arg" in
     --https|-https) HTTPS=1 ;;
     --http|-http) HTTPS=0 ;;
+    --serve-only|--serve) SERVE_ONLY=1; HTTPS=1 ;;
     -h|--help)
-      sed -n '2,24p' "$0" | sed 's/^# \{0,1\}//'
+      sed -n '2,28p' "$0" | sed 's/^# \{0,1\}//'
       exit 0
       ;;
     *)
@@ -118,10 +124,25 @@ normalize_host() {
   printf '%s' "$h"
 }
 
+serve_status_text() {
+  # "No serve config" is a successful empty state (exit 0) — still means Serve is down.
+  if [[ "$(id -u)" -eq 0 ]]; then
+    tailscale serve status 2>/dev/null || true
+  elif command -v sudo >/dev/null 2>&1; then
+    sudo tailscale serve status 2>/dev/null || tailscale serve status 2>/dev/null || true
+  else
+    tailscale serve status 2>/dev/null || true
+  fi
+}
+
 ts_cmd() {
-  # Serve mutate often needs root; use passwordless sudo when available.
+  # Serve mutate often needs root; prefer sudo (may prompt) for serve*.
   if [[ "$(id -u)" -eq 0 ]]; then
     tailscale "$@"
+    return
+  fi
+  if [[ "${1:-}" == "serve" ]] && command -v sudo >/dev/null 2>&1; then
+    sudo tailscale "$@"
     return
   fi
   if command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
@@ -162,6 +183,15 @@ configure_tailscale_https() {
   echo "  API  https://${host}:8443  → http://127.0.0.1:4000"
   echo "  (8443 avoids binding clash with Docker publishing 0.0.0.0:4000)"
   echo "  CORS: API reflects Origin (https://${host} → :8443 is cross-port; Bearer auth)."
+
+  local prior
+  prior="$(serve_status_text)"
+  if [[ -z "$prior" ]] || grep -qiE 'no serve config' <<<"$prior"; then
+    echo "! Current Serve state: No serve config (HTTPS :443/:8443 will fail until set)"
+  else
+    echo "› Current Serve state:"
+    echo "$prior" | sed 's/^/  /'
+  fi
 
   # Clear prior Serve mounts so we own 443 + 8443 predictably.
   ts_cmd serve reset >/dev/null 2>&1 || true
@@ -266,12 +296,58 @@ fi
 
 echo "› MagicDNS host: $HOST"
 echo "› HTTPS mode:    $([[ "$HTTPS" -eq 1 ]] && echo ON || echo OFF)"
+echo "› Serve-only:    $([[ "$SERVE_ONLY" -eq 1 ]] && echo YES || echo no)"
 echo "› NEXT_PUBLIC_API_URL=$API_URL"
 echo "› PUBLIC_WEB_URL=$WEB_URL"
 if [[ "$HTTPS" -eq 0 ]]; then
   echo "! Chrome Install app / PWA requires a secure context (HTTPS)."
   echo "  HTTP on *.ts.net is fine for browsing, but NOT installable."
   echo "  Re-run with: HTTPS=1 ./scripts/vps-tailscale.sh $HOST"
+fi
+
+# ---------------------------------------------------------------------------
+# Fast path: recreate Serve only (api/web already healthy; status = No serve config)
+# ---------------------------------------------------------------------------
+if [[ "$SERVE_ONLY" -eq 1 ]]; then
+  if [[ "$HTTPS" -ne 1 ]]; then
+    echo "x --serve-only requires HTTPS=1 / --https" >&2
+    exit 1
+  fi
+  if ! curl -fsS "http://127.0.0.1:4000/health" >/dev/null 2>&1 \
+    && ! curl -fsS "http://127.0.0.1:4000/health/" >/dev/null 2>&1; then
+    echo "x Loopback API :4000 not healthy — start the stack first, or drop --serve-only" >&2
+    echo "  curl -sS http://127.0.0.1:4000/health" >&2
+    exit 1
+  fi
+  if ! curl -fsS -o /dev/null -w "%{http_code}" "http://127.0.0.1:3000/" 2>/dev/null | grep -qE '200|301|302|304'; then
+    echo "x Loopback web :3000 not healthy — start the stack first, or drop --serve-only" >&2
+    exit 1
+  fi
+  # Keep .env aligned with HTTPS Serve URLs without a rebuild (web may still have old bake-in;
+  # Settings override or a later full HTTPS=1 rebuild fixes NEXT_PUBLIC_API_URL).
+  strip_env_kv COMPOSE_FILE
+  set_env_kv PUBLIC_API_URL "$API_URL"
+  set_env_kv PUBLIC_WEB_URL "$WEB_URL"
+  set_env_kv PERSONAI_TAILSCALE_HTTPS 1
+  existing_redir="$(grep -E '^GOOGLE_OAUTH_REDIRECT_URI=' .env 2>/dev/null | head -1 | cut -d= -f2- | tr -d '\r' || true)"
+  if [[ -z "$existing_redir" ]] \
+    || [[ "$existing_redir" == *"://${HOST}:"* ]] \
+    || [[ "$existing_redir" == *"://${HOST}/"* ]] \
+    || [[ "$existing_redir" == *"localhost"* ]] \
+    || [[ "$existing_redir" == *"127.0.0.1"* ]] \
+    || [[ "$existing_redir" == http://* ]]; then
+    set_env_kv GOOGLE_OAUTH_REDIRECT_URI "$OAUTH_REDIRECT"
+    echo "› GOOGLE_OAUTH_REDIRECT_URI=$OAUTH_REDIRECT"
+  fi
+  configure_tailscale_https "$HOST"
+  echo ""
+  echo "✓ Tailscale Serve restored (no docker rebuild)"
+  echo "  Phone open:     $WEB_URL"
+  echo "  Settings API:   $API_URL"
+  echo "  PWA install:    Chrome → open $WEB_URL → menu → Install app"
+  echo "  If web still bakes http://:4000, run full: HTTPS=1 ./scripts/vps-tailscale.sh $HOST"
+  echo "  HEAD: $(git rev-parse --short HEAD 2>/dev/null || echo n/a)"
+  exit 0
 fi
 
 # ---------------------------------------------------------------------------

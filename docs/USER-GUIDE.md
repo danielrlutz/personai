@@ -260,6 +260,20 @@ cd /etc/personaios
 HTTPS=1 ./scripts/vps-tailscale.sh debi9.tail8175e6.ts.net
 ```
 
+If `tailscale serve status` shows **No serve config** (HTTPS `:8443` fails but `http://127.0.0.1:4000/health` works):
+
+```bash
+# A) Quick — browse + Drive today (not Install app)
+# Phone: http://debi9.tail8175e6.ts.net:3000
+# Settings → API Server → http://debi9.tail8175e6.ts.net:4000 → Save & test
+
+# B) Full — restore Serve for PWA
+HTTPS=1 ./scripts/vps-tailscale.sh --serve-only debi9.tail8175e6.ts.net
+# or: sudo tailscale serve reset
+#     sudo tailscale serve --bg --yes --https=443 3000
+#     sudo tailscale serve --bg --yes --https=8443 4000
+```
+
 Then on the phone:
 
 ```text
@@ -311,11 +325,14 @@ curl -sS https://debi9.tail8175e6.ts.net:8443/health
 curl -sS -o /dev/null -w 'https-web %{http_code}\n' https://debi9.tail8175e6.ts.net/
 curl -sS http://debi9.tail8175e6.ts.net:4000/health
 
-# 3) Recreate Serve (ports 443 + 8443 only)
-sudo tailscale serve reset
-sudo tailscale serve --bg --yes --https=443 3000
-sudo tailscale serve --bg --yes --https=8443 4000
+# 3) Recreate Serve only (no docker rebuild) — when status says "No serve config"
+HTTPS=1 ./scripts/vps-tailscale.sh --serve-only debi9.tail8175e6.ts.net
+# manual equivalent:
+#   sudo tailscale serve reset
+#   sudo tailscale serve --bg --yes --https=443 3000
+#   sudo tailscale serve --bg --yes --https=8443 4000
 sudo tailscale serve status
+curl -sS https://debi9.tail8175e6.ts.net:8443/health
 
 # 4) Or full HTTPS rebuild (bake URLs + Serve + probe)
 HTTPS=1 ./scripts/vps-tailscale.sh debi9.tail8175e6.ts.net

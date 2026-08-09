@@ -66,8 +66,11 @@ export function ProductSettingsCard() {
       if (!opts?.skipPrefer) {
         const prefer = await preferReachableApiBaseUrl();
         if (prefer.switched) {
-          setNote(prefer.reason ?? `Switched API to ${prefer.baseUrl}.`);
-        } else if (prefer.needsHttpUi && prefer.reason) {
+          setNote(prefer.reason ?? `Switched API to ${prefer.baseUrl}. Reloading…`);
+          window.setTimeout(() => window.location.reload(), 400);
+          return;
+        }
+        if (prefer.needsHttpUi && prefer.reason) {
           // Still attempt load (will fail); surface Serve / HTTP UI guidance below.
           setLoadError(prefer.reason);
         }
@@ -231,8 +234,8 @@ export function ProductSettingsCard() {
                 {fallbackBusy
                   ? "Trying…"
                   : onHttps
-                    ? "Open HTTP Settings (:3000)"
-                    : `Try HTTP API :4000`}
+                    ? "Switch API URL (open HTTP Settings)"
+                    : "Switch API URL (:4000)"}
               </Button>
             ) : null}
           </div>

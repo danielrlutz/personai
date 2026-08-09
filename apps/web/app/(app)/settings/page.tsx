@@ -36,6 +36,7 @@ import {
   getHttpFallbackApiBaseUrl,
   getHttpFallbackSettingsUrl,
   getSuggestedApiBaseUrl,
+  preferReachableApiBaseUrl,
   probeApiHealth,
   setApiBaseUrl,
   type ArchiveRefreshResult,
@@ -191,15 +192,16 @@ export default function SettingsPage() {
     setHttpFallbackSettingsUrl(httpSettings);
 
     void (async () => {
-      if (!active.startsWith("https:")) return;
-      const probe = await probeApiHealth(active, 3500);
-      if (probe.ok) return;
-      setApiNote(
-        `HTTPS API unreachable (${probe.error ?? "failed"}). Serve :8443 may be down. ` +
-          (httpSettings
-            ? `Temporary Drive setup: open ${httpSettings} with API ${httpApi} (not PWA).`
-            : `Try HTTP API ${httpApi} from http://HOST:3000.`),
-      );
+      const prefer = await preferReachableApiBaseUrl(3500);
+      if (prefer.switched) {
+        setApiUrl(prefer.baseUrl);
+        setApiNote(prefer.reason ?? `Switched API to ${prefer.baseUrl}. Reloading…`);
+        window.setTimeout(() => window.location.reload(), 500);
+        return;
+      }
+      if (prefer.reason && (active.startsWith("https:") || prefer.needsHttpUi)) {
+        setApiNote(prefer.reason);
+      }
     })();
 
     void apiGet<LicenseInfo>("/license", { silent: true }).then(setLicense).catch(() => undefined);

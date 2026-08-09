@@ -192,7 +192,19 @@ fi
 
 section "Tailscale Serve (HTTPS / PWA)"
 if command -v tailscale >/dev/null 2>&1; then
-  tailscale serve status 2>/dev/null || note "tailscale serve status failed (Serve not configured?)"
+  SERVE_ST="$(sudo tailscale serve status 2>/dev/null || tailscale serve status 2>/dev/null || true)"
+  if [[ -z "$SERVE_ST" ]] || grep -qiE 'no serve config' <<<"$SERVE_ST"; then
+    if [[ "$TS_HTTPS" -eq 1 ]]; then
+      bad "Serve status: No serve config — https://HOST and :8443 will fail"
+      note "Recover: HTTPS=1 ./scripts/vps-tailscale.sh --serve-only $MAGICDNS"
+      note "Temp Drive (not PWA): http://${MAGICDNS}:3000 + API http://${MAGICDNS}:4000"
+      FAIL=1
+    else
+      note "Serve status: No serve config (expected for HTTP bake-in)"
+    fi
+  else
+    echo "$SERVE_ST"
+  fi
   if [[ "$TS_HTTPS" -eq 1 ]]; then
     HTTPS_WEB="https://${MAGICDNS}"
     HTTPS_API="https://${MAGICDNS}:8443"
@@ -257,18 +269,23 @@ Authenticated check (after unlock — replace TOKEN):
   curl -sS -H "Authorization: Bearer TOKEN" -H "X-Profile-Id: PROFILE_ID" \\
     http://127.0.0.1:4000/team/specialists | head -c 200; echo
 
-Recovery (PWA / Drive when :8443 dead):
-  cd $ROOT && git fetch && git reset --hard origin/main
+Recovery when \`tailscale serve status\` → No serve config:
+  # A) Quick HTTP (Drive today, not Install app)
   curl -sS http://127.0.0.1:4000/health
-  sudo tailscale serve status
+  # phone: http://${MAGICDNS}:3000  → Settings API http://${MAGICDNS}:4000
+
+  # B) Restore Serve (PWA)
+  cd $ROOT
+  HTTPS=1 ./scripts/vps-tailscale.sh --serve-only ${MAGICDNS}
+  # or manual:
   sudo tailscale serve reset
   sudo tailscale serve --bg --yes --https=443 3000
   sudo tailscale serve --bg --yes --https=8443 4000
-  curl -sS https://${MAGICDNS}:8443/health
-  HTTPS=1 ./scripts/vps-tailscale.sh ${MAGICDNS}
+  curl -skS https://${MAGICDNS}:8443/health
+  # full bake+rebuild if NEXT_PUBLIC_API_URL still wrong:
+  # HTTPS=1 ./scripts/vps-tailscale.sh ${MAGICDNS}
   ./scripts/vps-verify.sh ${MAGICDNS}
   # phone HTTPS: https://${MAGICDNS} → API https://${MAGICDNS}:8443 → Product vault → OAuth → Link Drive
-  # temp Drive (not PWA): http://${MAGICDNS}:3000 + API http://${MAGICDNS}:4000
 EOF
 
 section "Result"
