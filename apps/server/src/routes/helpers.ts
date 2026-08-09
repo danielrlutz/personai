@@ -1,4 +1,8 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
+import { getRequestSession } from "../auth/middleware.js";
+import { getPrisma } from "../db/prisma-singleton.js";
+import { publicErrorMessage } from "../lib/safe-data.js";
+import { requireProfileId } from "../profiles/registry.js";
 
 /**
  * SSE hijacks the raw socket — @fastify/cors never runs on the 200 response.
@@ -23,9 +27,6 @@ export function sseStart(reply: FastifyReply, request: FastifyRequest): void {
   }
   reply.raw.writeHead(200, headers);
 }
-import { requireProfileId } from "../profiles/registry.js";
-import { getPrisma } from "../db/prisma-singleton.js";
-import { getRequestSession } from "../auth/middleware.js";
 
 /** Prefer authenticated session profile; never trust bare X-Profile-Id alone on protected routes. */
 export function getProfileId(request: FastifyRequest): string {
@@ -43,8 +44,9 @@ export async function withPrisma(request: FastifyRequest) {
 }
 
 export function sendError(reply: FastifyReply, err: unknown, status = 400) {
-  const message = err instanceof Error ? err.message : String(err);
-  return reply.status(status).send({ error: message });
+  const code = (err as { statusCode?: number } | null)?.statusCode;
+  const httpStatus = typeof code === "number" && code >= 400 && code < 600 ? code : status;
+  return reply.status(httpStatus).send({ error: publicErrorMessage(err) });
 }
 
 export function sseWrite(reply: FastifyReply, event: string, data: unknown) {

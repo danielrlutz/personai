@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { buildPersonalTodaySummary, endOfDay, startOfDay } from "../life/life-service.js";
+import { optionalDateInput, safeDate, safeDateOrNow } from "../lib/safe-data.js";
 import { sendError, withPrisma } from "./helpers.js";
 
 type HabitFrequency = "DAILY" | "WEEKLY" | "CUSTOM";
@@ -113,7 +114,7 @@ export async function registerLifeRoutes(app: FastifyInstance): Promise<void> {
           data: {
             habitId: habit.id,
             note: req.body.note,
-            loggedAt: req.body.loggedAt ? new Date(req.body.loggedAt) : new Date(),
+            loggedAt: safeDateOrNow(req.body.loggedAt),
           },
         });
         return log;
@@ -184,7 +185,7 @@ export async function registerLifeRoutes(app: FastifyInstance): Promise<void> {
           description: req.body.description,
           status: req.body.status ?? "ACTIVE",
           domain: req.body.domain ?? "PERSONAL",
-          targetDate: req.body.targetDate ? new Date(req.body.targetDate) : null,
+          targetDate: safeDate(req.body.targetDate),
           progress: req.body.progress ?? 0,
         },
       });
@@ -214,12 +215,7 @@ export async function registerLifeRoutes(app: FastifyInstance): Promise<void> {
           description: req.body.description,
           status: req.body.status,
           domain: req.body.domain,
-          targetDate:
-            req.body.targetDate === undefined
-              ? undefined
-              : req.body.targetDate
-                ? new Date(req.body.targetDate)
-                : null,
+          targetDate: optionalDateInput(req.body.targetDate),
           progress: req.body.progress,
         },
       });
@@ -263,7 +259,7 @@ export async function registerLifeRoutes(app: FastifyInstance): Promise<void> {
           description: req.body.description,
           status: req.body.status ?? "TODO",
           domain: req.body.domain ?? "PERSONAL",
-          dueDate: req.body.dueDate ? new Date(req.body.dueDate) : null,
+          dueDate: safeDate(req.body.dueDate),
           goalId: req.body.goalId,
         },
       });
@@ -293,12 +289,7 @@ export async function registerLifeRoutes(app: FastifyInstance): Promise<void> {
           description: req.body.description,
           status: req.body.status,
           domain: req.body.domain,
-          dueDate:
-            req.body.dueDate === undefined
-              ? undefined
-              : req.body.dueDate
-                ? new Date(req.body.dueDate)
-                : null,
+          dueDate: optionalDateInput(req.body.dueDate),
           goalId: req.body.goalId,
           completedAt:
             req.body.status === "DONE"
@@ -343,8 +334,8 @@ export async function registerLifeRoutes(app: FastifyInstance): Promise<void> {
       const contactName = req.body.contactName?.trim();
       if (!contactName) return reply.status(400).send({ error: "contactName is required" });
       const cadenceDays = req.body.cadenceDays ?? 30;
-      const lastContactedAt = req.body.lastContactedAt ? new Date(req.body.lastContactedAt) : null;
-      let nextDueAt = req.body.nextDueAt ? new Date(req.body.nextDueAt) : null;
+      const lastContactedAt = safeDate(req.body.lastContactedAt);
+      let nextDueAt = safeDate(req.body.nextDueAt);
       if (!nextDueAt) {
         const base = lastContactedAt ?? new Date();
         nextDueAt = new Date(base);
@@ -387,18 +378,8 @@ export async function registerLifeRoutes(app: FastifyInstance): Promise<void> {
       });
       if (!existing) return reply.status(404).send({ error: "Touchpoint not found" });
 
-      let lastContactedAt =
-        req.body.lastContactedAt === undefined
-          ? undefined
-          : req.body.lastContactedAt
-            ? new Date(req.body.lastContactedAt)
-            : null;
-      let nextDueAt =
-        req.body.nextDueAt === undefined
-          ? undefined
-          : req.body.nextDueAt
-            ? new Date(req.body.nextDueAt)
-            : null;
+      let lastContactedAt = optionalDateInput(req.body.lastContactedAt);
+      let nextDueAt = optionalDateInput(req.body.nextDueAt);
 
       if (req.body.markContacted) {
         const contacted = new Date();
@@ -528,7 +509,7 @@ export async function registerLifeRoutes(app: FastifyInstance): Promise<void> {
           label: req.body.label,
           value: req.body.value,
           unit: req.body.unit,
-          recordedAt: req.body.recordedAt ? new Date(req.body.recordedAt) : new Date(),
+          recordedAt: safeDateOrNow(req.body.recordedAt),
           note: req.body.note,
         },
       });

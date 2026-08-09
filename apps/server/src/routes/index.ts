@@ -31,6 +31,12 @@ import {
 import { MedicalReportDocument } from "../export/medical-report.js";
 import { getPrisma } from "../db/prisma-singleton.js";
 import { sendError, sseStart, sseWrite, withPrisma, getProfileId } from "./helpers.js";
+import {
+  safeDate,
+  safeDateOrNow,
+  safeEnum,
+  safeFiniteNumber,
+} from "../lib/safe-data.js";
 import { registerLifeRoutes } from "./life.js";
 import { registerTeamRoutes } from "./team.js";
 import { registerMemoryRoutes } from "./memory.js";
@@ -296,14 +302,16 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   }>("/finance/qr-bills", async (req, reply) => {
     try {
       const { prisma } = await withPrisma(req);
+      const amount = safeFiniteNumber(req.body.amount);
+      if (amount == null) return reply.status(400).send({ error: "amount must be a finite number" });
       const bill = await prisma.qRBill.create({
         data: {
           creditorName: req.body.creditorName,
           iban: req.body.iban,
-          amount: req.body.amount,
+          amount,
           currency: req.body.currency ?? "CHF",
           reference: req.body.reference,
-          dueDate: req.body.dueDate ? new Date(req.body.dueDate) : null,
+          dueDate: safeDate(req.body.dueDate),
           notes: req.body.notes,
         },
       });
@@ -335,11 +343,14 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
           message: "Confirm before marking this bill paid and recording it.",
         });
       }
+      const status = req.body.status
+        ? safeEnum(req.body.status, ["PENDING", "PAID", "OVERDUE", "CANCELLED"] as const, "PENDING")
+        : undefined;
       const bill = await prisma.qRBill.update({
         where: { id: req.params.id },
         data: {
-          status: req.body.status,
-          paidAt: req.body.status === "PAID" ? new Date() : undefined,
+          status,
+          paidAt: status === "PAID" ? new Date() : undefined,
         },
       });
       return bill;
@@ -374,12 +385,19 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   }>("/finance/transactions", async (req, reply) => {
     try {
       const { prisma } = await withPrisma(req);
+      const amount = safeFiniteNumber(req.body.amount);
+      if (amount == null) return reply.status(400).send({ error: "amount must be a finite number" });
+      const type = safeEnum(
+        req.body.type,
+        ["INCOME", "EXPENSE", "TRANSFER"] as const,
+        "EXPENSE",
+      );
       const tx = await prisma.transaction.create({
         data: {
-          type: req.body.type,
-          amount: req.body.amount,
+          type,
+          amount,
           description: req.body.description,
-          date: req.body.date ? new Date(req.body.date) : new Date(),
+          date: safeDateOrNow(req.body.date),
           categoryId: req.body.categoryId,
           currency: req.body.currency ?? "CHF",
         },
@@ -416,9 +434,17 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
         data: {
           title: req.body.title,
           description: req.body.description,
-          type: req.body.type,
-          dueDate: req.body.dueDate ? new Date(req.body.dueDate) : null,
-          status: req.body.status ?? "TODO",
+          type: safeEnum(
+            req.body.type,
+            ["TAX", "FILING", "CONTRACT", "REVIEW", "DEADLINE", "COMPLIANCE", "OTHER"] as const,
+            "OTHER",
+          ),
+          dueDate: safeDate(req.body.dueDate),
+          status: safeEnum(
+            req.body.status ?? "TODO",
+            ["TODO", "IN_PROGRESS", "DONE", "BLOCKED"] as const,
+            "TODO",
+          ),
         },
       });
       return task;
@@ -478,15 +504,23 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       const { prisma } = await withPrisma(req);
       const complaint = await prisma.complaintLog.create({
         data: {
-          category: req.body.category,
+          category: safeEnum(
+            req.body.category,
+            ["PHYSICAL", "PSYCHOLOGICAL", "BOTH"] as const,
+            "PHYSICAL",
+          ),
           title: req.body.title,
           description: req.body.description,
           bodyRegion: req.body.bodyRegion,
-          severity: req.body.severity ?? "MILD",
-          moodScore: req.body.moodScore,
-          sleepHours: req.body.sleepHours,
+          severity: safeEnum(
+            req.body.severity ?? "MILD",
+            ["MILD", "MODERATE", "SEVERE"] as const,
+            "MILD",
+          ),
+          moodScore: safeFiniteNumber(req.body.moodScore) ?? undefined,
+          sleepHours: safeFiniteNumber(req.body.sleepHours) ?? undefined,
           triggers: req.body.triggers ? JSON.stringify(req.body.triggers) : null,
-          occurredAt: req.body.occurredAt ? new Date(req.body.occurredAt) : new Date(),
+          occurredAt: safeDateOrNow(req.body.occurredAt),
         },
       });
       return complaint;
@@ -596,11 +630,16 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
         },
       });
 
+      const fromDate = safeDate(req.body.dateRangeFrom);
+      const toDate = safeDate(req.body.dateRangeTo);
+      if (!fromDate || !toDate) {
+        return reply.status(400).send({ error: "dateRangeFrom/dateRangeTo must be valid dates" });
+      }
       const exportRec = await prisma.medicalExport.create({
         data: {
           title: req.body.title,
-          dateRangeFrom: new Date(req.body.dateRangeFrom),
-          dateRangeTo: new Date(req.body.dateRangeTo),
+          dateRangeFrom: fromDate,
+          dateRangeTo: toDate,
           complaintIds: JSON.stringify(req.body.complaintIds),
           analysisIds: JSON.stringify(req.body.analysisIds ?? []),
           status: "DRAFT",
@@ -610,8 +649,8 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       const pdfData = {
         profileName: profile?.name ?? "Patient",
         title: req.body.title,
-        dateFrom: req.body.dateRangeFrom.slice(0, 10),
-        dateTo: req.body.dateRangeTo.slice(0, 10),
+        dateFrom: fromDate.toISOString().slice(0, 10),
+        dateTo: toDate.toISOString().slice(0, 10),
         complaints: complaints.map((c) => ({
           title: c.title,
           category: c.category,

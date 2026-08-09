@@ -14,6 +14,7 @@ import { getActiveProfileId } from "../db/prisma-singleton.js";
 import { profileExportsDir } from "../config.js";
 import { getActiveProfile } from "../profiles/registry.js";
 import { MedicalReportDocument } from "../export/medical-report.js";
+import { safeDate, safeDateOrNow, safeFiniteNumberOr } from "../lib/safe-data.js";
 
 async function fileDocumentToArchive(prisma, documentId, payload) {
   const doc = await prisma.document.findUnique({ where: { id: documentId } });
@@ -28,17 +29,15 @@ async function fileDocumentToArchive(prisma, documentId, payload) {
     archiveCategory,
     mimeType: doc.mimeType,
   });
+  const deadline =
+    safeDate(payload.dueDate) ?? safeDate(payload.deadline) ?? undefined;
   await prisma.document.update({
     where: { id: documentId },
     data: {
       archiveName: archived.archiveName,
       archiveCategory: archived.archiveCategory,
       confirmedAt: new Date(),
-      deadline: payload.dueDate
-        ? new Date(String(payload.dueDate))
-        : payload.deadline
-          ? new Date(String(payload.deadline))
-          : undefined,
+      ...(deadline !== undefined ? { deadline } : {}),
     },
   });
   await prisma.auditLog.create({
@@ -73,10 +72,10 @@ async function applyLedgerWrite(prisma, payload) {
       data: {
         creditorName: String(payload.creditorName ?? "Unknown"),
         iban: String(payload.iban ?? ""),
-        amount: Number(payload.amount ?? 0),
+        amount: safeFiniteNumberOr(payload.amount, 0),
         currency: String(payload.currency ?? "CHF"),
         reference: payload.reference ? String(payload.reference) : null,
-        dueDate: payload.dueDate ? new Date(String(payload.dueDate)) : null,
+        dueDate: safeDate(payload.dueDate),
         documentId: documentId ?? null,
         status: "PENDING",
       },
@@ -95,10 +94,10 @@ async function applyLedgerWrite(prisma, payload) {
     const tx = await prisma.transaction.create({
       data: {
         type: payload.type ?? "EXPENSE",
-        amount: Number(payload.amount ?? 0),
+        amount: safeFiniteNumberOr(payload.amount, 0),
         currency: String(payload.currency ?? "CHF"),
         description: String(payload.description ?? "Expense"),
-        date: payload.date ? new Date(String(payload.date)) : new Date(),
+        date: safeDateOrNow(payload.date),
         documentId: documentId ?? null,
       },
     });
@@ -111,7 +110,7 @@ async function applyLedgerWrite(prisma, payload) {
 async function applyArchiveCommit(prisma, payload) {
   const documentId = String(payload.documentId ?? "");
   if (!documentId) throw new Error("documentId required");
-  const deadline = payload.deadline ? new Date(String(payload.deadline)) : null;
+  const deadline = safeDate(payload.deadline);
   const { doc, archived } = await fileDocumentToArchive(prisma, documentId, {
     ...payload,
     deadline: deadline ? deadline.toISOString() : null,
@@ -165,8 +164,8 @@ async function applyMedicalExport(prisma, payload) {
   const complaintIds = Array.isArray(payload.complaintIds) ? payload.complaintIds.map(String) : [];
   const analysisIds = Array.isArray(payload.analysisIds) ? payload.analysisIds.map(String) : [];
   const title = String(payload.title ?? "Medical Report");
-  const dateRangeFrom = String(payload.dateRangeFrom ?? new Date().toISOString());
-  const dateRangeTo = String(payload.dateRangeTo ?? new Date().toISOString());
+  const fromDate = safeDateOrNow(payload.dateRangeFrom);
+  const toDate = safeDateOrNow(payload.dateRangeTo);
 
   const complaints = await prisma.complaintLog.findMany({
     where: { id: { in: complaintIds } },
@@ -179,8 +178,8 @@ async function applyMedicalExport(prisma, payload) {
   const exportRec = await prisma.medicalExport.create({
     data: {
       title,
-      dateRangeFrom: new Date(dateRangeFrom),
-      dateRangeTo: new Date(dateRangeTo),
+      dateRangeFrom: fromDate,
+      dateRangeTo: toDate,
       complaintIds: JSON.stringify(complaintIds),
       analysisIds: JSON.stringify(analysisIds),
       status: "DRAFT",
@@ -190,8 +189,8 @@ async function applyMedicalExport(prisma, payload) {
   const pdfData = {
     profileName: profile?.name ?? "Patient",
     title,
-    dateFrom: dateRangeFrom.slice(0, 10),
-    dateTo: dateRangeTo.slice(0, 10),
+    dateFrom: fromDate.toISOString().slice(0, 10),
+    dateTo: toDate.toISOString().slice(0, 10),
     complaints: complaints.map((c) => ({
       title: c.title,
       category: c.category,
