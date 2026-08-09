@@ -233,9 +233,22 @@ export default function ProfilesPage() {
         {(step.kind === "login" || step.kind === "setup" || step.kind === "create") && (
           <Card className="animate-scale-in shadow-elev-2">
             <CardContent className="flex flex-col gap-3 p-4">
+              {(step.kind === "login" || step.kind === "setup") && (
+                <Input
+                  type="text"
+                  name="username"
+                  autoComplete="username"
+                  value={step.profile.name}
+                  readOnly
+                  tabIndex={-1}
+                  aria-hidden="true"
+                  className="sr-only"
+                />
+              )}
               {step.kind === "create" && (
                 <Input
                   autoFocus
+                  name="username"
                   placeholder="Profile name"
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
@@ -246,6 +259,7 @@ export default function ProfilesPage() {
               <Input
                 autoFocus={step.kind !== "create"}
                 type="password"
+                name="password"
                 placeholder={step.kind === "login" ? "Password" : "Choose a password (min 8)"}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -261,6 +275,7 @@ export default function ProfilesPage() {
               {step.kind !== "login" && (
                 <Input
                   type="password"
+                  name="password-confirm"
                   placeholder="Confirm password"
                   value={passwordConfirm}
                   onChange={(e) => setPasswordConfirm(e.target.value)}

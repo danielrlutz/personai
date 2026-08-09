@@ -820,8 +820,21 @@ export default function SettingsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
+          {profileName ? (
+            <Input
+              type="text"
+              name="username"
+              autoComplete="username"
+              value={profileName}
+              readOnly
+              tabIndex={-1}
+              aria-hidden="true"
+              className="sr-only"
+            />
+          ) : null}
           <Input
             type="password"
+            name="current-password"
             value={currentPassword}
             onChange={(e) => setCurrentPassword(e.target.value)}
             placeholder="Current password"
@@ -829,6 +842,7 @@ export default function SettingsPage() {
           />
           <Input
             type="password"
+            name="new-password"
             value={newPassword}
             onChange={(e) => setNewPassword(e.target.value)}
             placeholder="New password (min 8)"
@@ -836,6 +850,7 @@ export default function SettingsPage() {
           />
           <Input
             type="password"
+            name="new-password-confirm"
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
             placeholder="Confirm new password"
