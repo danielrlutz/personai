@@ -1,8 +1,10 @@
 import type { Metadata, Viewport } from "next";
-import { Plus_Jakarta_Sans } from "next/font/google";
+import { Fraunces, Plus_Jakarta_Sans } from "next/font/google";
 import { GeistMono } from "geist/font/mono";
 import { ApiBootstrap } from "@/components/shared/ApiBootstrap";
 import { ServiceWorkerRegister } from "@/components/shared/ServiceWorkerRegister";
+import { ThemeProvider } from "@/components/shared/ThemeProvider";
+import { AppLockGate } from "@/components/shared/AppLockGate";
 import "@/styles/globals.css";
 
 const plusJakarta = Plus_Jakarta_Sans({
@@ -12,9 +14,16 @@ const plusJakarta = Plus_Jakarta_Sans({
   weight: ["400", "500", "600", "700"],
 });
 
+const fraunces = Fraunces({
+  subsets: ["latin"],
+  variable: "--font-fraunces",
+  display: "swap",
+  weight: ["500", "600", "700"],
+});
+
 export const metadata: Metadata = {
   title: "PersonAI OS",
-  description: "Personal AI operating system for finance, legal, medical, and daily briefings",
+  description: "Private desk for triage, specialists, archive, money, and Fristen",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
@@ -28,8 +37,8 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#1a73e8",
-  colorScheme: "dark",
+  themeColor: "#2f6f5e",
+  colorScheme: "dark light",
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
@@ -37,12 +46,16 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="de-CH" className="dark">
+    <html lang="de-CH" className="dark" suppressHydrationWarning>
       <body
-        className={`${plusJakarta.variable} ${GeistMono.variable} font-sans antialiased`}
+        className={`${plusJakarta.variable} ${fraunces.variable} ${GeistMono.variable} font-sans antialiased`}
       >
         <ServiceWorkerRegister />
-        <ApiBootstrap>{children}</ApiBootstrap>
+        <ThemeProvider>
+          <ApiBootstrap>
+            <AppLockGate>{children}</AppLockGate>
+          </ApiBootstrap>
+        </ThemeProvider>
       </body>
     </html>
   );

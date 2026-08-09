@@ -3,6 +3,16 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Settings, Server, User, Shield, Cpu, Brain, Trash2, HardDrive } from "lucide-react";
+import { ProductSettingsCard } from "@/components/settings/ProductSettingsCard";
+import {
+  clearAppPin,
+  getIdleLockMs,
+  isLockEnabled,
+  setAppPin,
+  setIdleLockMs,
+} from "@/lib/app-lock";
+import { getStoredTheme, type ThemePreference } from "@/lib/theme";
+import { setThemePreference } from "@/components/shared/ThemeProvider";
 import {
   apiDelete,
   apiGet,
@@ -98,6 +108,13 @@ export default function SettingsPage() {
   const [driveNote, setDriveNote] = useState<string | null>(null);
   const [driveBusy, setDriveBusy] = useState(false);
   const platform = typeof window !== "undefined" ? getPlatform() : "browser";
+  const [themePref, setThemePref] = useState<ThemePreference>("system");
+  const [pinInput, setPinInput] = useState("");
+  const [lockNote, setLockNote] = useState<string | null>(null);
+
+  useEffect(() => {
+    setThemePref(getStoredTheme());
+  }, []);
 
   const refreshOllama = async () => {
     try {
@@ -457,15 +474,92 @@ export default function SettingsPage() {
         </CardContent>
       </Card>
 
+      <ProductSettingsCard />
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Theme & lock</CardTitle>
+          <CardDescription>
+            OS follow or override. Optional PIN locks the UI on idle / resume (DB still sealed by password).
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex flex-wrap gap-2">
+            {(["system", "dark", "light"] as ThemePreference[]).map((t) => (
+              <Button
+                key={t}
+                size="sm"
+                variant={themePref === t ? "default" : "outline"}
+                onClick={() => {
+                  setThemePreference(t);
+                  setThemePref(t);
+                }}
+              >
+                {t}
+              </Button>
+            ))}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Input
+              type="password"
+              inputMode="numeric"
+              placeholder={isLockEnabled() ? "New PIN (rotate)" : "Set 4–8 digit PIN"}
+              value={pinInput}
+              onChange={(e) => setPinInput(e.target.value.replace(/\D/g, "").slice(0, 8))}
+              className="max-w-[12rem]"
+            />
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() =>
+                void setAppPin(pinInput)
+                  .then(() => {
+                    setPinInput("");
+                    setLockNote("PIN enabled — locks on tab hide / idle.");
+                  })
+                  .catch((err) => setLockNote(err instanceof Error ? err.message : "PIN failed"))
+              }
+            >
+              Enable PIN
+            </Button>
+            {isLockEnabled() ? (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  clearAppPin();
+                  setLockNote("PIN cleared.");
+                }}
+              >
+                Disable
+              </Button>
+            ) : null}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Idle lock: {Math.round(getIdleLockMs() / 60000)} min
+            <button
+              type="button"
+              className="ml-2 underline"
+              onClick={() => {
+                setIdleLockMs(5 * 60_000);
+                setLockNote("Idle set to 5 minutes.");
+              }}
+            >
+              reset 5m
+            </button>
+          </p>
+          {lockNote ? <p className="text-xs text-muted-foreground">{lockNote}</p> : null}
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             <Cpu className="h-4 w-4 text-primary" />
-            Ollama
+            Ollama status
           </CardTitle>
           <CardDescription>
-            Native host install is preferred for desktop. If the API runs in Docker against host Ollama, use
-            http://host.docker.internal:11434
+            Live reachability. Persist host + models in Product vault above (not .env).
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -600,10 +694,8 @@ export default function SettingsPage() {
             </p>
           ) : (
             <p className="text-xs text-muted-foreground">
-              To enable one-click link, set{" "}
-              <span className="font-mono">GOOGLE_OAUTH_CLIENT_ID</span> and{" "}
-              <span className="font-mono">GOOGLE_OAUTH_CLIENT_SECRET</span> on the API. Or use a
-              service account JSON on the server.
+              Paste OAuth client id/secret once in <span className="font-medium">Product vault</span>{" "}
+              above, then Link Google Drive. No SSH / .env required for normal use.
             </p>
           )}
           <Input

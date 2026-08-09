@@ -248,17 +248,22 @@ PERSONAI_TLS=no
 # PERSONAI_USE_PROD=1   # force docker-compose.prod.yml in vps-* scripts
 
 # --- Google Drive archive (all optional) ---
+# Prefer OAuth (Settings → Link Google Drive). After .env change:
+#   COMPOSE_PROFILES= docker compose up -d --force-recreate api
 # GOOGLE_DRIVE_ENABLED=true
-# Service account (headless):
-# GOOGLE_SERVICE_ACCOUNT_JSON=./secrets/google-service-account.json
-# GOOGLE_SERVICE_ACCOUNT_JSON_INLINE={"type":"service_account",...}
-# GOOGLE_DRIVE_ROOT_FOLDER_ID=
-# GOOGLE_DRIVE_FOLDER_1= ... GOOGLE_DRIVE_FOLDER_10=
-# GOOGLE_DRIVE_FOLDERS={"1":"...","8":"..."}
-# OAuth (Settings → Link Google Drive — preferred):
+# OAuth (preferred):
 # GOOGLE_OAUTH_CLIENT_ID=
 # GOOGLE_OAUTH_CLIENT_SECRET=
 # GOOGLE_OAUTH_REDIRECT_URI=http://debi9.tail8175e6.ts.net:4000/archive/drive/oauth/callback
+# PUBLIC_WEB_URL must match the web UI (post-link redirect).
+# Service account (headless) — Docker only mounts ./data → /app/data:
+#   put JSON under data/ and set path inside the container, or use INLINE:
+# GOOGLE_SERVICE_ACCOUNT_JSON=/app/data/secrets/google-service-account.json
+# GOOGLE_SERVICE_ACCOUNT_JSON_INLINE={"type":"service_account",...}
+# Share Drive folders with the SA client_email (Editor), then:
+# GOOGLE_DRIVE_ROOT_FOLDER_ID=   # preferred on Docker (passed into api)
+# Note: GOOGLE_DRIVE_FOLDER_* / GOOGLE_DRIVE_FOLDERS are read by the API process
+# but are not currently listed in docker-compose.yml environment — use ROOT_FOLDER_ID on VPS.
 # Legacy env refresh token (Settings stores per-profile instead):
 # GOOGLE_OAUTH_REFRESH_TOKEN=
 

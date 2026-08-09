@@ -19,7 +19,19 @@ Inspired by Harmonia Hermes (one orchestration path, confirm before irreversible
 
 Open **Team** in the app (`/team?specialist=cfo`). Money and export actions use **Needs your confirmation** before anything is written.
 
-**Per-specialist models:** Forge prefers `OLLAMA_CODER_MODEL` (default `qwen2.5-coder:7b`); Architect / Legal / others use `OLLAMA_REASONING_MODEL`. If the coder model is not pulled, chat falls back to the reasoning model.
+**Per-specialist models** (failover within pulled tags — no required new pulls):
+
+| Role | Preferred | Failover |
+|------|-----------|----------|
+| OCR / Stylist vision | `maternion/LightOnOCR-2:latest` | `maternion/LightOnOCR-2` |
+| Staff / CFO / Legal / Medical | `deepseek-r1:8b` | — |
+| Architect | `deepseek-r1:14b` | `deepseek-r1:8b` |
+| Forge | `qwen2.5-coder:14b-instruct-q5_K_M` | `qwen2.5-coder:14b` → `deepseek-r1:8b` |
+| QA Auditor | `deepseek-r1:8b` | `deepseek-r1:14b` |
+| Coaching (Bio/Mystic/Wingman/Career) | `llama3.1:8b` | `llama3:latest` → `deepseek-r1:8b` |
+| Stylist text | `gemma4:e4b` | `llama3.1:8b` |
+
+Product config (Ollama host, Google OAuth, models, premium keys) lives in **Settings → encrypted host vault** — not day-to-day `.env` edits. `.env` remains Docker bootstrap only.
 
 Smoke API: `node scripts/integration-test.mjs` (API on `:4000`).
 

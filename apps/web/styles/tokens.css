@@ -1,63 +1,88 @@
 :root {
-  /* Google Workspace dark (Gmail / Drive) — Material tonal surfaces */
-  --background: 0 0% 12.5%; /* #202124 */
-  --foreground: 0 0% 91%; /* #e8eaed */
-  --card: 0 0% 19%; /* #303134 */
-  --card-foreground: 0 0% 91%;
-  --surface-container: 0 0% 17%; /* #2d2e30 */
-  --surface-container-high: 0 0% 22%; /* #38393c */
-  --muted: 0 0% 22%;
-  --muted-foreground: 0 0% 70%; /* #bdc1c6 */
-  --primary: 214 89% 51%; /* #1a73e8 */
-  --primary-foreground: 0 0% 100%;
-  --primary-container: 214 55% 22%;
-  --on-primary-container: 214 100% 85%;
-  --secondary: 214 30% 24%;
-  --secondary-foreground: 214 80% 88%;
-  --accent: 214 89% 51%;
-  --accent-foreground: 0 0% 100%;
-  --border: 0 0% 28%;
-  --input: 0 0% 28%;
-  --ring: 214 89% 51%;
+  /*
+   * PersonAI owned palette — hospitality charcoal + sage confidence.
+   * Not Google Workspace blue, not purple AI sludge, not cream+terracotta.
+   */
+  --background: 150 6% 9%;
+  --foreground: 40 12% 94%;
+  --card: 150 5% 13%;
+  --card-foreground: 40 12% 94%;
+  --surface-container: 150 5% 11.5%;
+  --surface-container-high: 150 4% 16%;
+  --muted: 150 4% 16%;
+  --muted-foreground: 40 6% 68%;
+  /* Sage primary — operational calm */
+  --primary: 158 28% 42%;
+  --primary-foreground: 150 20% 98%;
+  --primary-container: 158 22% 18%;
+  --on-primary-container: 158 35% 78%;
+  --secondary: 150 8% 18%;
+  --secondary-foreground: 40 12% 90%;
+  /* Warm amber accent for confirms / focus — sparingly */
+  --accent: 34 55% 52%;
+  --accent-foreground: 30 20% 10%;
+  --border: 150 5% 22%;
+  --input: 150 5% 22%;
+  --ring: 158 28% 42%;
   --destructive: 4 72% 55%;
   --destructive-foreground: 0 0% 100%;
-  --success: 142 45% 42%;
-  --warning: 38 92% 50%;
+  --success: 152 40% 38%;
+  --warning: 38 85% 48%;
 
-  /* Airbnb-calm shape — soft but Material-adjacent */
-  --radius: 0.625rem;
-  --radius-lg: 1rem;
-  --radius-xl: 1.25rem;
+  --radius: 0.5rem;
+  --radius-lg: 0.875rem;
+  --radius-xl: 1.125rem;
 
-  --sidebar-width: 16.5rem;
-  --nav-rail-width: 4.5rem;
-  --header-height: 3.75rem;
+  --sidebar-width: 15.5rem;
+  --nav-rail-width: 4.25rem;
+  --header-height: 3.5rem;
 
-  /* Soft refined elevation (dark hospitality, not flat Material hard edges) */
   --elevation-1:
-    0 1px 2px rgba(0, 0, 0, 0.28),
-    0 2px 8px rgba(0, 0, 0, 0.18);
+    0 1px 2px rgba(0, 0, 0, 0.32),
+    0 2px 6px rgba(0, 0, 0, 0.16);
   --elevation-2:
-    0 2px 4px rgba(0, 0, 0, 0.28),
-    0 8px 24px rgba(0, 0, 0, 0.22);
+    0 2px 4px rgba(0, 0, 0, 0.3),
+    0 8px 20px rgba(0, 0, 0, 0.2);
   --elevation-3:
-    0 4px 12px rgba(0, 0, 0, 0.3),
-    0 16px 40px rgba(0, 0, 0, 0.28);
+    0 4px 12px rgba(0, 0, 0, 0.32),
+    0 16px 36px rgba(0, 0, 0, 0.26);
 
-  /* Atmospheric wash — subtle blue depth, not purple glow */
-  --atmosphere-top: hsl(214 40% 18% / 0.35);
-  --atmosphere-mid: hsl(0 0% 12.5% / 0);
-  --atmosphere-spot: hsl(214 89% 51% / 0.06);
+  /* Supporting atmosphere only — soft sage wash, not the whole idea */
+  --atmosphere-top: hsl(158 20% 14% / 0.4);
+  --atmosphere-mid: hsl(150 6% 9% / 0);
+  --atmosphere-spot: hsl(34 40% 40% / 0.05);
 
-  /* Hospitable motion — calm ease-out, still snappy enough for UI */
   --motion-duration: 180ms;
   --motion-duration-slow: 320ms;
-  --motion-duration-enter: 420ms;
+  --motion-duration-enter: 400ms;
   --motion-easing: cubic-bezier(0.22, 1, 0.36, 1);
   --motion-easing-emphasized: cubic-bezier(0.2, 0, 0, 1);
-  --motion-stagger: 45ms;
+  --motion-stagger: 40ms;
 
-  /* Stacking — toast always above command palette / drawers (z-50) */
   --z-modal: 50;
   --z-toast: 9999;
+}
+
+html.light {
+  --background: 40 18% 97%;
+  --foreground: 150 10% 12%;
+  --card: 0 0% 100%;
+  --card-foreground: 150 10% 12%;
+  --surface-container: 40 14% 95%;
+  --surface-container-high: 40 12% 92%;
+  --muted: 40 10% 90%;
+  --muted-foreground: 150 6% 38%;
+  --primary: 158 32% 32%;
+  --primary-foreground: 0 0% 100%;
+  --primary-container: 158 30% 90%;
+  --on-primary-container: 158 35% 18%;
+  --secondary: 150 8% 92%;
+  --secondary-foreground: 150 10% 18%;
+  --accent: 34 60% 42%;
+  --accent-foreground: 0 0% 100%;
+  --border: 40 10% 84%;
+  --input: 40 10% 84%;
+  --ring: 158 32% 32%;
+  --atmosphere-top: hsl(158 25% 80% / 0.35);
+  --atmosphere-spot: hsl(34 50% 50% / 0.06);
 }

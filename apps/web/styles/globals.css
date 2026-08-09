@@ -20,11 +20,16 @@
     max-width: 100%;
     overflow-x: clip;
     letter-spacing: -0.011em;
+    background-color: hsl(var(--background));
     background-image:
-      radial-gradient(1200px 600px at 12% -10%, var(--atmosphere-top), transparent 55%),
-      radial-gradient(900px 480px at 88% 0%, var(--atmosphere-spot), transparent 50%),
-      linear-gradient(180deg, hsl(0 0% 13.5%) 0%, hsl(var(--background)) 42%, hsl(var(--background)) 100%);
+      radial-gradient(900px 420px at 8% -8%, var(--atmosphere-top), transparent 55%),
+      radial-gradient(640px 280px at 92% 0%, var(--atmosphere-spot), transparent 50%);
     background-attachment: fixed;
+  }
+
+  .font-display {
+    font-family: var(--font-fraunces), Georgia, serif;
+    letter-spacing: -0.03em;
   }
 
   ::selection {
@@ -72,10 +77,9 @@
   }
 
   .surface-panel {
-    background: hsl(var(--background) / 0.82);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border-color: hsl(var(--border) / 0.7);
+    /* Solid shell — no glassmorphism on chrome (Design critic) */
+    background: hsl(var(--card));
+    border-color: hsl(var(--border) / 0.85);
   }
 
   .app-atmosphere {

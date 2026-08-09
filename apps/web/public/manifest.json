@@ -4,8 +4,18 @@
   "description": "Personal AI operating system for finance, legal, medical, and daily briefings",
   "start_url": "/profiles/",
   "display": "standalone",
-  "background_color": "#09090b",
-  "theme_color": "#14b8a6",
+  "background_color": "#151816",
+  "theme_color": "#2f6f5e",
+  "share_target": {
+    "action": "/dashboard/",
+    "method": "GET",
+    "enctype": "application/x-www-form-urlencoded",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url"
+    }
+  },
   "orientation": "any",
   "icons": [
     {

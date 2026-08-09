@@ -55,6 +55,7 @@ const config: Config = {
       },
       fontFamily: {
         sans: ["var(--font-plus-jakarta)", "system-ui", "sans-serif"],
+        display: ["var(--font-fraunces)", "Georgia", "serif"],
         mono: ["var(--font-geist-mono)", "monospace"],
       },
       boxShadow: {
