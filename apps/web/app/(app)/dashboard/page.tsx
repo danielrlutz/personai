@@ -11,20 +11,21 @@ import { ConfirmGate } from "@/components/confirm/ConfirmGate";
 import { PersonalOverview } from "@/components/life/PersonalOverview";
 import { HabitPanel } from "@/components/life/HabitPanel";
 import { Button } from "@/components/ui/button";
+import { PageEnter, Stagger, StaggerItem } from "@/components/motion/PageEnter";
 
 export default function DashboardPage() {
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="md-title-large text-[26px] tracking-tight">Home</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Morning brief — business and personal manners in one overview.
+    <PageEnter className="mx-auto max-w-6xl space-y-8">
+      <div className="page-header flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0">
+          <h1 className="page-title">Home</h1>
+          <p className="page-subtitle">
+            Your morning brief — business and personal manners in one calm overview.
           </p>
         </div>
         <Button size="sm" asChild>
-          <Link href="/team">
-            <Users className="mr-2 h-4 w-4" />
+          <Link href="/team/">
+            <Users className="mr-1.5 h-4 w-4" />
             Open team
           </Link>
         </Button>
@@ -34,34 +35,44 @@ export default function DashboardPage() {
       <ConfirmGate />
 
       <section className="space-y-4">
-        <div>
-          <h2 className="text-lg font-semibold tracking-tight">Business</h2>
-          <p className="text-sm text-muted-foreground">
+        <div className="min-w-0">
+          <h2 className="section-title">Business</h2>
+          <p className="section-subtitle">
             Finance, legal, and document ingestion for this profile.
           </p>
         </div>
-        <div className="grid gap-4 lg:grid-cols-2">
-          <BudgetOverview />
-          <QRBillList />
-        </div>
-        <div className="grid gap-4 lg:grid-cols-2">
-          <LegalTimeline />
-          <IngestionQueue />
-        </div>
+        <Stagger className="grid gap-4 lg:grid-cols-2">
+          <StaggerItem>
+            <BudgetOverview />
+          </StaggerItem>
+          <StaggerItem>
+            <QRBillList />
+          </StaggerItem>
+          <StaggerItem>
+            <LegalTimeline />
+          </StaggerItem>
+          <StaggerItem>
+            <IngestionQueue />
+          </StaggerItem>
+        </Stagger>
       </section>
 
       <section className="space-y-4">
-        <div>
-          <h2 className="text-lg font-semibold tracking-tight">Personal manners</h2>
-          <p className="text-sm text-muted-foreground">
+        <div className="min-w-0">
+          <h2 className="section-title">Personal manners</h2>
+          <p className="section-subtitle">
             Habits and today&apos;s personal focus — empty until you track something real.
           </p>
         </div>
-        <div className="grid gap-4 lg:grid-cols-2">
-          <PersonalOverview />
-          <HabitPanel compact />
-        </div>
+        <Stagger className="grid gap-4 lg:grid-cols-2">
+          <StaggerItem>
+            <PersonalOverview />
+          </StaggerItem>
+          <StaggerItem>
+            <HabitPanel compact />
+          </StaggerItem>
+        </Stagger>
       </section>
-    </div>
+    </PageEnter>
   );
 }

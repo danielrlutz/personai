@@ -27,6 +27,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { PageEnter } from "@/components/motion/PageEnter";
 import { cn } from "@/lib/utils";
 
 function runtimeBadge(runtime?: OllamaHealth["runtime"]): string {
@@ -222,18 +223,22 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6">
-      <div>
-        <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
-          <Settings className="h-6 w-6 text-primary" />
-          Settings
-        </h1>
-        <p className="mt-1 text-muted-foreground">
-          Configure API connection, CEO profile, and durable memory.
+    <PageEnter className="mx-auto max-w-2xl space-y-6">
+      <div className="page-header min-w-0">
+        <div className="mb-1 flex items-center gap-2.5 text-primary">
+          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary-container shadow-elev-1">
+            <Settings className="h-4 w-4 text-primary-on-container" />
+          </span>
+          <span className="md-label-large">Account</span>
+        </div>
+        <h1 className="page-title">Settings</h1>
+        <p className="page-subtitle">
+          API connection, profile switch, CEO card, and durable memory — always one tap away from Home.
         </p>
       </div>
 
-      <Card>
+      <div className="space-y-5">
+      <Card className="animate-in">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             <Server className="h-4 w-4 text-primary" />
@@ -346,12 +351,15 @@ export default function SettingsPage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             <User className="h-4 w-4 text-primary" />
-            Active Profile
+            Active profile
           </CardTitle>
+          <CardDescription>
+            Sign out returns to the account picker. Your API URL and local data stay on this device.
+          </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
-            <p className="truncate font-medium">{profileName}</p>
+            <p className="truncate font-semibold tracking-tight">{profileName}</p>
             <p className="truncate font-mono text-xs text-muted-foreground">{getStoredProfileId()}</p>
           </div>
           <Button variant="outline" className="shrink-0" onClick={() => logoutToProfiles()}>
@@ -520,6 +528,7 @@ export default function SettingsPage() {
           </p>
         </CardContent>
       </Card>
-    </div>
+      </div>
+    </PageEnter>
   );
 }

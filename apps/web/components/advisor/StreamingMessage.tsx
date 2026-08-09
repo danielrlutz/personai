@@ -1,8 +1,10 @@
 "use client";
 
+import { motion, useReducedMotion } from "framer-motion";
 import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { messageVariants } from "@/lib/motion";
 import type { ChatMessageStatus } from "./useChatStream";
 
 interface StreamingMessageProps {
@@ -22,20 +24,22 @@ export function StreamingMessage({
   error,
   onRetry,
 }: StreamingMessageProps) {
+  const reduce = useReducedMotion();
   const failed = role === "user" && status === "failed";
   const pending = role === "user" && status === "pending";
 
   return (
-    <div
+    <motion.div
+      variants={reduce ? undefined : messageVariants}
+      initial={reduce ? undefined : "hidden"}
+      animate={reduce ? undefined : "show"}
       className={cn(
-        "min-w-0 max-w-full rounded-lg px-4 py-3 text-sm leading-relaxed",
-        role === "user"
-          ? "ml-4 bg-primary-container text-primary-on-container sm:ml-8"
-          : "mr-4 border border-border/60 bg-surface-container text-foreground sm:mr-8",
+        "chat-bubble",
+        role === "user" ? "chat-bubble-user" : "chat-bubble-assistant",
         failed && "ring-1 ring-destructive/50",
       )}
     >
-      <p className="mb-1 md-label-medium text-muted-foreground">
+      <p className="mb-1.5 md-label-medium text-muted-foreground">
         {role === "user" ? "You" : "Advisor"}
         {pending ? <span className="ml-2 text-muted-foreground/80">Sending…</span> : null}
         {failed ? <span className="ml-2 text-destructive">Not sent</span> : null}
@@ -68,6 +72,6 @@ export function StreamingMessage({
           ) : null}
         </div>
       ) : null}
-    </div>
+    </motion.div>
   );
 }

@@ -132,23 +132,31 @@ export function BriefingSnapshotCards({ snapshot }: BriefingSnapshotCardsProps) 
     : [];
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <div className="space-y-3">
-        <h3 className="text-sm font-medium text-muted-foreground">Business</h3>
+        <h3 className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+          Business
+        </h3>
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {businessCards.map(({ title, icon: Icon, accent, items }) => (
-            <Card key={title} className="overflow-hidden">
-              <CardHeader className="pb-1.5">
+          {businessCards.map(({ title, icon: Icon, accent, items }, index) => (
+            <Card
+              key={title}
+              className="animate-in overflow-hidden"
+              style={{ animationDelay: `${index * 45}ms` }}
+            >
+              <CardHeader className="pb-2">
                 <CardTitle className="flex items-center gap-2 text-sm">
                   <Icon className={`h-4 w-4 ${accent}`} />
                   {title}
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-1.5">
+              <CardContent className="space-y-2">
                 {items.map((item) => (
-                  <div key={item.label} className="flex items-center justify-between gap-2 text-sm">
-                    <span className="text-muted-foreground">{item.label}</span>
-                    <span className="text-right font-medium tabular-nums">{item.value}</span>
+                  <div key={item.label} className="flex min-w-0 items-center justify-between gap-2 text-sm">
+                    <span className="truncate text-muted-foreground">{item.label}</span>
+                    <span className="shrink-0 text-right font-semibold tabular-nums tracking-tight">
+                      {item.value}
+                    </span>
                   </div>
                 ))}
               </CardContent>
@@ -158,14 +166,18 @@ export function BriefingSnapshotCards({ snapshot }: BriefingSnapshotCardsProps) 
       </div>
 
       <div className="space-y-3">
-        <h3 className="text-sm font-medium text-muted-foreground">Personal manners</h3>
+        <h3 className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+          Personal manners
+        </h3>
         {personalCards.length === 0 ? (
           <Card>
-            <CardContent className="flex items-center gap-3 p-4">
+            <CardContent className="flex items-center gap-3 p-5">
               <Sparkles className="h-5 w-5 shrink-0 text-muted-foreground" />
-              <div>
-                <p className="text-sm font-medium">Personal pillar not in this briefing yet</p>
-                <p className="text-xs text-muted-foreground">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold tracking-tight">
+                  Personal pillar not in this briefing yet
+                </p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
                   Regenerate the briefing after Life data is available for this profile.
                 </p>
               </div>
@@ -173,19 +185,25 @@ export function BriefingSnapshotCards({ snapshot }: BriefingSnapshotCardsProps) 
           </Card>
         ) : (
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {personalCards.map(({ title, icon: Icon, accent, items }) => (
-              <Card key={title} className="overflow-hidden">
-                <CardHeader className="pb-1.5">
+            {personalCards.map(({ title, icon: Icon, accent, items }, index) => (
+              <Card
+                key={title}
+                className="animate-in overflow-hidden"
+                style={{ animationDelay: `${index * 45}ms` }}
+              >
+                <CardHeader className="pb-2">
                   <CardTitle className="flex items-center gap-2 text-sm">
                     <Icon className={`h-4 w-4 ${accent}`} />
                     {title}
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-1.5">
+                <CardContent className="space-y-2">
                   {items.map((item) => (
-                    <div key={item.label} className="flex items-center justify-between gap-2 text-sm">
-                      <span className="text-muted-foreground">{item.label}</span>
-                      <span className="text-right font-medium tabular-nums">{item.value}</span>
+                    <div key={item.label} className="flex min-w-0 items-center justify-between gap-2 text-sm">
+                      <span className="truncate text-muted-foreground">{item.label}</span>
+                      <span className="shrink-0 text-right font-semibold tabular-nums tracking-tight">
+                        {item.value}
+                      </span>
                     </div>
                   ))}
                 </CardContent>
@@ -197,13 +215,13 @@ export function BriefingSnapshotCards({ snapshot }: BriefingSnapshotCardsProps) 
 
       {billsToday > 0 ? (
         <Card className="border-warning/30 bg-warning/5">
-          <CardContent className="flex items-start gap-3 p-4">
+          <CardContent className="flex items-start gap-3 p-5">
             <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-warning" />
-            <div>
-              <p className="font-medium text-warning">Bills due today</p>
-              <ul className="mt-1 space-y-1 text-sm text-muted-foreground">
+            <div className="min-w-0">
+              <p className="font-semibold tracking-tight text-warning">Bills due today</p>
+              <ul className="mt-1.5 space-y-1 text-sm text-muted-foreground">
                 {snapshot.finance.billsDueToday.map((bill, i) => (
-                  <li key={i}>
+                  <li key={i} className="truncate">
                     {bill.creditor} — {formatCHF(bill.amount)}
                   </li>
                 ))}
@@ -213,11 +231,11 @@ export function BriefingSnapshotCards({ snapshot }: BriefingSnapshotCardsProps) 
         </Card>
       ) : (
         <Card>
-          <CardContent className="flex items-center gap-3 p-4">
+          <CardContent className="flex items-center gap-3 p-5">
             <Receipt className="h-5 w-5 shrink-0 text-muted-foreground" />
-            <div>
-              <p className="text-sm font-medium">No bills due today</p>
-              <p className="text-xs text-muted-foreground">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold tracking-tight">No bills due today</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
                 {billsWeek === 0
                   ? "No pending QR bills this week — ingest a bill or add one under Finance."
                   : `${billsWeek} pending bill${billsWeek === 1 ? "" : "s"} due later this week.`}

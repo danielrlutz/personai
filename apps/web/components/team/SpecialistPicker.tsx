@@ -17,14 +17,14 @@ export function SpecialistPicker({ specialists, value, onChange, disabled }: Spe
   }));
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3.5">
       {groups.map(({ group, items }) =>
         items.length === 0 ? null : (
-          <div key={group}>
-            <p className="mb-1.5 text-[11px] uppercase tracking-wide text-muted-foreground">
+          <div key={group} className="min-w-0">
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
               {GROUP_LABEL[group]}
             </p>
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex flex-wrap gap-2">
               {items.map((s) => (
                 <button
                   key={s.id}
@@ -33,9 +33,9 @@ export function SpecialistPicker({ specialists, value, onChange, disabled }: Spe
                   title={s.description}
                   onClick={() => onChange(s.id)}
                   className={cn(
-                    "rounded-full px-3 py-1.5 text-xs transition-colors duration-md ease-md disabled:opacity-50",
+                    "pressable rounded-full px-3.5 py-1.5 text-xs font-medium transition-colors duration-md ease-md disabled:opacity-50",
                     value === s.id
-                      ? "bg-secondary text-secondary-foreground shadow-elev-1"
+                      ? "bg-secondary text-secondary-foreground shadow-elev-1 ring-1 ring-primary/25"
                       : "bg-surface-container text-muted-foreground hover:bg-surface-container-high hover:text-foreground",
                   )}
                 >

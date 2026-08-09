@@ -91,11 +91,13 @@ export function TeamChat({ initialSpecialist = "secretary" }: TeamChatProps) {
           : "min-w-0"
       }
     >
-      <Card className="flex h-[calc(100dvh-11.5rem)] min-h-[22rem] min-w-0 flex-col overflow-hidden md:h-[calc(100dvh-8.5rem)]">
-        <CardHeader className="shrink-0 space-y-3 border-b border-border/80 pb-4">
+      <Card className="flex h-[calc(100dvh-12rem)] min-h-[22rem] min-w-0 flex-col overflow-hidden hover:shadow-elev-2 md:h-[calc(100dvh-9rem)]">
+        <CardHeader className="shrink-0 space-y-3.5 border-b border-border/60 pb-4">
           <div className="flex items-center justify-between gap-3">
-            <CardTitle className="flex min-w-0 items-center gap-2">
-              <Users className="h-4 w-4 shrink-0 text-primary" />
+            <CardTitle className="flex min-w-0 items-center gap-2.5">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-container">
+                <Users className="h-4 w-4 text-primary-on-container" />
+              </span>
               <span className="truncate">Pocket team</span>
             </CardTitle>
             <div className="flex shrink-0 items-center gap-1">
@@ -121,14 +123,14 @@ export function TeamChat({ initialSpecialist = "secretary" }: TeamChatProps) {
             disabled={streaming}
           />
           {active ? (
-            <p className="text-xs text-muted-foreground break-words">
-              <span className="text-foreground">{active.label}</span> — {active.description}
+            <p className="text-xs leading-relaxed text-muted-foreground break-words">
+              <span className="font-medium text-foreground">{active.label}</span> — {active.description}
             </p>
           ) : null}
         </CardHeader>
 
         <CardContent className="flex min-h-0 flex-1 flex-col overflow-hidden p-0">
-          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overflow-x-hidden p-5">
+          <div className="min-h-0 flex-1 space-y-3.5 overflow-y-auto overflow-x-hidden p-5">
             {messages.length === 0 ? (
               <EmptyState
                 icon={Users}
@@ -168,9 +170,9 @@ export function TeamChat({ initialSpecialist = "secretary" }: TeamChatProps) {
             ) : null}
           </div>
 
-          <div className="shrink-0 border-t border-border/80 p-4">
+          <div className="shrink-0 border-t border-border/60 bg-surface-container/30 p-4">
             {showRemember ? (
-              <div className="mb-3 space-y-2 rounded-md border border-border/80 p-3">
+              <div className="mb-3 animate-scale-in space-y-2 rounded-xl border border-border/70 bg-card/80 p-3.5">
                 <p className="text-xs text-muted-foreground">
                   Save a durable fact (compact injection; not full chat history).
                 </p>
@@ -203,7 +205,7 @@ export function TeamChat({ initialSpecialist = "secretary" }: TeamChatProps) {
             ) : rememberNote ? (
               <p className="mb-2 text-xs text-muted-foreground">{rememberNote}</p>
             ) : null}
-            <div className="flex min-w-0 gap-2">
+            <div className="flex min-w-0 items-end gap-2">
               <Textarea
                 placeholder={`Message ${active?.shortLabel ?? "Staff"}…`}
                 value={input}
