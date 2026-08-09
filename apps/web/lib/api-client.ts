@@ -357,6 +357,33 @@ export interface BriefingSnapshot {
   };
   /** Present after Personal manners roll-out; older snapshots may omit it. */
   personal?: PersonalTodaySummary;
+  /** Compact CEO card + bounded memory facts. */
+  userCare?: {
+    ceo: CeoProfile;
+    memoryFacts: MemoryFact[];
+  };
+}
+
+export interface CeoProfile {
+  id?: string;
+  displayName: string | null;
+  company: string | null;
+  locale: string | null;
+  language: string | null;
+  timezone: string | null;
+  briefHour: string | null;
+  notes: string | null;
+  updatedAt?: string;
+}
+
+export interface MemoryFact {
+  id?: string;
+  key: string;
+  value: string;
+  source: string | null;
+  specialistId: string | null;
+  updatedAt: string;
+  createdAt?: string;
 }
 
 export interface DailyBriefing {

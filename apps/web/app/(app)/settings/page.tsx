@@ -1,13 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Settings, Server, User, Shield, Cpu } from "lucide-react";
+import { Settings, Server, User, Shield, Cpu, Brain, Trash2 } from "lucide-react";
 import {
+  apiDelete,
   apiGet,
+  apiPost,
   apiPut,
   getApiBaseUrl,
   setApiBaseUrl,
+  type CeoProfile,
   type LicenseInfo,
+  type MemoryFact,
   type OllamaHealth,
   type ProfileRegistry,
 } from "@/lib/api-client";
@@ -16,6 +20,7 @@ import { getActiveProfileId, logoutToProfiles } from "@/lib/session";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
@@ -32,6 +37,16 @@ function runtimeBadge(runtime?: OllamaHealth["runtime"]): string {
   }
 }
 
+const emptyCeo: CeoProfile = {
+  displayName: null,
+  company: null,
+  locale: null,
+  language: null,
+  timezone: null,
+  briefHour: null,
+  notes: null,
+};
+
 export default function SettingsPage() {
   const [apiUrl, setApiUrl] = useState("");
   const [license, setLicense] = useState<LicenseInfo | null>(null);
@@ -41,6 +56,14 @@ export default function SettingsPage() {
   const [ollamaHost, setOllamaHost] = useState("");
   const [ollamaNote, setOllamaNote] = useState<string | null>(null);
   const [ollamaSaving, setOllamaSaving] = useState(false);
+  const [ceo, setCeo] = useState<CeoProfile>(emptyCeo);
+  const [ceoSaving, setCeoSaving] = useState(false);
+  const [ceoNote, setCeoNote] = useState<string | null>(null);
+  const [facts, setFacts] = useState<MemoryFact[]>([]);
+  const [factKey, setFactKey] = useState("");
+  const [factValue, setFactValue] = useState("");
+  const [factSaving, setFactSaving] = useState(false);
+  const [factNote, setFactNote] = useState<string | null>(null);
   const platform = typeof window !== "undefined" ? getPlatform() : "browser";
 
   const refreshOllama = async () => {
@@ -53,6 +76,27 @@ export default function SettingsPage() {
     }
   };
 
+  const refreshMemory = async () => {
+    try {
+      const [profile, mem] = await Promise.all([
+        apiGet<CeoProfile>("/ceo-profile"),
+        apiGet<{ facts: MemoryFact[] }>("/memory-facts"),
+      ]);
+      setCeo({
+        displayName: profile.displayName ?? null,
+        company: profile.company ?? null,
+        locale: profile.locale ?? null,
+        language: profile.language ?? null,
+        timezone: profile.timezone ?? null,
+        briefHour: profile.briefHour ?? null,
+        notes: profile.notes ?? null,
+      });
+      setFacts(mem.facts ?? []);
+    } catch {
+      setFactNote("Could not load CEO profile / memory.");
+    }
+  };
+
   useEffect(() => {
     setApiUrl(getStoredApiBaseUrl() ?? getApiBaseUrl());
     void apiGet<LicenseInfo>("/license").then(setLicense).catch(() => undefined);
@@ -62,6 +106,7 @@ export default function SettingsPage() {
       setProfileName(profile?.name ?? "Unknown");
     });
     void refreshOllama();
+    void refreshMemory();
   }, []);
 
   const saveApiUrl = () => {
@@ -86,6 +131,59 @@ export default function SettingsPage() {
     }
   };
 
+  const saveCeo = async () => {
+    setCeoSaving(true);
+    setCeoNote(null);
+    try {
+      const updated = await apiPut<CeoProfile>("/ceo-profile", ceo);
+      setCeo({
+        displayName: updated.displayName ?? null,
+        company: updated.company ?? null,
+        locale: updated.locale ?? null,
+        language: updated.language ?? null,
+        timezone: updated.timezone ?? null,
+        briefHour: updated.briefHour ?? null,
+        notes: updated.notes ?? null,
+      });
+      setCeoNote("CEO profile saved. Specialists get a compact card each turn.");
+    } catch (err) {
+      setCeoNote(err instanceof Error ? err.message : "Failed to save CEO profile");
+    } finally {
+      setCeoSaving(false);
+    }
+  };
+
+  const addFact = async () => {
+    if (!factKey.trim() || !factValue.trim()) return;
+    setFactSaving(true);
+    setFactNote(null);
+    try {
+      await apiPost<MemoryFact>("/memory-facts", {
+        key: factKey.trim(),
+        value: factValue.trim(),
+        source: "settings",
+      });
+      setFactKey("");
+      setFactValue("");
+      await refreshMemory();
+      setFactNote("Fact saved. Up to 20 recent facts are injected into chat/briefing.");
+    } catch (err) {
+      setFactNote(err instanceof Error ? err.message : "Failed to save fact");
+    } finally {
+      setFactSaving(false);
+    }
+  };
+
+  const deleteFact = async (id: string) => {
+    setFactNote(null);
+    try {
+      await apiDelete<{ ok: boolean }>(`/memory-facts/${id}`);
+      setFacts((prev) => prev.filter((f) => f.id !== id));
+    } catch (err) {
+      setFactNote(err instanceof Error ? err.message : "Failed to delete fact");
+    }
+  };
+
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <div>
@@ -93,7 +191,9 @@ export default function SettingsPage() {
           <Settings className="h-6 w-6 text-primary" />
           Settings
         </h1>
-        <p className="mt-1 text-muted-foreground">Configure API connection and profile.</p>
+        <p className="mt-1 text-muted-foreground">
+          Configure API connection, CEO profile, and durable memory.
+        </p>
       </div>
 
       <Card>
@@ -202,6 +302,124 @@ export default function SettingsPage() {
           <Button variant="outline" className="shrink-0" onClick={() => logoutToProfiles()}>
             Switch profile
           </Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <User className="h-4 w-4 text-primary" />
+            CEO profile
+          </CardTitle>
+          <CardDescription>
+            Compact card injected into team chat and daily briefing — not full chat history.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Input
+              value={ceo.displayName ?? ""}
+              onChange={(e) => setCeo((c) => ({ ...c, displayName: e.target.value }))}
+              placeholder="Display name"
+            />
+            <Input
+              value={ceo.company ?? ""}
+              onChange={(e) => setCeo((c) => ({ ...c, company: e.target.value }))}
+              placeholder="Company (optional)"
+            />
+            <Input
+              value={ceo.locale ?? ""}
+              onChange={(e) => setCeo((c) => ({ ...c, locale: e.target.value }))}
+              placeholder="Locale (e.g. de-CH)"
+            />
+            <Input
+              value={ceo.language ?? ""}
+              onChange={(e) => setCeo((c) => ({ ...c, language: e.target.value }))}
+              placeholder="Language (e.g. de)"
+            />
+            <Input
+              value={ceo.timezone ?? ""}
+              onChange={(e) => setCeo((c) => ({ ...c, timezone: e.target.value }))}
+              placeholder="Timezone (e.g. Europe/Zurich)"
+            />
+            <Input
+              value={ceo.briefHour ?? ""}
+              onChange={(e) => setCeo((c) => ({ ...c, briefHour: e.target.value }))}
+              placeholder="Brief hour (e.g. 07:00)"
+            />
+          </div>
+          <Textarea
+            value={ceo.notes ?? ""}
+            onChange={(e) => setCeo((c) => ({ ...c, notes: e.target.value }))}
+            placeholder="Short standing notes (kept compact in prompts)"
+            rows={3}
+            className="resize-none"
+          />
+          <Button onClick={() => void saveCeo()} disabled={ceoSaving}>
+            {ceoSaving ? "Saving…" : "Save CEO profile"}
+          </Button>
+          {ceoNote ? <p className="text-xs text-muted-foreground">{ceoNote}</p> : null}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Brain className="h-4 w-4 text-primary" />
+            Memory facts
+          </CardTitle>
+          <CardDescription>
+            Durable key/value facts. Specialists see only the 20 most recently updated.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-2 sm:grid-cols-[1fr_1.4fr_auto]">
+            <Input
+              value={factKey}
+              onChange={(e) => setFactKey(e.target.value)}
+              placeholder="Key (e.g. preferred-bank)"
+            />
+            <Input
+              value={factValue}
+              onChange={(e) => setFactValue(e.target.value)}
+              placeholder="Value"
+            />
+            <Button
+              onClick={() => void addFact()}
+              disabled={factSaving || !factKey.trim() || !factValue.trim()}
+            >
+              {factSaving ? "…" : "Add"}
+            </Button>
+          </div>
+          {facts.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No facts yet.</p>
+          ) : (
+            <ul className="space-y-2">
+              {facts.map((f) => (
+                <li
+                  key={f.id ?? f.key}
+                  className="flex items-start justify-between gap-3 border-b border-border/60 pb-2 last:border-0"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">{f.key}</p>
+                    <p className="break-words text-sm text-muted-foreground">{f.value}</p>
+                  </div>
+                  {f.id ? (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="shrink-0"
+                      onClick={() => void deleteFact(f.id!)}
+                      aria-label={`Delete ${f.key}`}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          )}
+          {factNote ? <p className="text-xs text-muted-foreground">{factNote}</p> : null}
         </CardContent>
       </Card>
 

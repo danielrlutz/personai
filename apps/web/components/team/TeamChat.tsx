@@ -1,16 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Send, Trash2, Users } from "lucide-react";
+import { BookmarkPlus, Send, Trash2, Users } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { StreamingMessage } from "@/components/advisor/StreamingMessage";
 import { useChatStream } from "@/components/advisor/useChatStream";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { SpecialistPicker } from "./SpecialistPicker";
 import { CareerPdfPanel } from "./CareerPdfPanel";
-import { apiGet } from "@/lib/api-client";
+import { apiGet, apiPost, type MemoryFact } from "@/lib/api-client";
 import { SPECIALIST_FALLBACK, type SpecialistMeta } from "@/lib/specialists";
 
 interface TeamChatProps {
@@ -21,6 +22,11 @@ export function TeamChat({ initialSpecialist = "secretary" }: TeamChatProps) {
   const [specialists, setSpecialists] = useState<SpecialistMeta[]>(SPECIALIST_FALLBACK);
   const [specialist, setSpecialist] = useState(initialSpecialist);
   const [input, setInput] = useState("");
+  const [showRemember, setShowRemember] = useState(false);
+  const [rememberKey, setRememberKey] = useState("");
+  const [rememberValue, setRememberValue] = useState("");
+  const [rememberNote, setRememberNote] = useState<string | null>(null);
+  const [rememberSaving, setRememberSaving] = useState(false);
   const { messages, streaming, error, sendMessage, retryMessage, clear } = useChatStream({
     specialist,
   });
@@ -47,6 +53,36 @@ export function TeamChat({ initialSpecialist = "secretary" }: TeamChatProps) {
     setInput("");
   };
 
+  const openRemember = () => {
+    const lastUser = [...messages].reverse().find((m) => m.role === "user" && m.content.trim());
+    setRememberKey("");
+    setRememberValue(lastUser?.content.trim().slice(0, 500) ?? input.trim().slice(0, 500));
+    setRememberNote(null);
+    setShowRemember((v) => !v);
+  };
+
+  const saveRemember = async () => {
+    if (!rememberKey.trim() || !rememberValue.trim()) return;
+    setRememberSaving(true);
+    setRememberNote(null);
+    try {
+      await apiPost<MemoryFact>("/memory-facts", {
+        key: rememberKey.trim(),
+        value: rememberValue.trim(),
+        source: "team-chat",
+        specialistId: specialist,
+      });
+      setRememberNote("Saved to durable memory.");
+      setShowRemember(false);
+      setRememberKey("");
+      setRememberValue("");
+    } catch (err) {
+      setRememberNote(err instanceof Error ? err.message : "Failed to remember");
+    } finally {
+      setRememberSaving(false);
+    }
+  };
+
   return (
     <div
       className={
@@ -62,16 +98,21 @@ export function TeamChat({ initialSpecialist = "secretary" }: TeamChatProps) {
               <Users className="h-4 w-4 shrink-0 text-primary" />
               <span className="truncate">Pocket team</span>
             </CardTitle>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={clear}
-              disabled={streaming || (messages.length === 0 && !hasUnsent)}
-              className="shrink-0"
-            >
-              <Trash2 className="h-4 w-4" />
-              Clear
-            </Button>
+            <div className="flex shrink-0 items-center gap-1">
+              <Button variant="ghost" size="sm" onClick={openRemember} disabled={streaming}>
+                <BookmarkPlus className="h-4 w-4" />
+                Remember
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={clear}
+                disabled={streaming || (messages.length === 0 && !hasUnsent)}
+              >
+                <Trash2 className="h-4 w-4" />
+                Clear
+              </Button>
+            </div>
           </div>
           <SpecialistPicker
             specialists={specialists}
@@ -128,6 +169,40 @@ export function TeamChat({ initialSpecialist = "secretary" }: TeamChatProps) {
           </div>
 
           <div className="shrink-0 border-t border-border/80 p-4">
+            {showRemember ? (
+              <div className="mb-3 space-y-2 rounded-md border border-border/80 p-3">
+                <p className="text-xs text-muted-foreground">
+                  Save a durable fact (compact injection; not full chat history).
+                </p>
+                <Input
+                  value={rememberKey}
+                  onChange={(e) => setRememberKey(e.target.value)}
+                  placeholder="Key (e.g. prefers-iban)"
+                />
+                <Textarea
+                  value={rememberValue}
+                  onChange={(e) => setRememberValue(e.target.value)}
+                  placeholder="Value to remember"
+                  rows={2}
+                  className="resize-none"
+                />
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    size="sm"
+                    onClick={() => void saveRemember()}
+                    disabled={rememberSaving || !rememberKey.trim() || !rememberValue.trim()}
+                  >
+                    {rememberSaving ? "Saving…" : "Save fact"}
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => setShowRemember(false)}>
+                    Cancel
+                  </Button>
+                </div>
+                {rememberNote ? <p className="text-xs text-muted-foreground">{rememberNote}</p> : null}
+              </div>
+            ) : rememberNote ? (
+              <p className="mb-2 text-xs text-muted-foreground">{rememberNote}</p>
+            ) : null}
             <div className="flex min-w-0 gap-2">
               <Textarea
                 placeholder={`Message ${active?.shortLabel ?? "Staff"}…`}
