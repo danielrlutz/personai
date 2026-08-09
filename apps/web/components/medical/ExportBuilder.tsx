@@ -29,7 +29,7 @@ export function ExportBuilder() {
       })
       .catch((err) => {
         setComplaints([]);
-        setError(err instanceof Error ? err.message : "Failed to load complaints");
+        setError(err instanceof Error ? err.message : "Failed to load symptom entries");
       });
   }, []);
 
@@ -121,7 +121,7 @@ export function ExportBuilder() {
             </label>
           ))}
           {complaints.length === 0 && (
-            <p className="py-4 text-center text-sm text-muted-foreground">No complaints to export.</p>
+            <p className="py-4 text-center text-sm text-muted-foreground">No symptom entries to export.</p>
           )}
         </div>
 

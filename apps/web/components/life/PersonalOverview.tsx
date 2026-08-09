@@ -54,7 +54,7 @@ export function PersonalOverview({ refreshKey = 0 }: PersonalOverviewProps) {
           <EmptyState
             icon={Sparkles}
             title="No personal data yet"
-            description="Add habits, tasks, and touchpoints under Life — nothing is invented here."
+            description="Add habits, tasks, and relationship follow-ups under Life."
             action={
               <Button variant="outline" size="sm" asChild>
                 <Link href="/life">Open Life</Link>

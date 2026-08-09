@@ -72,7 +72,7 @@ export function TeamChat({ initialSpecialist = "secretary" }: TeamChatProps) {
         source: "team-chat",
         specialistId: specialist,
       });
-      setRememberNote("Saved to durable memory.");
+      setRememberNote("Saved to memory.");
       setShowRemember(false);
       setRememberKey("");
       setRememberValue("");
@@ -135,7 +135,7 @@ export function TeamChat({ initialSpecialist = "secretary" }: TeamChatProps) {
               <EmptyState
                 icon={Users}
                 title="Ask your pocket team"
-                description="Staff routes everyday requests. Switch to CFO, Legal, Forge↔QA, Career, or coaching modes when you need a specialist."
+                description="Staff handles everyday requests. Switch to CFO, Legal, coding, Career, or coaching when you need a specialist."
               />
             ) : (
               messages.map((msg, i) => {
@@ -174,12 +174,12 @@ export function TeamChat({ initialSpecialist = "secretary" }: TeamChatProps) {
             {showRemember ? (
               <div className="mb-3 animate-scale-in space-y-2 rounded-xl border border-border/70 bg-card/80 p-3.5">
                 <p className="text-xs text-muted-foreground">
-                  Save a durable fact (compact injection; not full chat history).
+                  Save a short fact for future chats and the morning brief — not the full conversation.
                 </p>
                 <Input
                   value={rememberKey}
                   onChange={(e) => setRememberKey(e.target.value)}
-                  placeholder="Key (e.g. prefers-iban)"
+                  placeholder="Label (e.g. preferred IBAN)"
                 />
                 <Textarea
                   value={rememberValue}

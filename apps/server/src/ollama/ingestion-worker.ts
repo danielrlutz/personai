@@ -134,7 +134,7 @@ async function processJob(profileId: string, jobId: string): Promise<void> {
     if (structured.amount && structured.iban) {
       await createConfirmation(prisma, {
         action: "ledger.write",
-        summary: `Commit QR bill ${entity} · ${structured.amount} ${structured.currency ?? "CHF"} → archive ${archiveName}`,
+        summary: `Save QR bill ${entity} · ${structured.amount} ${structured.currency ?? "CHF"} · file as ${archiveName}`,
         entity: "Document",
         entityId: job.documentId,
         payload: {
@@ -153,7 +153,7 @@ async function processJob(profileId: string, jobId: string): Promise<void> {
     } else if (structured.amount && structured.vendor) {
       await createConfirmation(prisma, {
         action: "ledger.write",
-        summary: `Commit expense ${entity} · ${structured.amount} ${structured.currency ?? "CHF"} → archive ${archiveName}`,
+        summary: `Save expense ${entity} · ${structured.amount} ${structured.currency ?? "CHF"} · file as ${archiveName}`,
         entity: "Document",
         entityId: job.documentId,
         payload: {
@@ -171,7 +171,7 @@ async function processJob(profileId: string, jobId: string): Promise<void> {
     } else {
       await createConfirmation(prisma, {
         action: "archive.commit",
-        summary: `Archive as ${archiveName} (cat ${archiveCategory})${deadline ? ` · Frist ${deadline.toISOString().slice(0, 10)}` : ""}`,
+        summary: `File as ${archiveName} (folder ${archiveCategory})${deadline ? ` · deadline (Frist) ${deadline.toISOString().slice(0, 10)}` : ""}`,
         entity: "Document",
         entityId: job.documentId,
         payload: {

@@ -51,7 +51,7 @@ export function BriefingSnapshotCards({ snapshot }: BriefingSnapshotCardsProps) 
       icon: HeartPulse,
       accent: "text-rose-400",
       items: [
-        { label: "Recent complaints", value: String(snapshot.medical.recentComplaints) },
+        { label: "Recent entries", value: String(snapshot.medical.recentComplaints) },
         {
           label: "Avg mood (7d)",
           value: snapshot.medical.avgMoodScore7d != null ? `${snapshot.medical.avgMoodScore7d}/10` : "—",
@@ -66,12 +66,12 @@ export function BriefingSnapshotCards({ snapshot }: BriefingSnapshotCardsProps) 
       ],
     },
     {
-      title: "Ingest",
+      title: "Archive",
       icon: Upload,
       accent: "text-amber-400",
       items: [
-        { label: "Queued jobs", value: String(snapshot.ingest.queuedJobs) },
-        { label: "Completed yesterday", value: String(snapshot.ingest.completedYesterday) },
+        { label: "In queue", value: String(snapshot.ingest.queuedJobs) },
+        { label: "Done yesterday", value: String(snapshot.ingest.completedYesterday) },
       ],
     },
   ];
@@ -167,7 +167,7 @@ export function BriefingSnapshotCards({ snapshot }: BriefingSnapshotCardsProps) 
 
       <div className="space-y-3">
         <h3 className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-          Personal manners
+          Personal
         </h3>
         {personalCards.length === 0 ? (
           <Card>
@@ -175,10 +175,10 @@ export function BriefingSnapshotCards({ snapshot }: BriefingSnapshotCardsProps) 
               <Sparkles className="h-5 w-5 shrink-0 text-muted-foreground" />
               <div className="min-w-0">
                 <p className="text-sm font-semibold tracking-tight">
-                  Personal pillar not in this briefing yet
+                  No personal summary in this briefing yet
                 </p>
                 <p className="mt-0.5 text-xs text-muted-foreground">
-                  Regenerate the briefing after Life data is available for this profile.
+                  Add something under Life, then regenerate the briefing.
                 </p>
               </div>
             </CardContent>

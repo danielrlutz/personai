@@ -59,7 +59,7 @@ export function QRBillList() {
           <EmptyState
             icon={Receipt}
             title="No QR bills yet"
-            description="Nothing pending — upload a Swiss QR invoice under Archive, then confirm the ledger write."
+            description="Nothing pending — upload a Swiss QR invoice under Archive, then confirm to save it."
             action={
               <Button variant="tonal" size="sm" asChild>
                 <Link href="/ingest">Go to Archive</Link>
@@ -86,7 +86,17 @@ export function QRBillList() {
                   )}
                 </div>
                 <div className="flex shrink-0 flex-wrap items-center gap-2">
-                  <Badge variant={statusVariant[bill.status]}>{bill.status}</Badge>
+                  <Badge variant={statusVariant[bill.status]}>
+                    {bill.status === "PENDING"
+                      ? "Pending"
+                      : bill.status === "PAID"
+                        ? "Paid"
+                        : bill.status === "OVERDUE"
+                          ? "Overdue"
+                          : bill.status === "CANCELLED"
+                            ? "Cancelled"
+                            : bill.status}
+                  </Badge>
                   {bill.status === "PENDING" && (
                     <Button size="sm" variant="outline" onClick={() => void markPaid(bill.id)}>
                       <Check className="mr-1 h-3 w-3" />

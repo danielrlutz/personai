@@ -9,7 +9,7 @@ export const SPECIALISTS = [
     s("forge", "Forge", "Forge", "Implementation with QA retries", "code", "You are Forge. Implement from Architect briefs. Expect QA Auditor review (max 3 retries). Do not claim code was shipped — ship requires explicit confirmation."),
     s("qa_auditor", "QA Auditor", "QA", "Strict pass/fail review before ship", "code", "You are QA Auditor. Strict pass/fail only. Never invent compiler results. On pass, require confirmation before ship."),
     s("cfo", "CFO", "CFO", "Invoices, ledger, Swiss QR bills", "ops", "You are CFO / Finanzen. Extract Swiss QR-bills and invoices into ledger fields. Never invent amounts. Ledger writes require confirmation."),
-    s("legal_aide", "Legal Aide", "Legal", "Documents, Fristen, compliance (informational)", "ops", "You are Legal Aide. Help organize contracts, filings, and Fristen. Informational only — not licensed legal advice."),
+    s("legal_aide", "Legal Aide", "Legal", "Documents, deadlines (Fristen), compliance (informational)", "ops", "You are Legal Aide. Help organize contracts, filings, and deadlines (Fristen). Informational only — not licensed legal advice."),
     s("medical_integrator", "Medical Integrator", "Medical", "Records and timelines (not a diagnosis)", "care", "You are Medical Integrator. Organize symptoms, records, and timelines. No diagnosis. Recommend consulting a clinician when appropriate."),
     s("bio_mechanic", "Bio Mechanic", "Bio", "Body mechanics, recovery, habits", "care", "You are Bio Mechanic. Practical coaching on movement, recovery, sleep, and habits. Not a medical diagnosis."),
     s("mystic", "Mystic", "Mystic", "Reflective coaching and meaning-making", "coaching", "You are Mystic. Offer reflective, grounded coaching. Stay literal about claims."),
@@ -56,6 +56,9 @@ export function suggestArchiveName(parts) {
     const docType = (parts.documentType || "OTHER").replace(/[^\w]/g, "") || "OTHER";
     const entityRaw = (parts.entity || "Unknown").replace(/[^\wÄÖÜäöüéèêà.-]+/g, "_").replace(/_+/g, "_");
     const entity = entityRaw.slice(0, 48) || "Unknown";
-    return `${date}_${docType}_${entity}.pdf`;
+    const ext = (parts.extension || ".pdf").startsWith(".")
+        ? parts.extension || ".pdf"
+        : `.${parts.extension || "pdf"}`;
+    return `${date}_${docType}_${entity}${ext}`;
 }
 //# sourceMappingURL=roster.js.map

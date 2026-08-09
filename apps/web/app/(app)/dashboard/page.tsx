@@ -20,7 +20,7 @@ export default function DashboardPage() {
         <div className="min-w-0">
           <h1 className="page-title">Home</h1>
           <p className="page-subtitle">
-            Your morning brief — business and personal manners in one calm overview.
+            Your morning brief — work and personal life in one calm overview.
           </p>
         </div>
         <Button size="sm" asChild>
@@ -38,7 +38,7 @@ export default function DashboardPage() {
         <div className="min-w-0">
           <h2 className="section-title">Business</h2>
           <p className="section-subtitle">
-            Finance, legal, and document ingestion for this profile.
+            Finance, legal, and documents for this profile.
           </p>
         </div>
         <Stagger className="grid gap-4 lg:grid-cols-2">
@@ -59,9 +59,9 @@ export default function DashboardPage() {
 
       <section className="space-y-4">
         <div className="min-w-0">
-          <h2 className="section-title">Personal manners</h2>
+          <h2 className="section-title">Personal</h2>
           <p className="section-subtitle">
-            Habits and today&apos;s personal focus — empty until you track something real.
+            Habits and today&apos;s focus — empty until you track something.
           </p>
         </div>
         <Stagger className="grid gap-4 lg:grid-cols-2">

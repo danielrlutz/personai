@@ -53,7 +53,10 @@ export function BriefingActionItems({ snapshot }: BriefingActionItemsProps) {
 
   if (snapshot.personal && snapshot.personal.overdueTasks > 0) {
     actions.push({
-      label: `Resolve ${snapshot.personal.overdueTasks} overdue personal task(s)`,
+      label:
+        snapshot.personal.overdueTasks === 1
+          ? "Resolve 1 overdue personal task"
+          : `Resolve ${snapshot.personal.overdueTasks} overdue personal tasks`,
       href: "/life",
       priority: "high",
     });
@@ -61,14 +64,20 @@ export function BriefingActionItems({ snapshot }: BriefingActionItemsProps) {
 
   if (snapshot.ingest.queuedJobs > 0) {
     actions.push({
-      label: `Review ${snapshot.ingest.queuedJobs} queued ingestion job(s)`,
+      label:
+        snapshot.ingest.queuedJobs === 1
+          ? "Review 1 document in the archive queue"
+          : `Review ${snapshot.ingest.queuedJobs} documents in the archive queue`,
       href: "/ingest",
     });
   }
 
   if (snapshot.legal.overdueTasks > 0) {
     actions.push({
-      label: `Resolve ${snapshot.legal.overdueTasks} overdue legal task(s)`,
+      label:
+        snapshot.legal.overdueTasks === 1
+          ? "Resolve 1 overdue legal task"
+          : `Resolve ${snapshot.legal.overdueTasks} overdue legal tasks`,
       href: "/legal",
       priority: "high",
     });

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ArrowDownLeft, ArrowUpRight, ArrowLeftRight } from "lucide-react";
 import { apiGet, type Transaction } from "@/lib/api-client";
 import { formatCHF, formatDate } from "@/lib/utils";
+import { labelForEnum } from "@/lib/confirm-labels";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -59,7 +60,7 @@ export function TransactionTable() {
           <EmptyState
             icon={ArrowLeftRight}
             title="No transactions"
-            description="Transactions from ingested documents or manual entries appear here."
+            description="Transactions from archived documents or manual entries appear here."
           />
         ) : (
           <div className="min-w-0 overflow-x-auto">
@@ -96,7 +97,7 @@ export function TransactionTable() {
                       <td className="py-3">
                         <span className={`inline-flex items-center gap-1 ${typeColors[tx.type]}`}>
                           <Icon className="h-3.5 w-3.5 shrink-0" />
-                          {tx.type}
+                          {labelForEnum(tx.type)}
                         </span>
                       </td>
                       <td

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Scale, CheckCircle2, Circle } from "lucide-react";
 import { apiGet, apiPatch, type LegalTask } from "@/lib/api-client";
 import { formatDate } from "@/lib/utils";
+import { labelForEnum } from "@/lib/confirm-labels";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -55,7 +56,11 @@ export function LegalTimeline() {
         {error ? (
           <ApiLoadError message={error} onRetry={() => void load()} />
         ) : tasks.length === 0 ? (
-          <EmptyState icon={Scale} title="No legal tasks" description="Add deadlines, filings, and compliance items." />
+          <EmptyState
+            icon={Scale}
+            title="No legal tasks"
+            description="Add deadlines (Fristen), filings, and compliance items."
+          />
         ) : (
           <div className="relative space-y-0">
             <div className="absolute left-[15px] top-2 bottom-2 w-px bg-border" />
@@ -87,8 +92,8 @@ export function LegalTimeline() {
                       )}
                     </div>
                     <div className="flex shrink-0 flex-wrap gap-2">
-                      <Badge variant="outline">{task.type}</Badge>
-                      <Badge variant={statusVariant[task.status]}>{task.status}</Badge>
+                      <Badge variant="outline">{labelForEnum(task.type)}</Badge>
+                      <Badge variant={statusVariant[task.status]}>{labelForEnum(task.status)}</Badge>
                     </div>
                   </div>
                   {task.dueDate && (

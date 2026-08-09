@@ -27,7 +27,7 @@ export const SPECIALIST_FALLBACK: SpecialistMeta[] = [
   { id: "forge", label: "Forge", shortLabel: "Forge", description: "Implementation", group: "code" },
   { id: "qa_auditor", label: "QA Auditor", shortLabel: "QA", description: "Pass/fail before ship", group: "code" },
   { id: "cfo", label: "CFO", shortLabel: "CFO", description: "Invoices and ledger", group: "ops" },
-  { id: "legal_aide", label: "Legal Aide", shortLabel: "Legal", description: "Fristen and filings", group: "ops" },
+  { id: "legal_aide", label: "Legal Aide", shortLabel: "Legal", description: "Deadlines (Fristen) and filings", group: "ops" },
   { id: "medical_integrator", label: "Medical Integrator", shortLabel: "Medical", description: "Records (not diagnosis)", group: "care" },
   { id: "bio_mechanic", label: "Bio Mechanic", shortLabel: "Bio", description: "Body and recovery", group: "care" },
   { id: "mystic", label: "Mystic", shortLabel: "Mystic", description: "Reflective coaching", group: "coaching" },

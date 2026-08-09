@@ -36,17 +36,17 @@ export function QueueStatusBanner({ vram, queuedCount }: QueueStatusBannerProps)
         </span>
         <div className="min-w-0">
           <p className="md-label-large truncate">
-            {locked ? "VRAM lock active — competing jobs wait" : "Ingestion queue ready"}
+            {locked ? "Scanner busy — other jobs wait their turn" : "Ready for new documents"}
           </p>
           <p className="md-body-medium truncate text-muted-foreground">
-            {queuedCount} job(s) in queue
-            {locked && vram?.holder ? ` · Held by ${vram.holder}` : ""}
+            {queuedCount === 1 ? "1 document in queue" : `${queuedCount} documents in queue`}
+            {locked && vram?.holder ? ` · In use by ${vram.holder}` : ""}
             {vram?.pausedReason ? ` · ${vram.pausedReason}` : ""}
           </p>
         </div>
       </div>
       <Badge variant={locked ? "warning" : "secondary"} className="shrink-0">
-        {locked ? "Locked" : "Idle"}
+        {locked ? "Busy" : "Ready"}
       </Badge>
     </div>
   );

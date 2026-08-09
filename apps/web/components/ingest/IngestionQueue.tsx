@@ -67,7 +67,7 @@ export function IngestionQueue({ refreshKey }: IngestionQueueProps) {
       } catch (err) {
         if (mounted) {
           setJobs([]);
-          setError(err instanceof Error ? err.message : "Failed to load ingestion queue");
+          setError(err instanceof Error ? err.message : "Failed to load document queue");
           setLoading(false);
         }
       }
@@ -97,7 +97,7 @@ export function IngestionQueue({ refreshKey }: IngestionQueueProps) {
 
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-base">Ingestion queue</CardTitle>
+          <CardTitle className="text-base">Document queue</CardTitle>
         </CardHeader>
         <CardContent>
           {error ? (
@@ -106,7 +106,7 @@ export function IngestionQueue({ refreshKey }: IngestionQueueProps) {
             <EmptyState
               icon={FileText}
               title="Queue is empty"
-              description="Drop a PDF or image above to extract QR bills, transactions, and records."
+              description="Drop a PDF or image above to extract Swiss QR bills, payments, and records."
             />
           ) : (
             <ul>

@@ -16,7 +16,9 @@ export default function MedicalPage() {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Medical</h1>
-          <p className="mt-1 text-muted-foreground">Track complaints and dual-framework analysis.</p>
+          <p className="mt-1 text-muted-foreground">
+            Log symptoms and review Western and Eastern analysis side by side.
+          </p>
         </div>
         <Button variant="outline" asChild>
           <Link href="/medical/export">

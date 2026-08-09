@@ -281,7 +281,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
         if (!bill) return reply.status(404).send({ error: "QR bill not found" });
         const confirmation = await createConfirmation(prisma, {
           action: "qr.mark_paid",
-          summary: `Mark paid + ledger: ${bill.creditorName} · ${bill.amount} ${bill.currency}`,
+          summary: `Mark paid and record payment: ${bill.creditorName} · ${bill.amount} ${bill.currency}`,
           entity: "QRBill",
           entityId: bill.id,
           payload: { billId: bill.id, writeLedger: true },
@@ -289,7 +289,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
         return reply.status(202).send({
           needsConfirm: true,
           confirmation,
-          message: "Confirm before marking paid and writing the ledger.",
+          message: "Confirm before marking this bill paid and recording it.",
         });
       }
       const bill = await prisma.qRBill.update({
@@ -520,9 +520,11 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     try {
       const { profileId, prisma } = await withPrisma(req);
       if (!(req.body as { confirmed?: boolean }).confirmed) {
+        const entryCount = req.body.complaintIds?.length ?? 0;
+        const entryLabel = entryCount === 1 ? "symptom entry" : "symptom entries";
         const confirmation = await createConfirmation(prisma, {
           action: "medical.export",
-          summary: `Export medical report: ${req.body.title} (${req.body.complaintIds?.length ?? 0} complaints)`,
+          summary: `Export medical report: ${req.body.title} (${entryCount} ${entryLabel})`,
           entity: "MedicalExport",
           payload: {
             title: req.body.title,
@@ -535,7 +537,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
         return reply.status(202).send({
           needsConfirm: true,
           confirmation,
-          message: "Confirm before generating the medical PDF export.",
+          message: "Confirm before generating the medical PDF.",
         });
       }
       const profile = getActiveProfile();

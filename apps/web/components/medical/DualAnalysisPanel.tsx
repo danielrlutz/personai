@@ -50,7 +50,7 @@ export function DualAnalysisPanel() {
     return (
       <Card>
         <CardContent className="py-12 text-center text-sm text-muted-foreground">
-          Run dual analysis on a complaint to see Western vs Eastern perspectives.
+          Run dual analysis on a symptom entry to see Western vs Eastern perspectives.
         </CardContent>
       </Card>
     );

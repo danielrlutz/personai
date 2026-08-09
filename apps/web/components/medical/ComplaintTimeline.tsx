@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Activity, Sparkles } from "lucide-react";
 import { apiGet, apiPost, type ComplaintLog } from "@/lib/api-client";
 import { formatDate, formatRelative } from "@/lib/utils";
+import { labelForEnum } from "@/lib/confirm-labels";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -34,7 +35,7 @@ export function ComplaintTimeline({ refreshKey }: ComplaintTimelineProps) {
       setComplaints(data.complaints);
     } catch (err) {
       setComplaints([]);
-      setError(err instanceof Error ? err.message : "Failed to load complaints");
+      setError(err instanceof Error ? err.message : "Failed to load symptom log");
     }
   }, []);
 
@@ -58,13 +59,17 @@ export function ComplaintTimeline({ refreshKey }: ComplaintTimelineProps) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">Complaint timeline</CardTitle>
+        <CardTitle className="text-base">Symptom log</CardTitle>
       </CardHeader>
       <CardContent>
         {error ? (
           <ApiLoadError message={error} onRetry={() => void load()} />
         ) : complaints.length === 0 ? (
-          <EmptyState icon={Activity} title="No complaints logged" description="Track physical and psychological symptoms over time." />
+          <EmptyState
+            icon={Activity}
+            title="No symptoms logged"
+            description="Track physical and psychological symptoms over time."
+          />
         ) : (
           <ul className="space-y-4">
             {complaints.map((c) => (
@@ -79,8 +84,8 @@ export function ComplaintTimeline({ refreshKey }: ComplaintTimelineProps) {
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    <Badge variant="outline">{c.category}</Badge>
-                    <Badge variant={severityVariant[c.severity]}>{c.severity}</Badge>
+                    <Badge variant="outline">{labelForEnum(c.category)}</Badge>
+                    <Badge variant={severityVariant[c.severity]}>{labelForEnum(c.severity)}</Badge>
                   </div>
                 </div>
                 <div className="mt-3 flex items-center gap-2">

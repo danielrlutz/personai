@@ -186,7 +186,7 @@ export default function SettingsPage() {
         briefHour: updated.briefHour ?? null,
         notes: updated.notes ?? null,
       });
-      setCeoNote("CEO profile saved. Specialists get a compact card each turn.");
+      setCeoNote("Profile saved. Specialists see a short summary of you each turn.");
     } catch (err) {
       setCeoNote(err instanceof Error ? err.message : "Failed to save CEO profile");
     } finally {
@@ -207,7 +207,7 @@ export default function SettingsPage() {
       setFactKey("");
       setFactValue("");
       await refreshMemory();
-      setFactNote("Fact saved. Up to 20 recent facts are injected into chat/briefing.");
+      setFactNote("Fact saved. Up to 20 recent facts appear in chat and the morning brief.");
     } catch (err) {
       setFactNote(err instanceof Error ? err.message : "Failed to save fact");
     } finally {
@@ -236,7 +236,7 @@ export default function SettingsPage() {
         </div>
         <h1 className="page-title">Settings</h1>
         <p className="page-subtitle">
-          API connection, profile switch, CEO card, and durable memory — always one tap away from Home.
+          Connection, profile, and personal details for this account.
         </p>
       </div>
 
@@ -397,7 +397,7 @@ export default function SettingsPage() {
             CEO profile
           </CardTitle>
           <CardDescription>
-            Compact card injected into team chat and daily briefing — not full chat history.
+            Short profile shown to specialists and in the morning brief — not your full chat history.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -454,7 +454,7 @@ export default function SettingsPage() {
             Memory facts
           </CardTitle>
           <CardDescription>
-            Durable key/value facts. Specialists see only the 20 most recently updated.
+            Short facts you want remembered. Specialists see the 20 most recently updated.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -462,12 +462,12 @@ export default function SettingsPage() {
             <Input
               value={factKey}
               onChange={(e) => setFactKey(e.target.value)}
-              placeholder="Key (e.g. preferred-bank)"
+              placeholder="Label (e.g. preferred bank)"
             />
             <Input
               value={factValue}
               onChange={(e) => setFactValue(e.target.value)}
-              placeholder="Value"
+              placeholder="Details"
             />
             <Button
               onClick={() => void addFact()}

@@ -15,7 +15,7 @@ function TeamPageInner() {
       <div className="page-header min-w-0">
         <h1 className="page-title">Team</h1>
         <p className="page-subtitle">
-          Twelve specialists, one local orchestration path. Irreversible writes stay behind confirm.
+          Ask your specialists anything. Important changes still ask for confirmation first.
         </p>
       </div>
       <ConfirmGate compact />

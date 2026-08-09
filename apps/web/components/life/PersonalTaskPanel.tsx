@@ -96,7 +96,7 @@ export function PersonalTaskPanel({ refreshKey = 0, onChanged }: PersonalTaskPan
           <EmptyState
             icon={ListTodo}
             title="No personal tasks"
-            description="Capture personal to-dos here — the list stays empty until you add something real."
+            description="Capture personal to-dos here — the list stays empty until you add one."
           />
         ) : (
           <ul className="space-y-2">

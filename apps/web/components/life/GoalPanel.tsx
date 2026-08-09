@@ -107,7 +107,7 @@ export function GoalPanel({ refreshKey = 0, onChanged }: GoalPanelProps) {
           <EmptyState
             icon={Target}
             title="No goals yet"
-            description="Define personal goals when you have them — empty means unused, not fictional progress."
+            description="Define personal goals when you have them."
           />
         ) : (
           <ul className="space-y-2">

@@ -59,12 +59,12 @@ export function FileDropzone({ onUploaded }: FileDropzoneProps) {
           <Upload className="h-7 w-7 text-primary-on-container" />
         )}
       </div>
-      <h3 className="md-title-medium">Drop files to ingest</h3>
+      <h3 className="md-title-medium">Drop files to archive</h3>
       <p className="mt-1 md-body-medium text-muted-foreground">
         PDF, images, receipts, medical records
       </p>
       <p className="mt-2 max-w-sm text-xs text-muted-foreground">
-        Files are cached on this device first — if the network fails, Retry from Pending below.
+        Files stay on this device first — if upload fails, use Retry under Pending below.
       </p>
       <label className="mt-6 cursor-pointer">
         <Button asChild variant="default">

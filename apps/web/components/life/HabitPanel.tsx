@@ -124,7 +124,7 @@ export function HabitPanel({ refreshKey = 0, onChanged, compact = false }: Habit
           <EmptyState
             icon={Sparkles}
             title="No habits yet"
-            description="Track daily or weekly personal routines — only real entries appear here."
+            description="Track daily or weekly personal routines."
           />
         ) : (
           <ul className="space-y-2">

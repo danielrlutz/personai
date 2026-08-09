@@ -91,7 +91,7 @@ export function BudgetOverview() {
           <CardContent>
             <p className="text-xl font-medium tracking-tight">{formatCHF(totalLimit)}</p>
             {!hasSpending && (
-              <p className="mt-1 text-xs text-muted-foreground">Planning shells — not cash on hand</p>
+              <p className="mt-1 text-xs text-muted-foreground">Budget limits — not cash on hand</p>
             )}
           </CardContent>
         </Card>
@@ -128,7 +128,7 @@ export function BudgetOverview() {
               className="py-8"
               icon={Wallet}
               title="No spending recorded"
-              description="Category limits are empty templates until transactions are ingested or logged."
+              description="Category limits stay empty until you log or archive transactions."
             />
           ) : (
             <div className="h-[240px] w-full min-w-0">

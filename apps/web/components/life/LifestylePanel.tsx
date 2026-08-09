@@ -102,7 +102,7 @@ export function LifestylePanel({ refreshKey = 0, onChanged }: LifestylePanelProp
           <EmptyState
             icon={Activity}
             title="No metrics logged"
-            description="Log sleep, steps, or other lifestyle numbers when you have them — no sample data."
+            description="Log sleep, steps, or other lifestyle numbers when you have them."
           />
         ) : (
           <ul className="space-y-2">

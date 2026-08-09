@@ -13,7 +13,7 @@ export default function FinancePage() {
         <div className="min-w-0">
           <h1 className="page-title">Finance</h1>
           <p className="page-subtitle">
-            Budget templates, QR bills, and cashflow — ledger writes stay behind confirm.
+            Budgets, Swiss QR bills, and cash flow. Saving payments needs your confirmation.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">

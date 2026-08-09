@@ -19,7 +19,7 @@ export default function LifePage() {
       <div className="page-header min-w-0">
         <h1 className="page-title">Life</h1>
         <p className="page-subtitle">
-          Personal manners — habits, goals, relationships, and lifestyle signals. No mock data.
+          Habits, goals, relationships, and lifestyle — only what you track.
         </p>
       </div>
 

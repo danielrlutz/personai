@@ -7,9 +7,9 @@ import { cn } from "@/lib/utils";
 
 function statusLabel(health: OllamaHealth | null): string {
   if (!health?.ok) return "Ollama offline";
-  if (health.vram?.holder) return "VRAM busy";
-  if (health.failoverOk) return "Failover OK";
-  if (health.runtime === "native") return "Native Ollama";
+  if (health.vram?.holder) return "Model busy";
+  if (health.failoverOk) return "Backup ready";
+  if (health.runtime === "native") return "Ollama ready";
   if (health.runtime === "docker") return "Ollama (Docker)";
   if (health.runtime === "remote") return "Ollama (remote)";
   return "Ollama ready";

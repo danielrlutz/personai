@@ -1,0 +1,52 @@
+/** Human labels for confirmation action codes (API still stores machine keys). */
+const ACTION_LABELS: Record<string, string> = {
+  "medical.export": "Medical export",
+  "ledger.write": "Save to ledger",
+  "archive.commit": "File in archive",
+  "qr.mark_paid": "Mark bill paid",
+  "career.pdf": "Career PDF",
+  "export.generate": "Generate export",
+  "document.upload": "Document upload",
+  "confirm.accept": "Confirmed",
+  "confirm.reject": "Rejected",
+};
+
+/** Count + singular/plural noun, e.g. countLabel(1, "entry", "entries") → "1 entry". */
+export function countLabel(count: number, singular: string, plural: string): string {
+  return `${count} ${count === 1 ? singular : plural}`;
+}
+
+export function labelForConfirmAction(action: string): string {
+  const key = action.trim().toLowerCase();
+  if (ACTION_LABELS[key]) return ACTION_LABELS[key];
+  // Fallback: medical.export → Medical export
+  return action
+    .split(/[._]/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(" ");
+}
+
+/** Soften stored summaries (including older queued rows) for display. */
+export function humanizeConfirmationSummary(summary: string): string {
+  return summary
+    .replace(/\((\d+)\s+complaints?\)/gi, (_m, n: string) => {
+      const count = Number(n);
+      return `(${countLabel(count, "symptom entry", "symptom entries")})`;
+    })
+    .replace(/\bMark paid \+ ledger:\b/gi, "Mark paid and record payment:")
+    .replace(/\bCommit QR bill\b/gi, "Save QR bill")
+    .replace(/\bCommit expense\b/gi, "Save expense")
+    .replace(/\s*→\s*archive\s+/gi, " · file as ")
+    .replace(/\s*\(cat\s+(\d+)\)/gi, " (folder $1)")
+    .replace(/\s*·\s*Frist\s+(\d{4}-\d{2}-\d{2})/gi, " · deadline (Frist) $1")
+    .replace(/\bGenerate career PDF:\b/gi, "Create career PDF:");
+}
+
+export function labelForEnum(value: string): string {
+  return value
+    .split(/[._]/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(" ");
+}
