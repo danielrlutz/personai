@@ -13,6 +13,9 @@ const PUBLIC_EXACT = new Set([
   "/auth/setup",
 ]);
 
+/** Read-only probes — no profile data; keeps status chips honest before/without a session. */
+const PUBLIC_GET_EXACT = new Set(["/ollama/health"]);
+
 const PUBLIC_PREFIXES = ["/auth/login", "/auth/setup"];
 
 function normalizePath(url: string): string {
@@ -27,6 +30,7 @@ export function isPublicRoute(method: string, url: string): boolean {
   if (method === "OPTIONS") return true;
   const path = normalizePath(url);
   if (PUBLIC_EXACT.has(path)) return true;
+  if (method === "GET" && PUBLIC_GET_EXACT.has(path)) return true;
   return PUBLIC_PREFIXES.some((p) => path === p);
 }
 

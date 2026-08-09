@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Cpu, Loader2 } from "lucide-react";
 import { apiGet, type OllamaHealth } from "@/lib/api-client";
+import { requireSession } from "@/lib/session";
 import { cn } from "@/lib/utils";
 
 function statusLabel(health: OllamaHealth | null): string {
@@ -22,6 +23,14 @@ export function OllamaStatusIndicator({ className }: { className?: string }) {
   useEffect(() => {
     let mounted = true;
     const poll = async () => {
+      // Avoid 401 spam / false "Ollama offline" when the session gate is empty.
+      if (!requireSession()) {
+        if (mounted) {
+          setHealth(null);
+          setLoading(false);
+        }
+        return;
+      }
       try {
         const data = await apiGet<OllamaHealth>("/ollama/health", { silent: true });
         if (mounted) setHealth(data);
