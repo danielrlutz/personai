@@ -32,7 +32,15 @@ export const ingestionEvents = new EventEmitter();
 let running = false;
 let timer: NodeJS.Timeout | null = null;
 
-const DOC_TYPES = ["BILL", "MEDICAL_RECORD", "LEGAL", "CONTRACT", "RECEIPT", "OTHER"] as const;
+const DOC_TYPES = [
+  "BILL",
+  "MEDICAL_RECORD",
+  "LEGAL",
+  "CONTRACT",
+  "RECEIPT",
+  "OFFICIAL",
+  "OTHER",
+] as const;
 type DocType = (typeof DOC_TYPES)[number];
 
 type PageOcr = {
@@ -239,6 +247,73 @@ async function persistExtraction(opts: {
   });
 }
 
+/**
+ * Materialize a confirmable segment as its own archivable file (segment page PNG),
+ * never the unsplit multipage parent PDF.
+ */
+async function materializeSegmentOriginal(
+  destDir: string,
+  segment: PageSegment,
+): Promise<{ storagePath: string; mimeType: string; fileSize: number; extension: string }> {
+  const pagesDir = path.join(destDir, "pages");
+  await fs.mkdir(pagesDir, { recursive: true });
+  for (const page of segment.pages) {
+    await fs.copyFile(page.path, path.join(pagesDir, page.file));
+  }
+  const primary = segment.pages[0]!;
+  const extension = path.extname(primary.file) || ".png";
+  const storagePath = path.join(destDir, `original${extension}`);
+  await fs.copyFile(primary.path, storagePath);
+  const fileSize = (await fs.stat(storagePath)).size;
+  return { storagePath, mimeType: "image/png", fileSize, extension };
+}
+
+function segmentRangeLabel(segment: PageSegment): string {
+  return segment.startPage === segment.endPage
+    ? `p${segment.startPage}`
+    : `p${segment.startPage}-${segment.endPage}`;
+}
+
+/**
+ * After bulk split, rewrite the parent doc so archive.commit files only segment-1
+ * bytes. The unsplit multipage PDF is preserved as original-bulk{ext}.
+ */
+async function rewriteParentStorageToSegment(opts: {
+  prisma: Awaited<ReturnType<typeof getPrisma>>;
+  document: { id: string; storagePath: string; filename: string };
+  segment: PageSegment;
+}): Promise<{ extension: string; bulkOriginalPath: string }> {
+  const dir = path.dirname(opts.document.storagePath);
+  const prevExt =
+    path.extname(opts.document.storagePath) || path.extname(opts.document.filename) || ".pdf";
+  const bulkOriginalPath = path.join(dir, `original-bulk${prevExt}`);
+
+  try {
+    await fs.access(bulkOriginalPath);
+  } catch {
+    try {
+      await fs.rename(opts.document.storagePath, bulkOriginalPath);
+    } catch {
+      await fs.copyFile(opts.document.storagePath, bulkOriginalPath);
+    }
+  }
+
+  const materialized = await materializeSegmentOriginal(dir, opts.segment);
+  const filename = `${path.parse(opts.document.filename).name}_${segmentRangeLabel(opts.segment)}${materialized.extension}`;
+
+  await opts.prisma.document.update({
+    where: { id: opts.document.id },
+    data: {
+      storagePath: materialized.storagePath,
+      mimeType: materialized.mimeType,
+      fileSize: materialized.fileSize,
+      filename,
+    },
+  });
+
+  return { extension: materialized.extension, bulkOriginalPath };
+}
+
 async function spawnChildDocument(opts: {
   prisma: Awaited<ReturnType<typeof getPrisma>>;
   profileId: string;
@@ -249,29 +324,17 @@ async function spawnChildDocument(opts: {
   const documentId = randomUUID();
   const dir = path.join(profileUploadsDir(opts.profileId), documentId);
   await fs.mkdir(dir, { recursive: true });
-  const pagesDir = path.join(dir, "pages");
-  await fs.mkdir(pagesDir, { recursive: true });
+  const materialized = await materializeSegmentOriginal(dir, opts.segment);
 
-  for (const page of opts.segment.pages) {
-    await fs.copyFile(page.path, path.join(pagesDir, page.file));
-  }
-  const primary = opts.segment.pages[0]!;
-  const storagePath = path.join(dir, `original${path.extname(primary.file) || ".png"}`);
-  await fs.copyFile(primary.path, storagePath);
-
-  const range =
-    opts.segment.startPage === opts.segment.endPage
-      ? `p${opts.segment.startPage}`
-      : `p${opts.segment.startPage}-${opts.segment.endPage}`;
-  const filename = `${path.parse(opts.parent.filename).name}_${range}.png`;
+  const filename = `${path.parse(opts.parent.filename).name}_${segmentRangeLabel(opts.segment)}${materialized.extension}`;
 
   await opts.prisma.document.create({
     data: {
       id: documentId,
       filename,
-      mimeType: "image/png",
-      storagePath,
-      fileSize: (await fs.stat(storagePath)).size,
+      mimeType: materialized.mimeType,
+      storagePath: materialized.storagePath,
+      fileSize: materialized.fileSize,
     },
   });
 
@@ -287,7 +350,7 @@ async function spawnChildDocument(opts: {
       parentDocumentId: opts.parent.id,
     },
     confidence: combined.qr ? 0.95 : 0.8,
-    extension: ".png",
+    extension: materialized.extension,
   });
 
   await opts.prisma.auditLog.create({
@@ -375,7 +438,21 @@ async function processJob(profileId: string, jobId: string): Promise<void> {
     primary.structured.bulkSegments = finalSegments.length;
     primary.structured.sourcePages = [firstSeg.startPage, firstSeg.endPage];
 
-    const ext = path.extname(job.document.filename) || path.extname(job.document.storagePath) || ".pdf";
+    // Bulk split: parent must archive only segment-1 bytes, never the full stack PDF.
+    let archiveExt =
+      path.extname(job.document.filename) || path.extname(job.document.storagePath) || ".pdf";
+    // Keep original bulk filename for child naming (parent filename becomes *_p1.png after rewrite).
+    const bulkParentFilename = job.document.filename;
+    if (restSegs.length > 0) {
+      const rewritten = await rewriteParentStorageToSegment({
+        prisma,
+        document: job.document,
+        segment: firstSeg,
+      });
+      archiveExt = rewritten.extension;
+      primary.structured.bulkOriginalPreserved = path.basename(rewritten.bulkOriginalPath);
+    }
+
     await persistExtraction({
       prisma,
       documentId: job.documentId,
@@ -383,7 +460,7 @@ async function processJob(profileId: string, jobId: string): Promise<void> {
       raw: primary.raw,
       structured: primary.structured,
       confidence: primary.qr ? 0.95 : prepared.kind === "raw" ? 0.5 : 0.8,
-      extension: ext,
+      extension: archiveExt,
     });
 
     for (const segment of restSegs) {
@@ -391,7 +468,7 @@ async function processJob(profileId: string, jobId: string): Promise<void> {
       await spawnChildDocument({
         prisma,
         profileId,
-        parent: job.document,
+        parent: { id: job.document.id, filename: bulkParentFilename },
         segment,
         pageOcrs: segOcrs,
       });
@@ -407,6 +484,7 @@ async function processJob(profileId: string, jobId: string): Promise<void> {
             segments: finalSegments.length,
             childCount: restSegs.length,
             creator: prepared.creator,
+            parentStorageRewritten: true,
           }),
         },
       });

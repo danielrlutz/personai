@@ -5,12 +5,18 @@ Extrahiere strukturierte Daten aus diesem gescannten Dokument (Handy-/Scanner-Fo
 Kontext:
 - Sprache meist Deutsch (Schweiz): ss statt ß, CHF, AHV, Fristen, Rechnungen, QR-Rechnung / Zahlteil.
 - Swiss QR-bill: Suche Empfänger, IBAN/QR-IBAN, Betrag, Währung CHF/EUR, Referenz (QRR/SCOR/NON), Fälligkeit.
-- Dokumenttypen: Rechnung/QR-Rechnung=BILL, Quittung=RECEIPT, Arztzeugnis/Befund=MEDICAL_RECORD, Vertrag/Schuldanerkennung=LEGAL/CONTRACT, sonst OTHER.
+- Dokumenttypen:
+  - Rechnung/QR-Rechnung=BILL
+  - Quittung=RECEIPT
+  - Arztzeugnis/Arztbericht/Befund/Medizinisches Zeugnis=MEDICAL_RECORD (nicht Misc)
+  - Vertrag/Schuldanerkennung/Mietvertrag/privatrechtliche Anwaltsschreiben=LEGAL oder CONTRACT → Archiv 08_Legal
+  - Gerichtsunterlagen/Gerichtsbeschluss/Vorladung/Klage/Urteil/Verfügung/Behördenschreiben/Amtliche Zustellung=OFFICIAL → Archiv 01_Official (nicht Misc, nicht LEGAL)
+  - sonst OTHER
 - Erfinde keine Beträge, IBANs oder Diagnosen. Unleserlich → null.
 
 Return ONLY valid JSON (no markdown):
 {
-  "documentType": "BILL|MEDICAL_RECORD|LEGAL|CONTRACT|RECEIPT|OTHER",
+  "documentType": "BILL|MEDICAL_RECORD|LEGAL|CONTRACT|RECEIPT|OFFICIAL|OTHER",
   "vendor": string|null,
   "amount": number|null,
   "currency": "CHF"|string|null,

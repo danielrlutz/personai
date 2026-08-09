@@ -44,8 +44,12 @@ export function suggestArchiveCategory(documentType) {
             return 4;
         case "MEDICAL_RECORD":
             return 6;
+        case "OFFICIAL":
+            // Behörden / Gericht / amtliche Zustellungen → 01_Official
+            return 1;
         case "LEGAL":
         case "CONTRACT":
+            // Verträge / privatrechtliche Schreiben → 08_Legal
             return 8;
         default:
             return 9;

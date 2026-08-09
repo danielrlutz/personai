@@ -6,6 +6,7 @@ import {
   segmentBulkPages,
   type PreparedPage,
 } from "./bulk-split.js";
+import { suggestArchiveCategory } from "../specialists/roster.js";
 
 // Fully padded SPC (amount empty / open amount) — Salt Mobile sample shape
 const SALT_SPC = [
@@ -91,4 +92,11 @@ assert.equal(merged.length, 2);
 assert.equal(merged[0]!.endPage, 2);
 assert.equal(merged[1]!.startPage, 3);
 
-console.log("swiss-qr + bulk-split checks ok");
+// Archive taxonomy: medical → Health, court/official → Official, contracts → Legal
+assert.equal(suggestArchiveCategory("MEDICAL_RECORD"), 6);
+assert.equal(suggestArchiveCategory("OFFICIAL"), 1);
+assert.equal(suggestArchiveCategory("LEGAL"), 8);
+assert.equal(suggestArchiveCategory("CONTRACT"), 8);
+assert.equal(suggestArchiveCategory("OTHER"), 9);
+
+console.log("swiss-qr + bulk-split + archive-category checks ok");

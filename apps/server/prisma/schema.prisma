@@ -13,6 +13,7 @@ enum DocumentType {
   LEGAL
   CONTRACT
   RECEIPT
+  OFFICIAL
   OTHER
 }
 
