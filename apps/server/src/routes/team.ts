@@ -15,7 +15,14 @@ import {
   getCeoProfileCard,
   listRecentMemoryFacts,
   refreshSessionSummaryIfNeeded,
+  type ArchiveCareContext,
 } from "../memory/user-care.js";
+import { driveStatus } from "../archive/drive.js";
+import {
+  ARCHIVE_INDEX_KEY,
+  ARCHIVE_REFRESHED_KEY,
+  ARCHIVE_TAXONOMY_KEY,
+} from "../archive/init-context.js";
 import { sendError, sseWrite, withPrisma } from "./helpers.js";
 
 type ChatBody = {
@@ -59,16 +66,32 @@ export async function registerTeamRoutes(app: FastifyInstance): Promise<void> {
       });
     }
 
-    const [ceo, facts, liveOps] = await Promise.all([
+    const [ceo, facts, liveOps, archiveFacts] = await Promise.all([
       getCeoProfileCard(prisma),
       listRecentMemoryFacts(prisma),
       buildSlimLiveOps(prisma, specialistId),
+      prisma.memoryFact.findMany({
+        where: {
+          key: { in: [ARCHIVE_INDEX_KEY, ARCHIVE_TAXONOMY_KEY, ARCHIVE_REFRESHED_KEY] },
+        },
+      }),
     ]);
+    const drive = driveStatus();
+    const archiveMap = new Map(archiveFacts.map((f) => [f.key, f.value]));
+    const archive: ArchiveCareContext = {
+      linked: drive.linked || drive.enabled,
+      ready: Boolean(archiveMap.get(ARCHIVE_INDEX_KEY)?.trim()),
+      message: drive.message,
+      index: archiveMap.get(ARCHIVE_INDEX_KEY) ?? null,
+      taxonomy: archiveMap.get(ARCHIVE_TAXONOMY_KEY) ?? null,
+      refreshedAt: archiveMap.get(ARCHIVE_REFRESHED_KEY) ?? null,
+    };
     const userCare = formatUserCareContext({
       ceo,
       facts,
       liveOps,
       sessionSummary: session.sessionSummary,
+      archive,
     });
 
     await prisma.chatMessage.create({
@@ -89,6 +112,8 @@ export async function registerTeamRoutes(app: FastifyInstance): Promise<void> {
       sessionId: session.id,
       specialist: specialistId,
       vram: vramLock.getState(),
+      archiveLinked: archive.linked,
+      archiveReady: archive.ready,
     });
     const release = await vramLock.acquire("REASONING", (reason) => {
       sseWrite(reply, "context", { waiting: true, reason });

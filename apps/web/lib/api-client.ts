@@ -556,6 +556,40 @@ export interface MemoryFact {
   createdAt?: string;
 }
 
+export interface DriveStatus {
+  configured: boolean;
+  enabled: boolean;
+  linked: boolean;
+  mode: "service_account" | "oauth" | "none";
+  rootFolderId: string | null;
+  folderCount: number;
+  canStartOauth: boolean;
+  oauthRedirectUri: string | null;
+  serviceAccountEmail: string | null;
+  message: string;
+  archiveContext?: {
+    ready: boolean;
+    refreshedAt: string | null;
+    indexPreview: string | null;
+  };
+}
+
+export interface DriveOauthStart {
+  url: string;
+  redirectUri: string | null;
+  state: string;
+}
+
+export interface ArchiveRefreshResult {
+  ok: boolean;
+  linked: boolean;
+  folderCount: number;
+  fileCount: number;
+  model: string | null;
+  message: string;
+  status?: DriveStatus;
+}
+
 export interface DailyBriefing {
   id: string;
   briefingDate: string;

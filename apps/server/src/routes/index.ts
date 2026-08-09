@@ -36,6 +36,7 @@ import { registerTeamRoutes } from "./team.js";
 import { registerMemoryRoutes } from "./memory.js";
 import { registerConfirmationRoutes } from "./confirmations.js";
 import { registerAuthRoutes } from "./auth.js";
+import { registerDriveRoutes } from "./drive.js";
 import { createConfirmation } from "../confirm/confirm-service.js";
 import { driveStatus } from "../archive/drive.js";
 import { getRequestSession } from "../auth/middleware.js";
@@ -48,6 +49,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   await registerTeamRoutes(app);
   await registerMemoryRoutes(app);
   await registerConfirmationRoutes(app);
+  await registerDriveRoutes(app);
 
   app.get("/health", async () => ({
     ok: true,
@@ -56,8 +58,6 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     activeProfileId: getActiveProfile()?.id ?? null,
     drive: driveStatus(),
   }));
-
-  app.get("/archive/drive", async () => driveStatus());
 
   app.get("/ollama/health", async () => {
     const health = await ollamaHealth();

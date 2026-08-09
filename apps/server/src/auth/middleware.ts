@@ -11,12 +11,13 @@ const PUBLIC_EXACT = new Set([
   "/profiles",
   "/auth/login",
   "/auth/setup",
+  "/archive/drive/oauth/callback",
 ]);
 
 /** Read-only probes — no profile data; keeps status chips honest before/without a session. */
 const PUBLIC_GET_EXACT = new Set(["/ollama/health"]);
 
-const PUBLIC_PREFIXES = ["/auth/login", "/auth/setup"];
+const PUBLIC_PREFIXES = ["/auth/login", "/auth/setup", "/archive/drive/oauth/callback"];
 
 function normalizePath(url: string): string {
   const pathOnly = url.split("?")[0] ?? url;

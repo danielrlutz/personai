@@ -7,6 +7,7 @@ import { Sidebar } from "./Sidebar";
 import { ProfileSwitcher } from "./ProfileSwitcher";
 import { MobileNav } from "./MobileNav";
 import { OutboxBootstrap } from "@/components/outbox/OutboxBootstrap";
+import { DriveLinkBanner } from "@/components/drive/DriveLinkBanner";
 import { setProfileId, setSessionToken, getSessionToken } from "@/lib/api-client";
 import { logoutToProfiles, requireProfile } from "@/lib/session";
 import { getStoredSessionToken } from "@/lib/platform";
@@ -141,7 +142,10 @@ export function AppShell({ children }: AppShellProps) {
           )}
         >
           {gate === "allowed" ? (
-            children
+            <>
+              <DriveLinkBanner />
+              {children}
+            </>
           ) : (
             <div className="flex h-40 items-center justify-center">
               <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />

@@ -11,9 +11,10 @@ import { useChatStream } from "@/components/advisor/useChatStream";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { SpecialistPicker } from "./SpecialistPicker";
 import { CareerPdfPanel } from "./CareerPdfPanel";
-import { apiGet, apiPost, type MemoryFact } from "@/lib/api-client";
+import { apiGet, apiPost, type DriveStatus, type MemoryFact } from "@/lib/api-client";
 import { SPECIALIST_FALLBACK, type SpecialistMeta } from "@/lib/specialists";
 import { toast } from "@/lib/toast";
+import Link from "next/link";
 
 interface TeamChatProps {
   initialSpecialist?: string;
@@ -28,6 +29,7 @@ export function TeamChat({ initialSpecialist = "secretary" }: TeamChatProps) {
   const [rememberValue, setRememberValue] = useState("");
   const [rememberNote, setRememberNote] = useState<string | null>(null);
   const [rememberSaving, setRememberSaving] = useState(false);
+  const [drive, setDrive] = useState<DriveStatus | null>(null);
   const { messages, streaming, error, sendMessage, retryMessage, clear } = useChatStream({
     specialist,
   });
@@ -38,6 +40,9 @@ export function TeamChat({ initialSpecialist = "secretary" }: TeamChatProps) {
       .then((data) => {
         if (data.specialists?.length) setSpecialists(data.specialists);
       })
+      .catch(() => undefined);
+    void apiGet<DriveStatus>("/archive/drive", { silent: true })
+      .then(setDrive)
       .catch(() => undefined);
   }, []);
 
@@ -131,6 +136,15 @@ export function TeamChat({ initialSpecialist = "secretary" }: TeamChatProps) {
           {active ? (
             <p className="text-xs leading-relaxed text-muted-foreground break-words">
               <span className="font-medium text-foreground">{active.label}</span> — {active.description}
+            </p>
+          ) : null}
+          {drive && !drive.linked ? (
+            <p className="rounded-xl bg-surface-container px-3 py-2 text-xs leading-relaxed text-muted-foreground">
+              No archive context yet — this specialist can still advise, but not from your filed
+              documents.{" "}
+              <Link href="/settings/?focus=drive" className="font-medium text-foreground underline-offset-2 hover:underline">
+                Link Google Drive
+              </Link>
             </p>
           ) : null}
         </CardHeader>

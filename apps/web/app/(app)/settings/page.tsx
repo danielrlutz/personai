@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Settings, Server, User, Shield, Cpu, Brain, Trash2 } from "lucide-react";
+import { useSearchParams } from "next/navigation";
+import { Settings, Server, User, Shield, Cpu, Brain, Trash2, HardDrive } from "lucide-react";
 import {
   apiDelete,
   apiGet,
@@ -10,7 +11,10 @@ import {
   getApiBaseUrl,
   getSuggestedApiBaseUrl,
   setApiBaseUrl,
+  type ArchiveRefreshResult,
   type CeoProfile,
+  type DriveOauthStart,
+  type DriveStatus,
   type LicenseInfo,
   type MemoryFact,
   type OllamaHealth,
@@ -24,6 +28,7 @@ import {
   getPlatform,
 } from "@/lib/platform";
 import { getActiveProfileId, logoutToProfiles } from "@/lib/session";
+import { clearDriveStatusCache } from "@/lib/drive-status";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -63,6 +68,7 @@ const emptyCeo: CeoProfile = {
 };
 
 export default function SettingsPage() {
+  const searchParams = useSearchParams();
   const [apiUrl, setApiUrl] = useState("");
   const [apiNote, setApiNote] = useState<string | null>(null);
   const [apiTesting, setApiTesting] = useState(false);
@@ -87,6 +93,10 @@ export default function SettingsPage() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [passwordSaving, setPasswordSaving] = useState(false);
   const [passwordNote, setPasswordNote] = useState<string | null>(null);
+  const [drive, setDrive] = useState<DriveStatus | null>(null);
+  const [driveRoot, setDriveRoot] = useState("");
+  const [driveNote, setDriveNote] = useState<string | null>(null);
+  const [driveBusy, setDriveBusy] = useState(false);
   const platform = typeof window !== "undefined" ? getPlatform() : "browser";
 
   const refreshOllama = async () => {
@@ -121,6 +131,18 @@ export default function SettingsPage() {
     }
   };
 
+  const refreshDrive = async () => {
+    try {
+      clearDriveStatusCache();
+      const status = await apiGet<DriveStatus>("/archive/drive", { silent: true });
+      setDrive(status);
+      setDriveRoot(status.rootFolderId ?? "");
+    } catch {
+      setDrive(null);
+      setDriveNote("Could not load Google Drive status.");
+    }
+  };
+
   useEffect(() => {
     setApiUrl(getStoredApiBaseUrl() ?? getApiBaseUrl());
     setSuggestedApiUrl(getSuggestedApiBaseUrl());
@@ -132,7 +154,104 @@ export default function SettingsPage() {
     });
     void refreshOllama();
     void refreshMemory();
+    void refreshDrive();
   }, []);
+
+  useEffect(() => {
+    const driveFlag = searchParams.get("drive");
+    const focus = searchParams.get("focus");
+    if (driveFlag === "linked") {
+      setDriveNote("Google Drive linked. Archive context is initializing — you can refresh below.");
+      void refreshDrive();
+    } else if (driveFlag === "error") {
+      setDriveNote(searchParams.get("message") || "Google Drive link failed.");
+    }
+    if (focus === "drive" || driveFlag) {
+      requestAnimationFrame(() => {
+        document.getElementById("drive-settings")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    }
+  }, [searchParams]);
+
+  const linkGoogleDrive = async () => {
+    setDriveBusy(true);
+    setDriveNote(null);
+    try {
+      const start = await apiPost<DriveOauthStart>("/archive/drive/oauth/start", {
+        returnTo: `${window.location.origin}/settings/`,
+      });
+      window.location.href = start.url;
+    } catch (err) {
+      setDriveNote(err instanceof Error ? err.message : "Could not start Google link");
+      setDriveBusy(false);
+    }
+  };
+
+  const verifyDrive = async () => {
+    setDriveBusy(true);
+    setDriveNote(null);
+    try {
+      const result = await apiPost<{ ok: boolean; message: string; linked: boolean }>(
+        "/archive/drive/verify",
+      );
+      setDriveNote(result.message);
+      await refreshDrive();
+    } catch (err) {
+      setDriveNote(err instanceof Error ? err.message : "Drive verify failed");
+    } finally {
+      setDriveBusy(false);
+    }
+  };
+
+  const saveDriveRoot = async () => {
+    setDriveBusy(true);
+    setDriveNote(null);
+    try {
+      const status = await apiPut<DriveStatus>("/archive/drive/prefs", {
+        rootFolderId: driveRoot.trim() || null,
+      });
+      setDrive(status);
+      setDriveNote(status.linked ? "Archive root saved." : status.message);
+      clearDriveStatusCache();
+    } catch (err) {
+      setDriveNote(err instanceof Error ? err.message : "Could not save root folder");
+    } finally {
+      setDriveBusy(false);
+    }
+  };
+
+  const refreshArchiveContext = async () => {
+    setDriveBusy(true);
+    setDriveNote(null);
+    try {
+      const result = await apiPost<ArchiveRefreshResult>("/archive/drive/refresh-context");
+      setDriveNote(result.message);
+      if (result.status) setDrive(result.status);
+      else await refreshDrive();
+      await refreshMemory();
+      clearDriveStatusCache();
+    } catch (err) {
+      setDriveNote(err instanceof Error ? err.message : "Could not refresh archive context");
+    } finally {
+      setDriveBusy(false);
+    }
+  };
+
+  const unlinkDrive = async () => {
+    setDriveBusy(true);
+    setDriveNote(null);
+    try {
+      const status = await apiPost<DriveStatus & { ok: boolean }>("/archive/drive/unlink");
+      setDrive(status);
+      setDriveRoot(status.rootFolderId ?? "");
+      setDriveNote("OAuth link removed for this profile.");
+      clearDriveStatusCache();
+    } catch (err) {
+      setDriveNote(err instanceof Error ? err.message : "Could not unlink Drive");
+    } finally {
+      setDriveBusy(false);
+    }
+  };
 
   const saveApiUrl = async (urlOverride?: string) => {
     const normalized = normalizeApiBaseUrl(urlOverride ?? apiUrl);
@@ -433,6 +552,110 @@ export default function SettingsPage() {
           <Button variant="outline" className="shrink-0" onClick={() => logoutToProfiles()}>
             Switch profile
           </Button>
+        </CardContent>
+      </Card>
+
+      <Card id="drive-settings">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <HardDrive className="h-4 w-4 text-primary" />
+            Google Drive archive
+          </CardTitle>
+          <CardDescription>
+            Link Drive early so specialists can see your filed documents. Until then, chat still
+            works — without archive context.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant={drive?.linked ? "default" : "outline"}>
+              {drive?.linked ? "Linked" : "Not linked"}
+            </Badge>
+            {drive?.mode && drive.mode !== "none" ? (
+              <Badge variant="outline">
+                {drive.mode === "oauth" ? "Your Google account" : "Service account"}
+              </Badge>
+            ) : null}
+            {drive?.archiveContext?.ready ? (
+              <Badge variant="outline">Archive context ready</Badge>
+            ) : null}
+          </div>
+          <p className="text-sm text-muted-foreground">
+            {drive?.message ?? "Loading Drive status…"}
+          </p>
+          {drive?.serviceAccountEmail ? (
+            <p className="text-xs text-muted-foreground">
+              Service account:{" "}
+              <span className="font-mono text-foreground">{drive.serviceAccountEmail}</span>
+              . Share your archive folders with this email (Editor), then set the root folder id
+              below and verify.
+            </p>
+          ) : null}
+          {drive?.canStartOauth ? (
+            <p className="text-xs text-muted-foreground">
+              OAuth redirect must match:{" "}
+              <span className="font-mono text-foreground break-all">
+                {drive.oauthRedirectUri ?? "GOOGLE_OAUTH_REDIRECT_URI"}
+              </span>
+            </p>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              To enable one-click link, set{" "}
+              <span className="font-mono">GOOGLE_OAUTH_CLIENT_ID</span> and{" "}
+              <span className="font-mono">GOOGLE_OAUTH_CLIENT_SECRET</span> on the API. Or use a
+              service account JSON on the server.
+            </p>
+          )}
+          <Input
+            value={driveRoot}
+            onChange={(e) => setDriveRoot(e.target.value)}
+            placeholder="Drive root folder ID (optional if taxonomy folders are set)"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+          />
+          <div className="flex flex-wrap gap-2">
+            {drive?.canStartOauth && !drive.linked ? (
+              <Button onClick={() => void linkGoogleDrive()} disabled={driveBusy}>
+                {driveBusy ? "Opening Google…" : "Link Google Drive"}
+              </Button>
+            ) : null}
+            {drive?.canStartOauth && drive.linked && drive.mode === "oauth" ? (
+              <Button variant="outline" onClick={() => void linkGoogleDrive()} disabled={driveBusy}>
+                Re-link Google account
+              </Button>
+            ) : null}
+            <Button variant="outline" onClick={() => void saveDriveRoot()} disabled={driveBusy}>
+              Save root folder
+            </Button>
+            <Button variant="outline" onClick={() => void verifyDrive()} disabled={driveBusy}>
+              Verify connection
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => void refreshArchiveContext()}
+              disabled={driveBusy || !(drive?.linked || drive?.enabled)}
+            >
+              Refresh archive context
+            </Button>
+            {drive?.mode === "oauth" ? (
+              <Button variant="ghost" onClick={() => void unlinkDrive()} disabled={driveBusy}>
+                Unlink
+              </Button>
+            ) : null}
+            <Button variant="ghost" onClick={() => void refreshDrive()} disabled={driveBusy}>
+              Refresh status
+            </Button>
+          </div>
+          {drive?.archiveContext?.refreshedAt ? (
+            <p className="text-xs text-muted-foreground">
+              Last context refresh: {drive.archiveContext.refreshedAt}
+              {drive.archiveContext.indexPreview
+                ? ` — ${drive.archiveContext.indexPreview}`
+                : ""}
+            </p>
+          ) : null}
+          {driveNote ? <p className="text-xs text-muted-foreground">{driveNote}</p> : null}
         </CardContent>
       </Card>
 

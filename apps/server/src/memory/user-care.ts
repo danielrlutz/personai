@@ -191,15 +191,44 @@ function compactFactsBlock(facts: MemoryFactCard[]): string {
   return facts.map((f) => `- ${f.key}: ${f.value}`).join("\n");
 }
 
+export type ArchiveCareContext = {
+  linked: boolean;
+  ready: boolean;
+  message: string;
+  index: string | null;
+  taxonomy: string | null;
+  refreshedAt: string | null;
+};
+
+export function formatArchiveCareBlock(archive: ArchiveCareContext): string {
+  if (!archive.linked) {
+    return `Archive context: NOT AVAILABLE. Google Drive is not linked. Tell the user plainly that you do not have their document archive context yet. Still help with general personal advice in your role. Suggest Settings → Link Google Drive when archive/filing is needed.`;
+  }
+  if (!archive.ready || !archive.index?.trim()) {
+    return `Archive context: Drive is linked, but the archive index has not been built yet (or is empty). Say so if the user asks about filed documents. Suggest Settings → Refresh archive context.`;
+  }
+  const bits = [
+    `Archive context: READY (Drive linked).`,
+    archive.refreshedAt ? `Refreshed: ${archive.refreshedAt}` : null,
+    archive.taxonomy ? `Taxonomy folders:\n${archive.taxonomy.slice(0, 800)}` : null,
+    `Index:\n${archive.index.slice(0, 1200)}`,
+  ].filter(Boolean);
+  return bits.join("\n");
+}
+
 /** Compact user-care block for team chat / briefing system context. */
 export function formatUserCareContext(opts: {
   ceo: CeoProfileCard;
   facts: MemoryFactCard[];
   liveOps: SlimLiveOps;
   sessionSummary?: string | null;
+  archive?: ArchiveCareContext | null;
 }): string {
   const blocks = [
     `Profile card: ${compactCeoLine(opts.ceo)}`,
+    opts.archive
+      ? formatArchiveCareBlock(opts.archive)
+      : `Archive context: UNKNOWN. If document/archive questions arise, say you may lack archive context.`,
     `Memory facts (≤${MEMORY_FACT_INJECT_LIMIT} recent):\n${compactFactsBlock(opts.facts)}`,
     `Live ops (slim JSON):\n${JSON.stringify(opts.liveOps)}`,
   ];

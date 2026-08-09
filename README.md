@@ -29,28 +29,33 @@ Smoke API: `node scripts/integration-test.mjs` (API on `:4000`).
 | Bulk PDF split | Multipage scans are rasterized, blank-separated (or per-page for Genius Scan bulks), then each segment gets its own confirm |
 | Confirm gate | Ledger / archive / medical export wait for explicit approve |
 | Local archive | Always: `data/profiles/{id}/archive/{NN_Category}/{name}` on confirm |
-| Google Drive | Optional — uploads on confirm when credentials + folder IDs are set; otherwise local-only (no fake Drive files) |
+| Google Drive | Link in Settings (OAuth preferred). Until linked: chat works without archive context; Archive upload is soft-gated. |
 
-### Configure Google Drive (optional)
+### Configure Google Drive
 
-1. Create a Google Cloud service account, enable **Google Drive API**, download JSON.
-2. Share your taxonomy folders (or one root folder) with the service account email (**Editor**).
+**Preferred — user OAuth (Settings → Link Google Drive):**
+
+1. Google Cloud OAuth client (Web), enable **Google Drive API**.
+2. Authorized redirect URI: `{API}/archive/drive/oauth/callback` (see `GOOGLE_OAUTH_REDIRECT_URI`).
+3. Set `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `PUBLIC_WEB_URL`.
+4. After password login: Settings → **Link Google Drive**. PersonAI stores a per-profile refresh token, creates `PersonAI_Archive` if needed, and builds archive context (MemoryFact `archive.index`). Use **Refresh archive context** anytime.
+
+**Alternative — service account (headless VPS):**
+
+1. Create a service account, enable Drive API, download JSON.
+2. Share taxonomy folders (or one root) with the SA email (**Editor**).
 3. Set env vars (see `.env.example`):
 
 ```bash
 GOOGLE_DRIVE_ENABLED=true
 GOOGLE_SERVICE_ACCOUNT_JSON=./secrets/google-service-account.json
-# Prefer explicit folder IDs (Harmonia-style):
-GOOGLE_DRIVE_FOLDER_1=...   # Official
-GOOGLE_DRIVE_FOLDER_4=...   # Financial
-GOOGLE_DRIVE_FOLDER_6=...   # Health
+GOOGLE_DRIVE_FOLDER_1=...   # Official (Behörden)
+GOOGLE_DRIVE_FOLDER_8=...   # Legal (Gericht / contracts)
 # …or a root and let PersonAI create 01_Official … under it:
 GOOGLE_DRIVE_ROOT_FOLDER_ID=...
 ```
 
-OAuth refresh-token mode is also supported (`GOOGLE_OAUTH_CLIENT_ID` / `_SECRET` / `_REFRESH_TOKEN`).
-
-Check status: `GET /archive/drive` or the `drive` field on `GET /health`.
+Check status: `GET /archive/drive` (includes `linked` + archive context) or `drive` on `GET /health`.
 
 **PDF tooling for split/OCR:** install PyMuPDF (`pip install pymupdf`) or `poppler-utils` (`pdftoppm`) on the API host so multipage PDFs rasterize before vision OCR.
 
