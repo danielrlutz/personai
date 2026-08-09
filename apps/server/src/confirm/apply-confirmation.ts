@@ -1,172 +1,282 @@
 // @ts-nocheck
-import { getConfirmation, markConfirmation, parsePayload, } from "./confirm-service.js";
+import fs from "node:fs";
+import fsp from "node:fs/promises";
+import path from "node:path";
+import React from "react";
+import { renderToBuffer } from "@react-pdf/renderer";
+import {
+  getConfirmation,
+  markConfirmation,
+  parsePayload,
+} from "./confirm-service.js";
+import { commitDocumentToArchive } from "../archive/commit.js";
+import { getActiveProfileId } from "../db/prisma-singleton.js";
+import { profileExportsDir } from "../config.js";
+import { getActiveProfile } from "../profiles/registry.js";
+import { MedicalReportDocument } from "../export/medical-report.js";
+
+async function fileDocumentToArchive(prisma, documentId, payload) {
+  const doc = await prisma.document.findUnique({ where: { id: documentId } });
+  if (!doc) throw new Error("Document not found");
+  const archiveName = String(payload.archiveName ?? doc.archiveName ?? doc.filename);
+  const archiveCategory = Number(payload.archiveCategory ?? doc.archiveCategory ?? 9);
+  const profileId = getActiveProfileId();
+  const archived = await commitDocumentToArchive({
+    profileId,
+    sourcePath: doc.storagePath,
+    archiveName,
+    archiveCategory,
+    mimeType: doc.mimeType,
+  });
+  await prisma.document.update({
+    where: { id: documentId },
+    data: {
+      archiveName: archived.archiveName,
+      archiveCategory: archived.archiveCategory,
+      confirmedAt: new Date(),
+      deadline: payload.dueDate
+        ? new Date(String(payload.dueDate))
+        : payload.deadline
+          ? new Date(String(payload.deadline))
+          : undefined,
+    },
+  });
+  await prisma.auditLog.create({
+    data: {
+      action: "archive.write",
+      entity: "Document",
+      entityId: documentId,
+      metadata: JSON.stringify({
+        localPath: archived.localPath,
+        folder: archived.folderLabel,
+        driveFileId: archived.drive?.fileId ?? null,
+        driveFolderId: archived.drive?.folderId ?? null,
+        driveError: archived.driveError,
+      }),
+    },
+  });
+  return { doc, archived };
+}
+
 async function applyLedgerWrite(prisma, payload) {
-    const kind = String(payload.kind ?? "");
-    const documentId = payload.documentId ? String(payload.documentId) : undefined;
-    if (kind === "qr_bill") {
-        const existing = documentId
-            ? await prisma.qRBill.findFirst({ where: { documentId } })
-            : null;
-        if (existing)
-            return existing;
-        const bill = await prisma.qRBill.create({
-            data: {
-                creditorName: String(payload.creditorName ?? "Unknown"),
-                iban: String(payload.iban ?? ""),
-                amount: Number(payload.amount ?? 0),
-                currency: String(payload.currency ?? "CHF"),
-                reference: payload.reference ? String(payload.reference) : null,
-                dueDate: payload.dueDate ? new Date(String(payload.dueDate)) : null,
-                documentId: documentId ?? null,
-                status: "PENDING",
-            },
-        });
-        if (documentId) {
-            await prisma.document.update({
-                where: { id: documentId },
-                data: {
-                    archiveName: payload.archiveName ? String(payload.archiveName) : undefined,
-                    archiveCategory: payload.archiveCategory ? Number(payload.archiveCategory) : undefined,
-                    confirmedAt: new Date(),
-                    deadline: payload.dueDate ? new Date(String(payload.dueDate)) : undefined,
-                },
-            });
-        }
-        return bill;
+  const kind = String(payload.kind ?? "");
+  const documentId = payload.documentId ? String(payload.documentId) : undefined;
+  if (kind === "qr_bill") {
+    const existing = documentId
+      ? await prisma.qRBill.findFirst({ where: { documentId } })
+      : null;
+    if (existing) {
+      if (documentId) await fileDocumentToArchive(prisma, documentId, payload);
+      return existing;
     }
-    if (kind === "transaction") {
-        const existing = documentId
-            ? await prisma.transaction.findFirst({ where: { documentId } })
-            : null;
-        if (existing)
-            return existing;
-        const tx = await prisma.transaction.create({
-            data: {
-                type: payload.type ?? "EXPENSE",
-                amount: Number(payload.amount ?? 0),
-                currency: String(payload.currency ?? "CHF"),
-                description: String(payload.description ?? "Expense"),
-                date: payload.date ? new Date(String(payload.date)) : new Date(),
-                documentId: documentId ?? null,
-            },
-        });
-        if (documentId) {
-            await prisma.document.update({
-                where: { id: documentId },
-                data: {
-                    archiveName: payload.archiveName ? String(payload.archiveName) : undefined,
-                    archiveCategory: payload.archiveCategory ? Number(payload.archiveCategory) : undefined,
-                    confirmedAt: new Date(),
-                },
-            });
-        }
-        return tx;
-    }
-    throw new Error(`Unknown ledger write kind: ${kind}`);
-}
-async function applyArchiveCommit(prisma, payload) {
-    const documentId = String(payload.documentId ?? "");
-    if (!documentId)
-        throw new Error("documentId required");
-    const deadline = payload.deadline ? new Date(String(payload.deadline)) : null;
-    const doc = await prisma.document.update({
-        where: { id: documentId },
-        data: {
-            archiveName: payload.archiveName ? String(payload.archiveName) : undefined,
-            archiveCategory: payload.archiveCategory ? Number(payload.archiveCategory) : undefined,
-            deadline,
-            confirmedAt: new Date(),
-        },
+    const bill = await prisma.qRBill.create({
+      data: {
+        creditorName: String(payload.creditorName ?? "Unknown"),
+        iban: String(payload.iban ?? ""),
+        amount: Number(payload.amount ?? 0),
+        currency: String(payload.currency ?? "CHF"),
+        reference: payload.reference ? String(payload.reference) : null,
+        dueDate: payload.dueDate ? new Date(String(payload.dueDate)) : null,
+        documentId: documentId ?? null,
+        status: "PENDING",
+      },
     });
-    if (payload.createFristenTask && deadline) {
-        await prisma.legalTask.create({
-            data: {
-                title: `Frist: ${doc.archiveName ?? doc.filename}`,
-                description: `From archive document ${doc.id}`,
-                type: "DEADLINE",
-                status: "TODO",
-                dueDate: deadline,
-                documentId: doc.id,
-            },
-        });
-    }
-    return doc;
-}
-async function applyQrMarkPaid(prisma, payload) {
-    const billId = String(payload.billId ?? "");
-    if (!billId)
-        throw new Error("billId required");
-    const bill = await prisma.qRBill.update({
-        where: { id: billId },
-        data: { status: "PAID", paidAt: new Date() },
-    });
-    if (payload.writeLedger !== false) {
-        const existing = bill.documentId
-            ? await prisma.transaction.findFirst({ where: { documentId: bill.documentId } })
-            : null;
-        if (!existing) {
-            await prisma.transaction.create({
-                data: {
-                    type: "EXPENSE",
-                    amount: bill.amount,
-                    currency: bill.currency,
-                    description: `QR paid: ${bill.creditorName}`,
-                    date: new Date(),
-                    documentId: bill.documentId,
-                },
-            });
-        }
-    }
+    if (documentId) await fileDocumentToArchive(prisma, documentId, payload);
     return bill;
-}
-export async function resolveConfirmation(prisma, id, decision) {
-    const pending = await getConfirmation(prisma, id);
-    if (!pending)
-        throw new Error("Confirmation not found");
-    if (pending.status !== "pending")
-        throw new Error(`Already ${pending.status}`);
-    if (decision === "reject") {
-        const updated = await markConfirmation(prisma, id, "rejected");
-        await prisma.auditLog.create({
-            data: {
-                action: "confirm.reject",
-                entity: pending.entity,
-                entityId: pending.entityId ?? pending.id,
-                metadata: JSON.stringify({ action: pending.action }),
-            },
-        });
-        return { confirmation: updated, result: null };
+  }
+  if (kind === "transaction") {
+    const existing = documentId
+      ? await prisma.transaction.findFirst({ where: { documentId } })
+      : null;
+    if (existing) {
+      if (documentId) await fileDocumentToArchive(prisma, documentId, payload);
+      return existing;
     }
-    const payload = parsePayload(pending.payload);
-    let result = null;
-    switch (pending.action) {
-        case "ledger.write":
-            result = await applyLedgerWrite(prisma, payload);
-            break;
-        case "archive.commit":
-            result = await applyArchiveCommit(prisma, payload);
-            break;
-        case "qr.mark_paid":
-            result = await applyQrMarkPaid(prisma, payload);
-            break;
-        case "forge.ship":
-        case "medical.export":
-        case "career.pdf":
-        case "premium.spend":
-            result = { acknowledged: true, action: pending.action, payload };
-            break;
-        default:
-            throw new Error(`Unsupported action: ${pending.action}`);
-    }
-    const updated = await markConfirmation(prisma, id, "confirmed");
-    await prisma.auditLog.create({
-        data: {
-            action: "confirm.accept",
-            entity: pending.entity,
-            entityId: pending.entityId ?? pending.id,
-            metadata: JSON.stringify({ action: pending.action }),
-        },
+    const tx = await prisma.transaction.create({
+      data: {
+        type: payload.type ?? "EXPENSE",
+        amount: Number(payload.amount ?? 0),
+        currency: String(payload.currency ?? "CHF"),
+        description: String(payload.description ?? "Expense"),
+        date: payload.date ? new Date(String(payload.date)) : new Date(),
+        documentId: documentId ?? null,
+      },
     });
-    return { confirmation: updated, result };
+    if (documentId) await fileDocumentToArchive(prisma, documentId, payload);
+    return tx;
+  }
+  throw new Error(`Unknown ledger write kind: ${kind}`);
 }
-//# sourceMappingURL=apply-confirmation.js.map
+
+async function applyArchiveCommit(prisma, payload) {
+  const documentId = String(payload.documentId ?? "");
+  if (!documentId) throw new Error("documentId required");
+  const deadline = payload.deadline ? new Date(String(payload.deadline)) : null;
+  const { doc, archived } = await fileDocumentToArchive(prisma, documentId, {
+    ...payload,
+    deadline: deadline ? deadline.toISOString() : null,
+  });
+  if (payload.createFristenTask && deadline) {
+    await prisma.legalTask.create({
+      data: {
+        title: `Deadline (Frist): ${archived.archiveName ?? doc.filename}`,
+        description: `From archive document ${doc.id}`,
+        type: "DEADLINE",
+        status: "TODO",
+        dueDate: deadline,
+        documentId: doc.id,
+      },
+    });
+  }
+  return { document: doc, archived };
+}
+
+async function applyQrMarkPaid(prisma, payload) {
+  const billId = String(payload.billId ?? "");
+  if (!billId) throw new Error("billId required");
+  const bill = await prisma.qRBill.update({
+    where: { id: billId },
+    data: { status: "PAID", paidAt: new Date() },
+  });
+  if (payload.writeLedger !== false) {
+    const existing = bill.documentId
+      ? await prisma.transaction.findFirst({ where: { documentId: bill.documentId } })
+      : null;
+    if (!existing) {
+      await prisma.transaction.create({
+        data: {
+          type: "EXPENSE",
+          amount: bill.amount,
+          currency: bill.currency,
+          description: `QR paid: ${bill.creditorName}`,
+          date: new Date(),
+          documentId: bill.documentId,
+        },
+      });
+    }
+  }
+  return bill;
+}
+
+async function applyMedicalExport(prisma, payload) {
+  const profileId = getActiveProfileId();
+  if (!profileId) throw new Error("No active profile");
+  const profile = getActiveProfile();
+  const complaintIds = Array.isArray(payload.complaintIds) ? payload.complaintIds.map(String) : [];
+  const analysisIds = Array.isArray(payload.analysisIds) ? payload.analysisIds.map(String) : [];
+  const title = String(payload.title ?? "Medical Report");
+  const dateRangeFrom = String(payload.dateRangeFrom ?? new Date().toISOString());
+  const dateRangeTo = String(payload.dateRangeTo ?? new Date().toISOString());
+
+  const complaints = await prisma.complaintLog.findMany({
+    where: { id: { in: complaintIds } },
+    orderBy: { occurredAt: "asc" },
+  });
+  const analyses = await prisma.medicalAnalysis.findMany({
+    where: { id: { in: analysisIds } },
+  });
+
+  const exportRec = await prisma.medicalExport.create({
+    data: {
+      title,
+      dateRangeFrom: new Date(dateRangeFrom),
+      dateRangeTo: new Date(dateRangeTo),
+      complaintIds: JSON.stringify(complaintIds),
+      analysisIds: JSON.stringify(analysisIds),
+      status: "DRAFT",
+    },
+  });
+
+  const pdfData = {
+    profileName: profile?.name ?? "Patient",
+    title,
+    dateFrom: dateRangeFrom.slice(0, 10),
+    dateTo: dateRangeTo.slice(0, 10),
+    complaints: complaints.map((c) => ({
+      title: c.title,
+      category: c.category,
+      severity: c.severity,
+      description: c.description,
+      occurredAt: c.occurredAt.toISOString().slice(0, 10),
+      moodScore: c.moodScore,
+      sleepHours: c.sleepHours,
+    })),
+    analyses: analyses.map((a) => ({
+      framework: a.framework,
+      result: a.result,
+      disclaimer: a.disclaimer,
+    })),
+  };
+
+  const doc = React.createElement(MedicalReportDocument, { data: pdfData });
+  const buffer = await renderToBuffer(doc);
+  const exportsDir = profileExportsDir(profileId);
+  fs.mkdirSync(exportsDir, { recursive: true });
+  const storagePath = path.join(exportsDir, `${exportRec.id}.pdf`);
+  await fsp.writeFile(storagePath, buffer);
+
+  const updated = await prisma.medicalExport.update({
+    where: { id: exportRec.id },
+    data: {
+      storagePath,
+      status: "GENERATED",
+      generatedAt: new Date(),
+    },
+  });
+
+  return { export: updated, storagePath };
+}
+
+export async function resolveConfirmation(prisma, id, decision) {
+  const pending = await getConfirmation(prisma, id);
+  if (!pending) throw new Error("Confirmation not found");
+  if (pending.status !== "pending") throw new Error(`Already ${pending.status}`);
+  if (decision === "reject") {
+    const updated = await markConfirmation(prisma, id, "rejected");
+    await prisma.auditLog.create({
+      data: {
+        action: "confirm.reject",
+        entity: pending.entity,
+        entityId: pending.entityId ?? pending.id,
+        metadata: JSON.stringify({ action: pending.action }),
+      },
+    });
+    return { confirmation: updated, result: null };
+  }
+  const payload = parsePayload(pending.payload);
+  let result = null;
+  switch (pending.action) {
+    case "ledger.write":
+      result = await applyLedgerWrite(prisma, payload);
+      break;
+    case "archive.commit":
+      result = await applyArchiveCommit(prisma, payload);
+      break;
+    case "qr.mark_paid":
+      result = await applyQrMarkPaid(prisma, payload);
+      break;
+    case "medical.export":
+      result = await applyMedicalExport(prisma, payload);
+      break;
+    case "career.pdf":
+      // CareerPdfPanel re-requests /career/pdf with confirmed:true after gate approve.
+      result = { acknowledged: true, action: pending.action, payload };
+      break;
+    case "forge.ship":
+    case "premium.spend":
+      result = { acknowledged: true, action: pending.action, payload };
+      break;
+    default:
+      throw new Error(`Unsupported action: ${pending.action}`);
+  }
+  const updated = await markConfirmation(prisma, id, "confirmed");
+  await prisma.auditLog.create({
+    data: {
+      action: "confirm.accept",
+      entity: pending.entity,
+      entityId: pending.entityId ?? pending.id,
+      metadata: JSON.stringify({ action: pending.action }),
+    },
+  });
+  return { confirmation: updated, result };
+}

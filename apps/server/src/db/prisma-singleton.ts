@@ -3,7 +3,13 @@ import fs from "node:fs";
 import path from "node:path";
 import { execSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { profileDbPath, profileDir, profileExportsDir, profileUploadsDir } from "../config.js";
+import {
+  profileArchiveDir,
+  profileDbPath,
+  profileDir,
+  profileExportsDir,
+  profileUploadsDir,
+} from "../config.js";
 
 let activeClient: PrismaClient | null = null;
 let activeProfileId: string | null = null;
@@ -15,6 +21,7 @@ function ensureProfileDirs(profileId: string): void {
   fs.mkdirSync(profileDir(profileId), { recursive: true });
   fs.mkdirSync(profileUploadsDir(profileId), { recursive: true });
   fs.mkdirSync(profileExportsDir(profileId), { recursive: true });
+  fs.mkdirSync(profileArchiveDir(profileId), { recursive: true });
 }
 
 function ensureDatabase(profileId: string): void {
@@ -76,17 +83,31 @@ async function seedDefaults(client: PrismaClient): Promise<void> {
     });
   }
 
-  // Empty category shells (zero spend/transactions). Limits are templates, not fake activity.
+  // Empty category shells only — null limits so UI never shows fake "budget remaining".
   const catCount = await client.budgetCategory.count();
   if (catCount === 0) {
     await client.budgetCategory.createMany({
       data: [
-        { name: "Betriebskosten", monthlyLimit: 1500, color: "#14b8a6" },
-        { name: "Leben", monthlyLimit: 2000, color: "#6366f1" },
-        { name: "Steuern/AHV", monthlyLimit: 800, color: "#f59e0b" },
-        { name: "Gesundheit", monthlyLimit: 400, color: "#ef4444" },
+        { name: "Betriebskosten", monthlyLimit: null, color: "#14b8a6" },
+        { name: "Leben", monthlyLimit: null, color: "#6366f1" },
+        { name: "Steuern/AHV", monthlyLimit: null, color: "#f59e0b" },
+        { name: "Gesundheit", monthlyLimit: null, color: "#ef4444" },
       ],
     });
+  } else {
+    // Clear classic seed limits (name+amount) that looked like live budget data.
+    const seedLimits: Array<{ name: string; monthlyLimit: number }> = [
+      { name: "Betriebskosten", monthlyLimit: 1500 },
+      { name: "Leben", monthlyLimit: 2000 },
+      { name: "Steuern/AHV", monthlyLimit: 800 },
+      { name: "Gesundheit", monthlyLimit: 400 },
+    ];
+    for (const seed of seedLimits) {
+      await client.budgetCategory.updateMany({
+        where: seed,
+        data: { monthlyLimit: null },
+      });
+    }
   }
 
   await client.ceoProfile.upsert({

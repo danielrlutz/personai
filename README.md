@@ -16,9 +16,43 @@ Inspired by Harmonia Hermes (one orchestration path, confirm before irreversible
 | Bio / Mystic / Stylist / Wingman | Coaching personas |
 | Career Strategist | Career HTML→PDF |
 
-Open **Team** in the app (`/team?specialist=cfo`). Money-adjacent and export actions use **Confirm before write**.
+Open **Team** in the app (`/team?specialist=cfo`). Money and export actions use **Needs your confirmation** before anything is written.
 
 Smoke API: `node scripts/integration-test.mjs` (API on `:4000`).
+
+## Archive naming, split, and Google Drive
+
+| Piece | Behaviour |
+|-------|-----------|
+| Naming | `{date}_{DocType}_{Entity}.pdf` (e.g. `2026-08-09_BILL_Swisscom.pdf`) |
+| Taxonomy folders | `01_Official` … `10_Vehicles` (local + optional Drive) |
+| Bulk PDF split | Multipage scans are rasterized, blank-separated (or per-page for Genius Scan bulks), then each segment gets its own confirm |
+| Confirm gate | Ledger / archive / medical export wait for explicit approve |
+| Local archive | Always: `data/profiles/{id}/archive/{NN_Category}/{name}` on confirm |
+| Google Drive | Optional — uploads on confirm when credentials + folder IDs are set; otherwise local-only (no fake Drive files) |
+
+### Configure Google Drive (optional)
+
+1. Create a Google Cloud service account, enable **Google Drive API**, download JSON.
+2. Share your taxonomy folders (or one root folder) with the service account email (**Editor**).
+3. Set env vars (see `.env.example`):
+
+```bash
+GOOGLE_DRIVE_ENABLED=true
+GOOGLE_SERVICE_ACCOUNT_JSON=./secrets/google-service-account.json
+# Prefer explicit folder IDs (Harmonia-style):
+GOOGLE_DRIVE_FOLDER_1=...   # Official
+GOOGLE_DRIVE_FOLDER_4=...   # Financial
+GOOGLE_DRIVE_FOLDER_6=...   # Health
+# …or a root and let PersonAI create 01_Official … under it:
+GOOGLE_DRIVE_ROOT_FOLDER_ID=...
+```
+
+OAuth refresh-token mode is also supported (`GOOGLE_OAUTH_CLIENT_ID` / `_SECRET` / `_REFRESH_TOKEN`).
+
+Check status: `GET /archive/drive` or the `drive` field on `GET /health`.
+
+**PDF tooling for split/OCR:** install PyMuPDF (`pip install pymupdf`) or `poppler-utils` (`pdftoppm`) on the API host so multipage PDFs rasterize before vision OCR.
 
 ## Stack
 
@@ -308,6 +342,31 @@ cd src-tauri && cargo check   # compile shell + tray + CREATE_NO_WINDOW spawn
 # or: pnpm tauri:dev:fast     # confirm tray icon, close→hide, Quit stops API
 # packaging (v0.5.x): pnpm tauri:build  # MSI/NSIS still use bundle.resources + release windows_subsystem
 ```
+
+## Archive OCR / ingest (scanned PDFs, Swiss QR)
+
+Optimized for **Genius Scan / phone stacks** and **CH-DE** paperwork:
+
+1. Upload → queue → **VRAM VISION lock** (unchanged failover)
+2. **Rasterize PDF pages** (PyMuPDF script, or `pdftoppm` fallback) — do not send raw multipage PDF bytes to LightOnOCR
+3. **Blank-page split** + phone-scanner **per-page split**; re-merge when OCR sees `Seite 1 von N`
+4. **Swiss QR decode** (SPC payload via jsQR) before/alongside vision; confirm gate still required before ledger
+5. CH-DE vision prompt → archive name / QR bill / expense / archive.commit
+
+### VPS / Docker model pull
+
+After deploy (host Ollama or bundled):
+
+```bash
+pnpm pull-models          # Linux/macOS helper
+# or:
+ollama pull maternion/LightOnOCR-2
+ollama pull deepseek-r1:8b
+```
+
+API image includes **Python 3 + PyMuPDF + poppler-utils** for rasterization. On Windows desktop, install [PyMuPDF](https://pypi.org/project/PyMuPDF/) (`pip install pymupdf`) so scanned PDFs prepare correctly; otherwise the worker falls back to raw PDF (worse for multipage).
+
+Optional env: `INGEST_PDF_DPI` (default 140), `INGEST_MAX_PAGES` (40), `OLLAMA_VISION_TIMEOUT_MS` (180000).
 
 ## Profiles
 

@@ -52,6 +52,10 @@ export function profileExportsDir(profileId: string): string {
   return path.join(profileDir(profileId), "exports");
 }
 
+export function profileArchiveDir(profileId: string): string {
+  return path.join(profileDir(profileId), "archive");
+}
+
 export function registryPath(): string {
   return path.join(config.dataDir, "profiles.json");
 }

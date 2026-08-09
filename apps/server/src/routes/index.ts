@@ -30,6 +30,7 @@ import { registerTeamRoutes } from "./team.js";
 import { registerMemoryRoutes } from "./memory.js";
 import { registerConfirmationRoutes } from "./confirmations.js";
 import { createConfirmation } from "../confirm/confirm-service.js";
+import { driveStatus } from "../archive/drive.js";
 
 export async function registerRoutes(app: FastifyInstance): Promise<void> {
   await registerLifeRoutes(app);
@@ -42,7 +43,10 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     service: "personai-server",
     tier: config.licenseTier,
     activeProfileId: getActiveProfile()?.id ?? null,
+    drive: driveStatus(),
   }));
+
+  app.get("/archive/drive", async () => driveStatus());
 
   app.get("/ollama/health", async () => {
     const health = await ollamaHealth();
@@ -522,10 +526,12 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       if (!(req.body as { confirmed?: boolean }).confirmed) {
         const entryCount = req.body.complaintIds?.length ?? 0;
         const entryLabel = entryCount === 1 ? "symptom entry" : "symptom entries";
+        const complaintIds = [...(req.body.complaintIds ?? [])].sort();
         const confirmation = await createConfirmation(prisma, {
           action: "medical.export",
           summary: `Export medical report: ${req.body.title} (${entryCount} ${entryLabel})`,
           entity: "MedicalExport",
+          entityId: `medical-export:${req.body.title}:${complaintIds.join(",")}`,
           payload: {
             title: req.body.title,
             dateRangeFrom: req.body.dateRangeFrom,
@@ -537,7 +543,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
         return reply.status(202).send({
           needsConfirm: true,
           confirmation,
-          message: "Confirm before generating the medical PDF.",
+          message: "Confirm in Needs your confirmation before the medical PDF is written.",
         });
       }
       const profile = getActiveProfile();

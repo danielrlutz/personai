@@ -7,6 +7,8 @@ const ACTION_LABELS: Record<string, string> = {
   "career.pdf": "Career PDF",
   "export.generate": "Generate export",
   "document.upload": "Document upload",
+  "forge.ship": "Ship code",
+  "premium.spend": "Premium spend",
   "confirm.accept": "Confirmed",
   "confirm.reject": "Rejected",
 };
@@ -40,7 +42,8 @@ export function humanizeConfirmationSummary(summary: string): string {
     .replace(/\s*→\s*archive\s+/gi, " · file as ")
     .replace(/\s*\(cat\s+(\d+)\)/gi, " (folder $1)")
     .replace(/\s*·\s*Frist\s+(\d{4}-\d{2}-\d{2})/gi, " · deadline (Frist) $1")
-    .replace(/\bGenerate career PDF:\b/gi, "Create career PDF:");
+    .replace(/\bGenerate career PDF:\b/gi, "Create career PDF:")
+    .replace(/\bMEDICAL\.EXPORT\b/gi, "Medical export");
 }
 
 export function labelForEnum(value: string): string {

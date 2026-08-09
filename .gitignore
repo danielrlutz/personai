@@ -18,3 +18,6 @@ Thumbs.db
 *.tsbuildinfo
 .vercel
 coverage
+tmp/
+secrets/
+*.pem
