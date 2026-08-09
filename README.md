@@ -165,26 +165,31 @@ docker compose -f docker-compose.yml -f docker-compose.ollama.yml up -d --build
 
 ## VPS deploy
 
-Prefer `./install.sh` (detects native Ollama and wires `host.docker.internal`). Manual / recovery when `:11434` is already in use:
+Prefer `./install.sh` (detects native Ollama and wires `host.docker.internal`).
+
+**Recovery when `:11434` is already in use** (stale profile / override / `COMPOSE_FILE` still starting compose ollama):
 
 ```bash
-cd /etc/personaios   # or your install dir
-git pull
+cd /etc/personaios   # or ~/personai — your install dir
+# One-shot (resets to origin/main if needed, strips ollama, up api):
+curl -fsSL https://raw.githubusercontent.com/danielrlutz/personai/main/scripts/vps-recover-api.sh | bash
+# Or after git pull:  ./scripts/vps-recover-api.sh
+# Ongoing helper:     ./scripts/vps-up.sh api
+```
 
-# Stale installs may still have this — clear it
-grep COMPOSE_PROFILES .env || true
-sed -i 's/^COMPOSE_PROFILES=.*/COMPOSE_PROFILES=/' .env
-# Also ensure API talks to host Ollama:
-#   OLLAMA_HOST=http://host.docker.internal:11434
+Manual checklist:
 
-docker compose rm -f -s ollama 2>/dev/null || true
+```bash
+cd /etc/personaios
+git fetch && git reset --hard origin/main   # need a2f2533+ (no ollama in base compose)
+unset COMPOSE_FILE; export COMPOSE_FILE= COMPOSE_PROFILES=
+sed -i '/^COMPOSE_FILE=/d; s/^COMPOSE_PROFILES=.*/COMPOSE_PROFILES=/' .env
+# OLLAMA_HOST=http://host.docker.internal:11434
 docker rm -f personaios-ollama-1 2>/dev/null || true
-
-COMPOSE_PROFILES= docker compose up api -d --build
-# full stack: COMPOSE_PROFILES= docker compose up -d --build
-# helper:     ./scripts/vps-up.sh api
-
-docker compose ps   # must show NO ollama container
+docker compose down --remove-orphans
+docker compose config --services   # must NOT list ollama
+COMPOSE_FILE= COMPOSE_PROFILES= docker compose up api -d --build --remove-orphans
+docker compose ps
 ```
 
 Bundled Ollama only when you intentionally want Docker Ollama (no host listener on `:11434`):
