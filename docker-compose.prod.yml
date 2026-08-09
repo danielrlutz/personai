@@ -1,5 +1,8 @@
 services:
+  # Optional bundled Ollama — off by default (use host Ollama on the VPS).
+  # Enable: COMPOSE_PROFILES=bundled-ollama and OLLAMA_HOST=http://ollama:11434
   ollama:
+    profiles: ["bundled-ollama"]
     image: ollama/ollama:latest
     volumes:
       - ollama_data:/root/.ollama
@@ -20,8 +23,8 @@ services:
     environment:
       PORT: "4000"
       DATA_DIR: /app/data
-      # Override with http://host.docker.internal:11434 for native host Ollama
-      OLLAMA_HOST: ${OLLAMA_HOST:-http://ollama:11434}
+      # Default: host/native Ollama via Docker gateway
+      OLLAMA_HOST: ${OLLAMA_HOST:-http://host.docker.internal:11434}
       OLLAMA_VISION_MODEL: maternion/LightOnOCR-2
       OLLAMA_REASONING_MODEL: deepseek-r1:8b
       LICENSE_TIER: ${LICENSE_TIER:-pro}
@@ -30,9 +33,7 @@ services:
       PERSONAI_IN_DOCKER: "1"
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    depends_on:
-      ollama:
-        condition: service_healthy
+    # No hard depends_on ollama — service is profile-gated (bundled-ollama).
     restart: unless-stopped
 
   web:

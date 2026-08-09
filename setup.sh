@@ -579,16 +579,42 @@ install_node() {
   check_node || die "Node.js install failed — install Node >=20 manually and re-run"
 }
 
+# Install pnpm. Pass 0 as first arg for optional/VPS path (warn + continue on failure).
 install_pnpm() {
+  local required="${1:-1}"
+  local npm_prefix="${NPM_CONFIG_PREFIX:-$HOME/.local}"
+
   if have_cmd corepack; then
-    with_spinner "Enabling pnpm via corepack…" corepack enable
-    corepack prepare pnpm@9.15.0 --activate || true
+    if corepack enable >/dev/null 2>&1; then
+      with_spinner "Preparing pnpm via corepack…" corepack prepare pnpm@9.15.0 --activate || true
+    else
+      warn "corepack enable needs elevated permissions (EACCES on /usr/bin/pnpm is common)"
+      if have_cmd sudo; then
+        with_spinner "Enabling corepack with sudo…" sudo corepack enable || true
+        sudo corepack prepare pnpm@9.15.0 --activate || true
+      fi
+    fi
   fi
-  if ! have_cmd pnpm; then
-    with_spinner "Installing pnpm…" npm install -g pnpm@9
-  fi
+
   hash -r 2>/dev/null || true
-  check_pnpm || die "pnpm install failed"
+  if ! have_cmd pnpm && have_cmd npm; then
+    mkdir -p "$npm_prefix/bin"
+    export PATH="$npm_prefix/bin:$PATH"
+    # User-local install avoids needing write access to /usr/bin
+    with_spinner "Installing pnpm (user-local under $npm_prefix)…" \
+      npm install -g pnpm@9 --prefix "$npm_prefix" || true
+    export PATH="$npm_prefix/bin:$PATH"
+  fi
+
+  hash -r 2>/dev/null || true
+  if check_pnpm; then
+    return 0
+  fi
+  if [[ "$required" == "1" ]]; then
+    die "pnpm install failed — try: sudo corepack enable && sudo corepack prepare pnpm@9.15.0 --activate"
+  fi
+  warn "pnpm not available — OK for Docker-only VPS path (host pnpm is optional)"
+  return 1
 }
 
 install_rust() {
@@ -896,6 +922,7 @@ run_vps_deps() {
 
   step "Optional host Node / pnpm"
   info "Only needed if you build or develop outside Docker on this machine."
+  info "VPS docker compose does not require host pnpm."
   if [[ $ASSUME_YES -eq 1 ]]; then
     info "Skipping optional Node/pnpm (--yes defaults to Docker-only VPS deps)"
   elif ask_yn "Also install Node.js >=20 and pnpm on the host?" "n"; then
@@ -903,7 +930,8 @@ run_vps_deps() {
       install_node
     fi
     if ! check_pnpm; then
-      install_pnpm
+      # optional: never abort VPS deps on pnpm permission failures
+      install_pnpm 0 || true
     fi
   else
     ok "Skipping host Node/pnpm — docker compose is enough"

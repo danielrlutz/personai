@@ -110,7 +110,11 @@ Fresh install additionally scans for Ollama (processes, Docker, ports, HTTP `/ap
 Also configurable: install/data dirs, ports, license tier, domain + Caddy TLS, model pulls, stack start, optional user systemd unit.
 
 ```bash
-# Non-interactive install
+# Non-interactive — host Ollama already installed (typical VPS)
+curl -fsSL https://raw.githubusercontent.com/danielrlutz/personai/main/install.sh | bash -s -- \
+  --yes --ollama=existing-native --tier=pro --domain=app.example.com --tls=yes --pull-models=yes --start=yes
+
+# Non-interactive — bundled Docker Ollama (opt-in; binds :11434)
 curl -fsSL https://raw.githubusercontent.com/danielrlutz/personai/main/install.sh | bash -s -- \
   --yes --ollama=new-docker --tier=pro --domain=app.example.com --tls=yes --pull-models=yes --start=yes
 
@@ -135,17 +139,46 @@ pnpm dev:web
 
 Open http://localhost:3000
 
-### With Docker (Ollama + API + Web)
+### With Docker (API + Web; Ollama optional)
+
+**Default:** use a host-installed Ollama. Compose does **not** start an `ollama` container (avoids `bind: address already in use` on `:11434`).
 
 ```bash
+# Point the API container at host Ollama (Linux gateway is wired in compose)
+# In .env:
+#   OLLAMA_HOST=http://host.docker.internal:11434
 docker compose up -d --build
-pnpm pull-models   # or scripts/pull-models.ps1 on Windows
+# or just the API:
+docker compose up api -d --build
+
+pnpm pull-models   # or scripts/pull-models.ps1 / native: ollama pull …
+```
+
+**Opt-in bundled Ollama** (Docker binds host `:11434`):
+
+```bash
+# In .env:
+#   OLLAMA_HOST=http://ollama:11434
+#   COMPOSE_PROFILES=bundled-ollama
+docker compose --profile bundled-ollama up -d --build
 ```
 
 ## VPS deploy
 
+Prefer `./install.sh` (detects native Ollama and wires `host.docker.internal`). Manual:
+
 ```bash
+# Host Ollama already on the VPS (recommended)
+# .env: OLLAMA_HOST=http://host.docker.internal:11434  and empty COMPOSE_PROFILES
 docker compose -f docker-compose.prod.yml up -d --build
+# or: docker compose -f docker-compose.prod.yml up api -d --build
+```
+
+Bundled Ollama only when you intentionally want a second instance:
+
+```bash
+# .env: OLLAMA_HOST=http://ollama:11434  COMPOSE_PROFILES=bundled-ollama
+docker compose -f docker-compose.prod.yml --profile bundled-ollama up -d --build
 ```
 
 Edit `Caddyfile` hostnames before production TLS.

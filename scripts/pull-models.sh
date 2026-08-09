@@ -7,12 +7,16 @@ REASONING="${OLLAMA_REASONING_MODEL:-deepseek-r1:8b}"
 
 echo "Pulling models via ${HOST}"
 
-if command -v docker >/dev/null 2>&1 && docker compose ps ollama >/dev/null 2>&1; then
-  docker compose exec -T ollama ollama pull "$VISION"
-  docker compose exec -T ollama ollama pull "$REASONING"
-else
+# Prefer native CLI; only use compose ollama when the bundled-ollama profile service is up
+if command -v ollama >/dev/null 2>&1; then
   ollama pull "$VISION"
   ollama pull "$REASONING"
+elif command -v docker >/dev/null 2>&1 && docker compose ps --status running ollama 2>/dev/null | grep -q ollama; then
+  docker compose --profile bundled-ollama exec -T ollama ollama pull "$VISION"
+  docker compose --profile bundled-ollama exec -T ollama ollama pull "$REASONING"
+else
+  echo "No native ollama CLI and no running compose ollama service." >&2
+  exit 1
 fi
 
 echo "Done."
