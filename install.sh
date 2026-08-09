@@ -148,9 +148,11 @@ port_in_use() {
   return 1
 }
 
+# Never throw under set -e — probes must be soft failures.
 http_ok() {
   local url="$1"
-  curl -fsS --max-time 2 "$url" >/dev/null 2>&1
+  curl -fsS --connect-timeout 1 --max-time 2 "$url" >/dev/null 2>&1 || return 1
+  return 0
 }
 
 detect_gpu() {
@@ -267,6 +269,9 @@ EOF
 }
 
 # --- Ollama discovery -------------------------------------------------------
+# IMPORTANT: every helper here must be set -e safe. A common bash footgun is a
+# function whose last command is `probe && append` — when probe fails, the
+# function returns 1 and the whole installer exits with no message.
 
 declare -a FOUND_NATIVE=()
 declare -a FOUND_DOCKER=()
@@ -280,8 +285,17 @@ discover_ollama() {
   FOUND_PORTS=()
   FOUND_HTTP=()
 
+  # Never run `ollama list` here — it fails when the daemon/container is down
+  # (native vs docker) and would abort under set -e if unguarded.
   if command -v ollama >/dev/null 2>&1; then
-    FOUND_NATIVE+=("binary: $(command -v ollama) ($(ollama --version 2>/dev/null | head -n1 || echo present))")
+    local ver=""
+    # Soft version probe only; ignore failures / hangs via short timeout when available.
+    if command -v timeout >/dev/null 2>&1; then
+      ver="$(timeout 2 ollama --version 2>/dev/null | head -n1 || true)"
+    else
+      ver="$(ollama --version 2>/dev/null | head -n1 || true)"
+    fi
+    FOUND_NATIVE+=("binary: $(command -v ollama)${ver:+ ($ver)}")
   fi
   if command -v systemctl >/dev/null 2>&1; then
     if systemctl is-active --quiet ollama 2>/dev/null || systemctl --user is-active --quiet ollama 2>/dev/null; then
@@ -292,47 +306,79 @@ discover_ollama() {
   fi
   if command -v ps >/dev/null 2>&1; then
     while IFS= read -r line; do
+      [[ -n "$line" ]] || continue
       FOUND_NATIVE+=("process: $line")
     done < <(ps -eo pid,comm,args 2>/dev/null | grep -Ei '[o]llama|[o]pen-webui|llama\.cpp|lmstudio|localai|gpt4all' || true)
   fi
   if command -v docker >/dev/null 2>&1; then
     while IFS= read -r line; do
-      [[ -n "$line" ]] && FOUND_DOCKER+=("container: $line")
+      [[ -n "$line" ]] || continue
+      FOUND_DOCKER+=("container: $line")
     done < <(docker ps -a --format '{{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}' 2>/dev/null \
       | grep -Ei 'ollama|open-webui|localai|text-generation|llama|vllm' || true)
     while IFS= read -r line; do
-      [[ -n "$line" ]] && FOUND_DOCKER+=("image: $line")
+      [[ -n "$line" ]] || continue
+      FOUND_DOCKER+=("image: $line")
     done < <(docker images --format '{{.Repository}}:{{.Tag}}' 2>/dev/null \
       | grep -Ei 'ollama|open-webui|localai|vllm' || true)
   fi
   local p
   for p in 11434 11435 8080 3001 5000 1234 8081; do
-    port_in_use "$p" && FOUND_PORTS+=("$p")
+    if port_in_use "$p"; then
+      FOUND_PORTS+=("$p")
+    fi
   done
   local url
   for url in "http://127.0.0.1:11434/api/tags" "http://localhost:11434/api/tags" "http://127.0.0.1:11435/api/tags"; do
-    http_ok "$url" && FOUND_HTTP+=("$url")
+    if http_ok "$url"; then
+      FOUND_HTTP+=("$url")
+    fi
   done
+
+  # Always succeed — missing Ollama is a valid install path (Core / skip).
+  return 0
 }
 
 native_ollama_detected() {
-  ((${#FOUND_NATIVE[@]} > 0)) && return 0
-  ((${#FOUND_HTTP[@]} > 0)) && return 0
+  if [[ ${#FOUND_NATIVE[@]} -gt 0 ]]; then return 0; fi
+  if [[ ${#FOUND_HTTP[@]} -gt 0 ]]; then return 0; fi
   local p
-  for p in "${FOUND_PORTS[@]}"; do
-    [[ "$p" == "11434" ]] && return 0
-  done
+  if [[ ${#FOUND_PORTS[@]} -gt 0 ]]; then
+    for p in "${FOUND_PORTS[@]}"; do
+      [[ "$p" == "11434" ]] && return 0
+    done
+  fi
   return 1
 }
 
 print_discovery() {
   local any=0
-  ((${#FOUND_NATIVE[@]})) && { any=1; log "${BOLD}Native / process matches${RST}"; printf '  %s\n' "${FOUND_NATIVE[@]}"; }
-  ((${#FOUND_DOCKER[@]})) && { any=1; log "${BOLD}Docker matches${RST}"; printf '  %s\n' "${FOUND_DOCKER[@]}"; }
-  ((${#FOUND_PORTS[@]})) && { any=1; log "${BOLD}Listening ports of interest${RST}"; printf '  %s\n' "${FOUND_PORTS[@]}"; }
-  ((${#FOUND_HTTP[@]})) && { any=1; log "${BOLD}Live Ollama HTTP endpoints${RST}"; printf '  %s\n' "${FOUND_HTTP[@]}"; }
-  [[ $any -eq 0 ]] && warn "No Ollama-like runtime detected on this host."
+  if [[ ${#FOUND_NATIVE[@]} -gt 0 ]]; then
+    any=1
+    log "${BOLD}Native / process matches${RST}"
+    printf '  %s\n' "${FOUND_NATIVE[@]}"
+  fi
+  if [[ ${#FOUND_DOCKER[@]} -gt 0 ]]; then
+    any=1
+    log "${BOLD}Docker matches${RST}"
+    printf '  %s\n' "${FOUND_DOCKER[@]}"
+  fi
+  if [[ ${#FOUND_PORTS[@]} -gt 0 ]]; then
+    any=1
+    log "${BOLD}Listening ports of interest${RST}"
+    printf '  %s\n' "${FOUND_PORTS[@]}"
+  fi
+  if [[ ${#FOUND_HTTP[@]} -gt 0 ]]; then
+    any=1
+    log "${BOLD}Live Ollama HTTP endpoints${RST}"
+    printf '  %s\n' "${FOUND_HTTP[@]}"
+  fi
+  if [[ $any -eq 0 ]]; then
+    warn "No Ollama-like runtime detected on this host."
+  fi
+  ok "Runtime scan finished (continuing — missing Ollama is OK)."
   log ""
+  return 0
 }
 
 choose_ollama() {
@@ -368,7 +414,7 @@ choose_ollama() {
   local default="3"
   if native_ollama_detected; then
     default="1"
-  elif ((${#FOUND_DOCKER[@]} > 0)); then
+  elif [[ ${#FOUND_DOCKER[@]} -gt 0 ]]; then
     default="2"
   fi
 
@@ -384,7 +430,9 @@ choose_ollama() {
 
   if [[ "$OLLAMA_MODE" == "existing-native" || "$OLLAMA_MODE" == "existing-docker" ]]; then
     local suggested="http://127.0.0.1:11434"
-    ((${#FOUND_HTTP[@]})) && suggested="${FOUND_HTTP[0]%'/api/tags'}"
+    if [[ ${#FOUND_HTTP[@]} -gt 0 ]]; then
+      suggested="${FOUND_HTTP[0]%/api/tags}"
+    fi
     OLLAMA_HOST="$(ask "Ollama base URL" "$suggested")"
     if http_ok "${OLLAMA_HOST%/}/api/tags"; then
       ok "Reached Ollama at $OLLAMA_HOST"
@@ -407,6 +455,7 @@ choose_ollama() {
       fi
     fi
   fi
+  return 0
 }
 
 choose_paths_and_ports() {
@@ -730,7 +779,7 @@ YAML
     cat <<YAML
   api:
     ports:
-      - "${API_PORT}:4000"
+      - "0.0.0.0:${API_PORT}:4000"
     environment:
       OLLAMA_HOST: ${ollama_env_host}
       LICENSE_TIER: ${LICENSE_TIER}
@@ -890,17 +939,24 @@ Update anytime with the same command:
 EOF
 }
 
+run_safe_discovery() {
+  # Scan must never abort install/update (set -e + failed probe was a silent stop).
+  if ! discover_ollama; then
+    warn "Ollama/AI runtime scan returned an error — continuing anyway."
+  fi
+  if ! print_discovery; then
+    warn "Could not print discovery results — continuing anyway."
+  fi
+}
+
 run_update() {
   log "${BOLD}${CYN}Update mode${RST} — existing PersonAI install found"
   log "  ${INSTALL_DIR}"
   log ""
 
   ensure_prereqs
-  # Light discovery only if ollama mode unknown
-  if [[ -z "$OLLAMA_MODE" ]]; then
-    discover_ollama
-    print_discovery
-  fi
+  # Always scan so operators see what is on the host; mode keep/change still follows choose_ollama.
+  run_safe_discovery
   choose_ollama
   choose_paths_and_ports
   choose_product_options
@@ -921,7 +977,13 @@ run_update() {
     pull_models
   else
     info "Skipping restart. Run compose up --build when ready."
+    info "Or: cd $INSTALL_DIR && ./scripts/vps-up.sh"
+    info "Phone/Tailscale: ./scripts/vps-tailscale.sh debi9.tail8175e6.ts.net"
   fi
+
+  log ""
+  ok "Update complete"
+  info "Verify: cd $INSTALL_DIR && ./scripts/vps-verify.sh"
   print_summary
 }
 
@@ -929,8 +991,7 @@ run_install() {
   log "${BOLD}${CYN}Fresh install mode${RST}"
   log ""
   ensure_prereqs
-  discover_ollama
-  print_discovery
+  run_safe_discovery
   choose_ollama
   choose_paths_and_ports
   choose_product_options
@@ -967,6 +1028,9 @@ run_install() {
   fi
 
   install_systemd_user
+  log ""
+  ok "Install complete"
+  info "Verify: cd $INSTALL_DIR && ./scripts/vps-verify.sh"
   print_summary
 }
 

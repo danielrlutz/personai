@@ -142,13 +142,16 @@ export function describeApiFailure(
         return {
           kind: "auth",
           sticky: true,
-          message: `Sign-in required — open Profiles and unlock with your password, then retry. (${raw})`,
+          message: `Sign-in required (HTTP ${status}) talking to ${base}${pathHint} — open Profiles, unlock with your password (Bearer session), then retry. (${raw})`,
         };
       }
       return {
         kind: "auth",
         sticky: true,
-        message: status === 401 ? `Sign-in required — ${raw}` : `Not allowed — ${raw}`,
+        message:
+          status === 401
+            ? `Sign-in required (401) at ${base}${pathHint} — unlock your profile, then retry. ${raw}`
+            : `Not allowed (403) at ${base}${pathHint} — ${raw}`,
       };
     }
 
@@ -186,7 +189,10 @@ export function describeApiFailure(
     return {
       kind: "network",
       sticky: true,
-      message: `Can't reach API at ${base}${pathHint}. Is the API running? On phone, set Settings → API URL to this machine's Tailscale host on port 4000.`,
+      message:
+        `Can't reach API at ${base}${pathHint} (${raw}). ` +
+        `Check API is up on :4000, not localhost-only. On phone: Settings → API URL → http://<magicdns>:4000 (no trailing slash). ` +
+        `If health works but chat fails with 401, unlock the profile first.`,
     };
   }
 
