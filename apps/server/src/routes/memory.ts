@@ -4,12 +4,63 @@ import {
   collectMemoryDistillCandidates,
   queueMemoryDistillConfirmations,
 } from "../memory/distill.js";
+import {
+  isStagingDocId,
+  listStagingDocs,
+  loadStagingForPrompt,
+  STAGING_TOTAL_INJECT_BUDGET,
+  writeStagingDoc,
+} from "../memory/staging.js";
 import { ensureCeoProfile } from "../memory/user-care.js";
-import { sendError, withPrisma } from "./helpers.js";
+import { getProfileId, sendError, withPrisma } from "./helpers.js";
 
 const USAGE_MODES = new Set(["PERSONAL", "BUSINESS", "BOTH"]);
 
 export async function registerMemoryRoutes(app: FastifyInstance): Promise<void> {
+  /** OpenClaw-style personality vault (local markdown under profile memory/). */
+  app.get("/staging", async (req, reply) => {
+    try {
+      const profileId = getProfileId(req);
+      const docs = await listStagingDocs(profileId);
+      const prompt = await loadStagingForPrompt(profileId);
+      return {
+        docs,
+        inject: {
+          totalBudget: STAGING_TOTAL_INJECT_BUDGET,
+          totalInjected: prompt.totalInjected,
+          slices: prompt.slices.map((s) => ({
+            id: s.id,
+            filename: s.filename,
+            charCount: s.charCount,
+            truncated: s.truncated,
+          })),
+        },
+      };
+    } catch (err) {
+      return sendError(reply, err);
+    }
+  });
+
+  app.put<{ Params: { id: string }; Body: { content?: string } }>(
+    "/staging/:id",
+    async (req, reply) => {
+      try {
+        const id = req.params.id?.trim();
+        if (!id || !isStagingDocId(id)) {
+          return reply.status(400).send({ error: "Unknown staging doc id" });
+        }
+        const content = req.body?.content;
+        if (typeof content !== "string") {
+          return reply.status(400).send({ error: "content string is required" });
+        }
+        const profileId = getProfileId(req);
+        return await writeStagingDoc(profileId, id, content);
+      } catch (err) {
+        return sendError(reply, err);
+      }
+    },
+  );
+
   app.get("/ceo-profile", async (req, reply) => {
     try {
       const { prisma } = await withPrisma(req);

@@ -137,13 +137,14 @@ Also listed in **First-launch setup** → **Archive**. Naming pattern after conf
 
 **Taxonomy health (Settings → Google Drive archive):** Tap **Scan folder map** to list duplicate candidates under your archive root, see the suggested winner (more files / legacy name), and **Prefer forever** to cache that folder for uploads. This only updates PersonAI's mapping — it does not delete or merge Drive folders.
 
-**Confirm → Drive is durable:** Approving a filing writes the local archive immediately (the confirm barrier). Google Drive upload continues on the server as a background job even if you close the tab or navigate away. After Confirm, a **Drive upload** strip on Home / Needs your confirmation polls job status (Queued → Done / Failed), links to **Activity**, and lets you **Retry** a failed upload without re-filing locally.
+**Confirm ? Drive is durable:** Approving a filing writes the local archive immediately (the confirm barrier). Google Drive upload continues on the server as a background job even if you close the tab or navigate away. After Confirm, a **Drive upload** strip on Home / Needs your confirmation polls job status (Queued ? Done / Failed), links to **Activity**, and lets you **Retry** a failed upload without re-filing locally.
 
 ### Step G — Optional comfort settings
 
 - **Theme & lock** — theme **system** / **dark** / **light**; optional **Set 4–8 digit PIN** → **Enable PIN** (locks UI on tab hide / idle; database still sealed by password).
 - **Password & encryption** — **Change password** anytime.
-- **Memory facts** — short facts specialists should remember → **Add**.
+- **About you / Personality vault** — edit local markdown (`USER.md`, `SOUL.md`, `preferences.md`, `people.md`, `ADHD.md`) under the profile’s `memory/` folder. Staff and specialists inject budgeted slices (e.g. hotel budget, Cham/Zug). Distinct from the **Soul News** home widget.
+- **Memory facts** — short key/value facts specialists should remember → **Add**. Distill from chats still waits for **Needs your confirmation** before writing.
 - **First-launch setup** → **Alerts** → **Allow notifications** for Fristen and pending confirms.
 - Profile menu: **Switch profile** / **Sign out** (both return to the account picker and seal the session).
 

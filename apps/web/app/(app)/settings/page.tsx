@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { ProductSettingsCard } from "@/components/settings/ProductSettingsCard";
 import { DriveTaxonomyHealth } from "@/components/settings/DriveTaxonomyHealth";
+import { PersonalityVaultCard } from "@/components/settings/PersonalityVaultCard";
 import { InstallAppCard } from "@/components/shared/InstallAppCard";
 import {
   clearAppPin,
@@ -939,6 +940,8 @@ export default function SettingsPage() {
         </CardContent>
       </Card>
 
+      <PersonalityVaultCard />
+
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
@@ -1154,6 +1157,20 @@ export default function SettingsPage() {
                     <span className="font-medium">Medical log</span>
                     <span className="mt-0.5 block text-xs text-muted-foreground">
                       Symptom log and dual analysis — available, not a primary nav item.
+                    </span>
+                  </span>
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/archive/jahresakte/"
+                  className="md-list-row flex items-center gap-3 px-3.5 py-3 text-sm hover:bg-surface-container-high"
+                >
+                  <HardDrive className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  <span className="min-w-0">
+                    <span className="font-medium">Jahresakte year pack</span>
+                    <span className="mt-0.5 block text-xs text-muted-foreground">
+                      Swiss tax-season ZIP + PDF index — confirm-gated; optional Drive.
                     </span>
                   </span>
                 </Link>

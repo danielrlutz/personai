@@ -1,4 +1,4 @@
-import {
+﻿import {
   clearStoredProfileId,
   clearStoredSessionToken,
   getStoredApiBaseUrl,
@@ -400,6 +400,50 @@ export type ApiBlobResult = {
   filename: string | null;
 };
 
+
+/** Authenticated binary POST (e.g. sealed suitcase export). */
+export async function apiPostBlob(
+  path: string,
+  body?: unknown,
+  init?: ApiRequestInit,
+): Promise<ApiBlobResult> {
+  const { request, silent } = splitInit(init);
+  return runNotified(async () => {
+    const headers = buildHeaders(request.headers);
+    headers.set("Accept", "*/*");
+    const res = await fetch(apiUrl(path), {
+      ...request,
+      method: "POST",
+      headers,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+    if (!res.ok) {
+      maybeRedirectOnAuthFailure(res.status, path);
+      const text = await res.text();
+      let parsed: unknown = text;
+      try {
+        parsed = text ? JSON.parse(text) : null;
+      } catch {
+        /* keep text */
+      }
+      const message =
+        typeof parsed === "object" && parsed !== null && "error" in parsed
+          ? String((parsed as { error: unknown }).error)
+          : `Request failed (${res.status})`;
+      throw new ApiError(message, res.status, parsed);
+    }
+    const cd = res.headers.get("Content-Disposition") ?? "";
+    const quoted = cd.match(/filename="([^"]+)"/i);
+    const plain = cd.match(/filename=([^;]+)/i);
+    const filename = (quoted?.[1] ?? plain?.[1] ?? null)?.trim() || null;
+    return {
+      blob: await res.blob(),
+      contentType: res.headers.get("Content-Type") ?? "application/octet-stream",
+      filename,
+    };
+  }, silent, path);
+}
+
 /** Authenticated binary GET (document preview / download). Does not force JSON Content-Type. */
 export async function apiGetBlob(path: string, init?: ApiRequestInit): Promise<ApiBlobResult> {
   const { request, silent } = splitInit(init);
@@ -725,6 +769,29 @@ export interface MemoryFact {
   createdAt?: string;
 }
 
+/** OpenClaw-style personality staging doc under profile memory/. */
+export interface StagingDoc {
+  id: string;
+  filename: string;
+  title: string;
+  description: string;
+  content: string;
+  exists: boolean;
+  charCount: number;
+  injectBudget: number;
+  maxChars: number;
+  hasSubstance: boolean;
+  updatedAt: string | null;
+}
+
+export interface MemorySnippet {
+  source: "fact" | "staging";
+  ref: string;
+  label: string;
+  text: string;
+  score: number;
+}
+
 export interface DriveStatus {
   configured: boolean;
   enabled: boolean;
@@ -813,19 +880,58 @@ export interface DailyBriefing {
   tier?: string;
 }
 
+export type IngestLanePhase =
+  | "queued"
+  | "waiting_vision"
+  | "rasterize"
+  | "ocr"
+  | "split"
+  | "await_confirm"
+  | "cancelling"
+  | "failed"
+  | "done";
+
+export interface IngestLaneSummary {
+  visionHolder: string | null;
+  visionWaiting: number;
+  activeCount: number;
+  awaitConfirmCount: number;
+  failedCount: number;
+}
+
 export interface IngestionJob {
   id: string;
   status: "QUEUED" | "PROCESSING" | "COMPLETED" | "FAILED";
   documentId: string;
   errorMessage?: string | null;
   pausedReason?: string | null;
+  progressPhase?: string | null;
+  progressDetail?: string | null;
+  /** Derived lane phase from /ingest/queue */
+  phase?: IngestLanePhase;
+  phaseDetail?: string | null;
+  awaitingConfirm?: boolean;
+  queuePosition?: number | null;
+  startedAt?: string | null;
+  completedAt?: string | null;
   createdAt: string;
   document: {
     id: string;
     filename: string;
     mimeType: string;
     fileSize: number;
+    confirmedAt?: string | null;
   };
+}
+
+export interface IngestQueueResponse {
+  jobs: IngestionJob[];
+  vram?: {
+    holder: string | null;
+    waiting: number;
+    pausedReason: string | null;
+  };
+  lane?: IngestLaneSummary;
 }
 
 export interface BudgetCategoryOverview {

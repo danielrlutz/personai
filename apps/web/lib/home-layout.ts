@@ -99,9 +99,9 @@ export const WIDGET_CATALOG: WidgetCatalogEntry[] = [
   {
     id: "archive-queue",
     title: "Archive queue",
-    description: "OCR / ingest jobs waiting or in progress.",
+    description: "Ingest lane: rasterize → OCR → split → await confirm, with vision lock.",
     availableFor: () => true,
-    defaultSize: "sm",
+    defaultSize: "md",
   },
   {
     id: "ollama",
