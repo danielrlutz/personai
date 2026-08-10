@@ -13,6 +13,7 @@ const ACTION_LABELS: Record<string, string> = {
   "memory.fact": "Remember fact",
   "calendar.event": "Calendar (stage locally — Google write not wired)",
   "calendar.event_staged": "Calendar staged locally",
+  "legal.frist_kit": "Legal Frist kit",
   "confirm.accept": "Confirmed",
   "confirm.reject": "Rejected",
 };
@@ -47,7 +48,11 @@ export function humanizeConfirmationSummary(summary: string): string {
     .replace(/\s*\(cat\s+(\d+)\)/gi, " (folder $1)")
     .replace(/\s*·\s*Frist\s+(\d{4}-\d{2}-\d{2})/gi, " · deadline (Frist) $1")
     .replace(/\bGenerate career PDF:\b/gi, "Create career PDF:")
-    .replace(/\bMEDICAL\.EXPORT\b/gi, "Medical export");
+    .replace(/\bMEDICAL\.EXPORT\b/gi, "Medical export")
+    // Ban shouty Prisma enum leakage in older queued summaries / archive previews
+    .replace(/\bBILL\b/g, "Invoice")
+    .replace(/\bMEDICAL_RECORD\b/g, "Medical")
+    .replace(/\bRECEIPT\b/g, "Quittance");
 }
 
 export function labelForEnum(value: string): string {
