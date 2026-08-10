@@ -497,6 +497,23 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   app.patch<{
     Params: { id: string };
     Body: { status?: "TODO" | "IN_PROGRESS" | "DONE" | "BLOCKED"; title?: string };
+  }>("/legal/tasks/:id", async (req, reply) => {
+    try {
+      const { prisma } = await withPrisma(req);
+      const task = await prisma.legalTask.update({
+        where: { id: req.params.id },
+        data: {
+          status: req.body.status,
+          title: req.body.title,
+          completedAt: req.body.status === "DONE" ? new Date() : undefined,
+        },
+      });
+      return task;
+    } catch (err) {
+      return sendError(reply, err);
+    }
+  });
+
   app.post<{
     Body: {
       title?: string;
@@ -552,23 +569,6 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
         error: "Use Needs your confirmation to apply the Frist kit.",
         code: "CONFIRM_REQUIRED",
       });
-    } catch (err) {
-      return sendError(reply, err);
-    }
-  });
-
-  }>("/legal/tasks/:id", async (req, reply) => {
-    try {
-      const { prisma } = await withPrisma(req);
-      const task = await prisma.legalTask.update({
-        where: { id: req.params.id },
-        data: {
-          status: req.body.status,
-          title: req.body.title,
-          completedAt: req.body.status === "DONE" ? new Date() : undefined,
-        },
-      });
-      return task;
     } catch (err) {
       return sendError(reply, err);
     }

@@ -265,7 +265,8 @@ export async function findNearDuplicates(
     where: {
       confirmedAt: { not: null },
       ...(excludeId ? { id: { not: excludeId } } : {}),
-      OR: [{ archiveName: { not: null } }, { filename: { not: null } }],
+      // filename is required on Document; archiveName is optional
+      OR: [{ archiveName: { not: null } }, { filename: { not: "" } }],
     },
     select: {
       id: true,

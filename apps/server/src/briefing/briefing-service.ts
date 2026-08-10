@@ -13,7 +13,6 @@ import {
   type MemoryFactCard,
 } from "../memory/user-care.js";
 import { loadStagingForPrompt } from "../memory/staging.js";
-import { getActiveProfileId } from "../db/prisma-singleton.js";
 
 export type BriefingSnapshot = {
   greeting: string;
