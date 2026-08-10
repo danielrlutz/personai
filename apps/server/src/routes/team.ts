@@ -33,8 +33,10 @@ import {
   formatVocabForPrompt,
 } from "../memory/chat-vocabulary.js";
 import { driveStatus } from "../archive/drive.js";
+import { buildKnowledgeInjection } from "../archive/drive-knowledge/index.js";
 import {
   ARCHIVE_INDEX_KEY,
+  ARCHIVE_NAMING_MUSCLE_KEY,
   ARCHIVE_REFRESHED_KEY,
   ARCHIVE_TAXONOMY_KEY,
 } from "../archive/init-context.js";
@@ -103,7 +105,7 @@ export async function registerTeamRoutes(app: FastifyInstance): Promise<void> {
     profileId: string,
     specialistId: string,
     sessionSummary: string | null | undefined,
-    opts?: { citeFromArchive?: boolean },
+    opts?: { citeFromArchive?: boolean; retrievalQuery?: string | null },
   ) {
     const [ceo, facts, liveOps, archiveFacts, citables, staging] = await Promise.all([
       getCeoProfileCard(prisma),
@@ -111,7 +113,14 @@ export async function registerTeamRoutes(app: FastifyInstance): Promise<void> {
       buildSlimLiveOps(prisma, specialistId),
       prisma.memoryFact.findMany({
         where: {
-          key: { in: [ARCHIVE_INDEX_KEY, ARCHIVE_TAXONOMY_KEY, ARCHIVE_REFRESHED_KEY] },
+          key: {
+            in: [
+              ARCHIVE_INDEX_KEY,
+              ARCHIVE_TAXONOMY_KEY,
+              ARCHIVE_REFRESHED_KEY,
+              ARCHIVE_NAMING_MUSCLE_KEY,
+            ],
+          },
         },
       }),
       listCitableDocuments(prisma),
@@ -127,10 +136,20 @@ export async function registerTeamRoutes(app: FastifyInstance): Promise<void> {
       taxonomy: archiveMap.get(ARCHIVE_TAXONOMY_KEY) ?? null,
       refreshedAt: archiveMap.get(ARCHIVE_REFRESHED_KEY) ?? null,
       citablesBlock: formatCitableDocsBlock(citables),
+      namingMuscle: archiveMap.get(ARCHIVE_NAMING_MUSCLE_KEY) ?? null,
     };
     const vocab = extractDriveVocab(
       [archive.index, archive.taxonomy].filter(Boolean).join("\n"),
     );
+    const knowledgeBlock = await buildKnowledgeInjection({
+      profileId,
+      query:
+        opts?.retrievalQuery?.trim() ||
+        `${specialistId} ${sessionSummary ?? ""}`.trim() ||
+        specialistId,
+      charBudget: 1600,
+      topK: 5,
+    });
     return {
       userCare: formatUserCareContext({
         ceo,
@@ -140,11 +159,13 @@ export async function registerTeamRoutes(app: FastifyInstance): Promise<void> {
         archive,
         stagingBlock: staging.block,
         vocabBlock: formatVocabForPrompt(vocab),
+        knowledgeBlock,
         extraInstructions: citationModeInstructions(Boolean(opts?.citeFromArchive)),
       }),
       liveOps,
       archive,
       citables,
+      knowledgeBlock,
     };
   }
 
@@ -179,18 +200,18 @@ export async function registerTeamRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const citeFromArchive = Boolean(body.citeFromArchive);
+    const userText =
+      body.message?.trim() ||
+      (hasImage ? "Please analyze this photo for wardrobe and presentation coaching." : "");
+
     const { userCare, liveOps, archive, citables } = await loadUserCare(
       prisma,
       profileId,
       specialistId,
       session.sessionSummary,
-      { citeFromArchive },
+      { citeFromArchive, retrievalQuery: userText },
     );
     const citableDocs: CitableDoc[] = citables;
-
-    const userText =
-      body.message?.trim() ||
-      (hasImage ? "Please analyze this photo for wardrobe and presentation coaching." : "");
 
     await prisma.chatMessage.create({
       data: {

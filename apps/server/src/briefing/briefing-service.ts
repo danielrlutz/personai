@@ -1,7 +1,9 @@
 import type { PrismaClient } from "@prisma/client";
 import { config } from "../config.js";
+import { buildKnowledgeInjection } from "../archive/drive-knowledge/index.js";
 import { resolveOllamaHost, streamChat } from "../ollama/client.js";
 import { vramLock } from "../ollama/vram-lock.js";
+import { getActiveProfileId } from "../db/prisma-singleton.js";
 import { buildPersonalTodaySummary, type PersonalTodaySummary } from "../life/life-service.js";
 import {
   formatBriefingUserCare,
@@ -328,7 +330,13 @@ export async function* streamBriefingNarrative(
       ? loadStagingForPrompt(profileId)
       : Promise.resolve({ block: "", slices: [], totalInjected: 0 }),
   ]);
-  const userCareBlock = formatBriefingUserCare(ceo, facts, staging.block);
+  const knowledgeBlock = await buildKnowledgeInjection({
+    profileId: getActiveProfileId(),
+    query: "morning brief deadlines invoices fristen documents plans",
+    charBudget: 1000,
+    topK: 4,
+  });
+  const userCareBlock = formatBriefingUserCare(ceo, facts, staging.block, knowledgeBlock);
 
   const release = await vramLock.acquire("REASONING");
   let full = "";

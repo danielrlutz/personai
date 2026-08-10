@@ -51,6 +51,7 @@ import {
   setApiBaseUrl,
   type ArchiveRefreshResult,
   type CeoProfile,
+  type DriveKnowledgeReindexResult,
   type DriveOauthStart,
   type DriveStatus,
   type LicenseInfo,
@@ -306,6 +307,24 @@ export default function SettingsPage() {
       clearDriveStatusCache();
     } catch (err) {
       setDriveNote(err instanceof Error ? err.message : "Could not refresh archive context");
+    } finally {
+      setDriveBusy(false);
+    }
+  };
+
+  const reindexDriveKnowledge = async () => {
+    setDriveBusy(true);
+    setDriveNote(null);
+    try {
+      const result = await apiPost<DriveKnowledgeReindexResult>(
+        "/archive/drive/reindex-knowledge",
+      );
+      setDriveNote(result.message);
+      if (result.status) setDrive({ ...result.status, knowledge: result.knowledge });
+      else await refreshDrive();
+      clearDriveStatusCache();
+    } catch (err) {
+      setDriveNote(err instanceof Error ? err.message : "Could not reindex Drive knowledge");
     } finally {
       setDriveBusy(false);
     }
@@ -884,6 +903,13 @@ export default function SettingsPage() {
             >
               Refresh archive context
             </Button>
+            <Button
+              variant="outline"
+              onClick={() => void reindexDriveKnowledge()}
+              disabled={driveBusy || !(drive?.linked || drive?.enabled) || !drive?.rootFolderId}
+            >
+              Reindex Drive knowledge
+            </Button>
             {drive?.mode === "oauth" ? (
               <Button variant="ghost" onClick={() => void unlinkDrive()} disabled={driveBusy}>
                 Unlink
@@ -899,6 +925,19 @@ export default function SettingsPage() {
               {drive.archiveContext.indexPreview
                 ? ` — ${drive.archiveContext.indexPreview}`
                 : ""}
+            </p>
+          ) : null}
+          {drive?.knowledge ? (
+            <p className="text-xs text-muted-foreground">
+              Drive knowledge:{" "}
+              {drive.knowledge.ready
+                ? `${drive.knowledge.fileCount} files / ${drive.knowledge.chunkCount} chunks`
+                : (drive.knowledge.lastSyncStatus ?? "not indexed yet")}
+              {drive.knowledge.embedModel
+                ? ` · embed ${drive.knowledge.embedModel}`
+                : " · keyword-only (pull nomic-embed-text for vectors)"}
+              {drive.knowledge.lastSyncAt ? ` · ${drive.knowledge.lastSyncAt}` : ""}. Private
+              local index — not Gemini.
             </p>
           ) : null}
           <DriveTaxonomyHealth

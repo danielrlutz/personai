@@ -8,10 +8,17 @@ import { config } from "../config.js";
 import { chatCompletion, humanizeOllamaError, resolveOllamaHost } from "../ollama/client.js";
 import { vramLock } from "../ollama/vram-lock.js";
 import { driveStatus, listDriveArchiveFiles } from "./drive.js";
+import { enqueueDriveKnowledgeReindexForProfile } from "./drive-knowledge/index.js";
+import {
+  accumulateTerminology,
+  detectFolderNumberingStyle,
+  formatNamingMuscle,
+} from "./drive-knowledge/terminology.js";
 
 export const ARCHIVE_INDEX_KEY = "archive.index";
 export const ARCHIVE_TAXONOMY_KEY = "archive.taxonomy";
 export const ARCHIVE_REFRESHED_KEY = "archive.refreshedAt";
+export const ARCHIVE_NAMING_MUSCLE_KEY = "archive.naming.muscle";
 
 export type ArchiveInitResult = {
   ok: boolean;
@@ -21,6 +28,7 @@ export type ArchiveInitResult = {
   model: string | null;
   facts: { key: string; value: string }[];
   message: string;
+  knowledgeJobId?: string | null;
 };
 
 async function upsertFact(
@@ -78,17 +86,31 @@ export async function refreshArchiveContext(
   }
 
   const listing = await listDriveArchiveFiles({ profileId, perFolder: 15 });
-  const taxonomyLines = listing.folders
-    .map((f) => `${f.label} (${f.fileCount} recent listed)`)
-    .join("\n");
+  const numbering = listing.folders
+    .map((f) => detectFolderNumberingStyle(f.label))
+    .filter(Boolean);
+  const numberingHint =
+    numbering.length > 0
+      ? `Numbering styles seen: ${[...new Set(numbering)].join(", ")}`
+      : "Numbering style: unknown (will learn on full reindex)";
+  const taxonomyLines = [
+    ...listing.folders.map((f) => `${f.label} (${f.fileCount} recent listed)`),
+    numberingHint,
+  ].join("\n");
   const fileLines = compactListing(listing.files);
   const refreshedAt = new Date().toISOString();
+
+  const quickTerms = accumulateTerminology(
+    listing.files.map((f) => ({ name: f.name, folderLabel: f.folderLabel })),
+  );
+  const namingMuscle = formatNamingMuscle(quickTerms);
 
   const taxonomyFact = await upsertFact(
     prisma,
     ARCHIVE_TAXONOMY_KEY,
     taxonomyLines || "(no taxonomy folders resolved yet)",
   );
+  const namingFact = await upsertFact(prisma, ARCHIVE_NAMING_MUSCLE_KEY, namingMuscle);
 
   let summary =
     `Drive archive snapshot ${refreshedAt}. Folders:\n${taxonomyLines}\n\nRecent files:\n${fileLines || "(none listed)"}`.slice(
@@ -139,17 +161,31 @@ ${fileLines || "(none)"}`;
   const indexFact = await upsertFact(prisma, ARCHIVE_INDEX_KEY, summary);
   const refreshedFact = await upsertFact(prisma, ARCHIVE_REFRESHED_KEY, refreshedAt);
 
+  let knowledgeJobId: string | null = null;
+  if (profileId) {
+    try {
+      const enqueued = await enqueueDriveKnowledgeReindexForProfile(prisma, profileId);
+      knowledgeJobId = enqueued.jobId;
+    } catch {
+      // Context facts still useful without full index job.
+    }
+  }
+
   return {
     ok: true,
     linked: listing.linked || status.linked || status.enabled,
     folderCount: listing.folders.length,
     fileCount: listing.files.length,
     model,
-    facts: [indexFact, taxonomyFact, refreshedFact],
+    facts: [indexFact, taxonomyFact, refreshedFact, namingFact],
+    knowledgeJobId,
     message:
       listing.files.length === 0
-        ? "Archive context refreshed. Folders are ready; no recent files were listed yet."
-        : `Archive context refreshed from ${listing.files.length} recent file names across ${listing.folders.length} folders.`,
+        ? "Archive context refreshed. Folders are ready; full Drive knowledge reindex queued when files appear."
+        : `Archive context refreshed from ${listing.files.length} recent file names across ${listing.folders.length} folders.` +
+          (knowledgeJobId
+            ? " Full Drive knowledge reindex queued (local index; not Gemini)."
+            : ""),
   };
 }
 

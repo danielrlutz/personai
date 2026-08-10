@@ -36,6 +36,8 @@ import {
   personAiStyleFolderName,
   type DriveFolderCandidate,
 } from "./folder-match.js";
+import { listFolderLabels } from "./drive-knowledge/store.js";
+import { folderAliasesFromLabels } from "./drive-knowledge/terminology.js";
 import {
   buildTaxonomyHealthReport,
   type TaxonomyHealthReport,
@@ -68,6 +70,18 @@ export type DriveUploadResult = {
 export type DriveFileIndexEntry = {
   id: string;
   name: string;
+  folderLabel: string;
+  archiveCategory: number | null;
+  modifiedTime: string | null;
+  webViewLink: string | null;
+};
+
+/** Full recursive listing under the configured archive root (Drive knowledge index). */
+export type DriveTreeFile = {
+  id: string;
+  name: string;
+  mimeType: string | null;
+  folderPath: string;
   folderLabel: string;
   archiveCategory: number | null;
   modifiedTime: string | null;
@@ -597,6 +611,8 @@ export type ResolveFolderOptions = {
   createIfMissing?: boolean;
   /** Reuse a pre-listed child folder set (avoids N Drive list calls). */
   childFolders?: Array<{ id: string; name: string }>;
+  /** Extra folder-name synonyms (e.g. from Drive knowledge index). */
+  extraSynonyms?: readonly string[];
 };
 
 async function withFileCounts(
@@ -640,10 +656,26 @@ export async function resolveFolderForCategory(
   const children =
     opts?.childFolders ?? (await listDriveFoldersInParent(cfg, rootId));
 
+  let indexedAliases: string[] = [...(opts?.extraSynonyms ?? [])];
+  if (cfg.profileId) {
+    try {
+      const fromIndex = folderAliasesFromLabels(listFolderLabels(cfg.profileId))[
+        archiveCategory
+      ];
+      if (fromIndex?.length) {
+        indexedAliases = [...new Set([...indexedAliases, ...fromIndex])];
+      }
+    } catch {
+      /* index not ready */
+    }
+  }
+
   // First pass without counts; enrich only when duplicates need ranking.
+  // Prefer indexed folder names (user conventions) alongside regex/synonyms.
   let regexMatch = matchFolderForCategory(
     archiveCategory,
     children.map((f) => ({ id: f.id, name: f.name })),
+    { extraSynonyms: indexedAliases },
   );
   if (regexMatch?.duplicates.length) {
     const relatedIds = new Set([
@@ -654,12 +686,16 @@ export async function resolveFolderForCategory(
       cfg,
       children.filter((c) => relatedIds.has(c.id)),
     );
-    regexMatch = matchFolderForCategory(archiveCategory, [
-      ...enriched,
-      ...children
-        .filter((c) => !relatedIds.has(c.id))
-        .map((f) => ({ id: f.id, name: f.name })),
-    ]);
+    regexMatch = matchFolderForCategory(
+      archiveCategory,
+      [
+        ...enriched,
+        ...children
+          .filter((c) => !relatedIds.has(c.id))
+          .map((f) => ({ id: f.id, name: f.name })),
+      ],
+      { extraSynonyms: indexedAliases },
+    );
   }
 
   if (regexMatch) {
@@ -792,6 +828,173 @@ export async function listDriveArchiveFiles(opts?: {
   }
 
   return { linked: cfg.linked, folders, files };
+}
+
+async function listDriveFilesInParent(
+  cfg: DriveConfig,
+  parentId: string,
+): Promise<
+  Array<{
+    id: string;
+    name: string;
+    mimeType?: string;
+    modifiedTime?: string;
+    webViewLink?: string;
+  }>
+> {
+  const q = encodeURIComponent(
+    `'${parentId}' in parents and mimeType!='application/vnd.google-apps.folder' and trashed=false`,
+  );
+  const out: Array<{
+    id: string;
+    name: string;
+    mimeType?: string;
+    modifiedTime?: string;
+    webViewLink?: string;
+  }> = [];
+  let pageToken: string | undefined;
+  do {
+    const url =
+      `https://www.googleapis.com/drive/v3/files?q=${q}` +
+      `&fields=nextPageToken,files(id,name,mimeType,modifiedTime,webViewLink)` +
+      `&pageSize=100` +
+      (pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : "");
+    const list = await driveFetch(cfg, url);
+    if (!list.ok) {
+      throw new Error(`Drive file list failed: ${list.status} ${await list.text()}`);
+    }
+    const listed = (await list.json()) as {
+      files?: Array<{
+        id: string;
+        name: string;
+        mimeType?: string;
+        modifiedTime?: string;
+        webViewLink?: string;
+      }>;
+      nextPageToken?: string;
+    };
+    for (const f of listed.files ?? []) out.push(f);
+    pageToken = listed.nextPageToken;
+  } while (pageToken);
+  return out;
+}
+
+/**
+ * Walk everything under the configured Drive archive root (BFS).
+ * Maps top-level taxonomy folders to archive categories; nested paths keep the parent category.
+ */
+export async function walkDriveArchiveTree(opts?: {
+  profileId?: string | null;
+  /** Soft cap to avoid runaway indexes on huge drives. */
+  maxFiles?: number;
+}): Promise<{
+  linked: boolean;
+  rootFolderId: string | null;
+  folders: Array<{ id: string; name: string; path: string; archiveCategory: number | null }>;
+  files: DriveTreeFile[];
+}> {
+  const cfg = loadDriveConfig(opts?.profileId);
+  if (!cfg.enabled || cfg.mode === "none" || !cfg.rootFolderId) {
+    return { linked: false, rootFolderId: null, folders: [], files: [] };
+  }
+  const maxFiles = opts?.maxFiles ?? 5000;
+  const rootId = cfg.rootFolderId;
+  const topChildren = await listDriveFoldersInParent(cfg, rootId);
+
+  const categoryByTopFolderId = new Map<string, number>();
+  for (let cat = 1; cat <= 10; cat++) {
+    try {
+      const match = matchFolderForCategory(cat, topChildren);
+      if (match) categoryByTopFolderId.set(match.folderId, cat);
+    } catch {
+      /* continue */
+    }
+  }
+  // Also honor cached explicit folder IDs
+  for (const [k, id] of Object.entries(cfg.folderIds)) {
+    const cat = Number(k);
+    if (Number.isFinite(cat) && id) categoryByTopFolderId.set(id, cat);
+  }
+
+  type QueueItem = {
+    id: string;
+    path: string;
+    label: string;
+    archiveCategory: number | null;
+  };
+  const queue: QueueItem[] = topChildren.map((c) => ({
+    id: c.id,
+    path: c.name,
+    label: c.name,
+    archiveCategory: categoryByTopFolderId.get(c.id) ?? null,
+  }));
+  // Files directly under root (uncategorized)
+  queue.unshift({
+    id: rootId,
+    path: "",
+    label: "(root)",
+    archiveCategory: null,
+  });
+
+  const folders: Array<{
+    id: string;
+    name: string;
+    path: string;
+    archiveCategory: number | null;
+  }> = topChildren.map((c) => ({
+    id: c.id,
+    name: c.name,
+    path: c.name,
+    archiveCategory: categoryByTopFolderId.get(c.id) ?? null,
+  }));
+  const files: DriveTreeFile[] = [];
+  const seenFolders = new Set<string>([rootId]);
+
+  while (queue.length > 0 && files.length < maxFiles) {
+    const current = queue.shift()!;
+    const listed = await listDriveFilesInParent(cfg, current.id);
+    for (const f of listed) {
+      if (files.length >= maxFiles) break;
+      files.push({
+        id: f.id,
+        name: f.name,
+        mimeType: f.mimeType ?? null,
+        folderPath: current.path || current.label,
+        folderLabel: current.label,
+        archiveCategory: current.archiveCategory,
+        modifiedTime: f.modifiedTime ?? null,
+        webViewLink: f.webViewLink ?? null,
+      });
+    }
+
+    // Nested folders (skip re-walking root's taxonomy children when current is root)
+    if (current.id === rootId) continue;
+    const childFolders = await listDriveFoldersInParent(cfg, current.id);
+    for (const child of childFolders) {
+      if (seenFolders.has(child.id)) continue;
+      seenFolders.add(child.id);
+      const nestedPath = current.path ? `${current.path}/${child.name}` : child.name;
+      folders.push({
+        id: child.id,
+        name: child.name,
+        path: nestedPath,
+        archiveCategory: current.archiveCategory,
+      });
+      queue.push({
+        id: child.id,
+        path: nestedPath,
+        label: current.label,
+        archiveCategory: current.archiveCategory,
+      });
+    }
+  }
+
+  return {
+    linked: cfg.linked,
+    rootFolderId: rootId,
+    folders,
+    files,
+  };
 }
 
 export async function uploadFileToDrive(opts: {

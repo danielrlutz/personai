@@ -11,12 +11,18 @@ import {
   type DriveCombineJobPayload,
 } from "../archive/folder-combine.js";
 import { guessMime } from "../archive/commit.js";
+import {
+  SERVER_JOB_DRIVE_KNOWLEDGE_REINDEX,
+  runKnowledgeReindexBatch,
+  type KnowledgeReindexPayload,
+} from "../archive/drive-knowledge/sync.js";
 
 export const serverJobEvents = new EventEmitter();
 
 export const SERVER_JOB_DRIVE_UPLOAD = "drive.upload";
 export const SERVER_JOB_DRIVE_ENSURE = "drive.ensure_folders";
 export const SERVER_JOB_DRIVE_COMBINE = "drive.combine_folders";
+export { SERVER_JOB_DRIVE_KNOWLEDGE_REINDEX };
 
 export type DriveUploadJobPayload = {
   localPath: string;
@@ -191,6 +197,27 @@ async function processDriveCombine(
   return result as unknown as Record<string, unknown>;
 }
 
+async function processKnowledgeReindex(
+  prisma: PrismaClient,
+  profileId: string,
+  job: ServerJob,
+): Promise<Record<string, unknown>> {
+  const payload = parsePayload<KnowledgeReindexPayload>(job.payload);
+  const result = await runKnowledgeReindexBatch({ prisma, profileId, payload });
+  if (result.more) {
+    // Continue as a fresh queued job so each batch is durable / recoverable.
+    await enqueueServerJob(prisma, {
+      type: SERVER_JOB_DRIVE_KNOWLEDGE_REINDEX,
+      payload: {
+        offset: result.offset,
+        batchSize: payload.batchSize,
+        pruneMissing: payload.pruneMissing,
+      },
+    });
+  }
+  return result;
+}
+
 async function processOneJob(profileId: string, jobId: string): Promise<void> {
   const prisma = await getPrisma(profileId);
   const job = await prisma.serverJob.findUnique({ where: { id: jobId } });
@@ -218,6 +245,10 @@ async function processOneJob(profileId: string, jobId: string): Promise<void> {
         break;
       case SERVER_JOB_DRIVE_COMBINE:
         result = await processDriveCombine(profileId, job);
+        break;
+
+      case SERVER_JOB_DRIVE_KNOWLEDGE_REINDEX:
+        result = await processKnowledgeReindex(prisma, profileId, job);
         break;
       default:
         throw new Error(`Unknown server job type: ${job.type}`);

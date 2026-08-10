@@ -200,6 +200,7 @@ export type ArchiveCareContext = {
   refreshedAt: string | null;
   /** Preformatted local citable docs (+ citation rules). */
   citablesBlock?: string | null;
+  namingMuscle?: string | null;
 };
 
 export function formatArchiveCareBlock(archive: ArchiveCareContext): string {
@@ -212,7 +213,7 @@ export function formatArchiveCareBlock(archive: ArchiveCareContext): string {
   }
   if (!archive.ready || !archive.index?.trim()) {
     const bits = [
-      `Archive context: Drive is linked, but the archive index has not been built yet (or is empty). Say so if the user asks about filed documents. Suggest Settings → Refresh archive context.`,
+      `Archive context: Drive is linked, but the archive index has not been built yet (or is empty). Say so if the user asks about filed documents. Suggest Settings → Refresh archive context or Reindex Drive knowledge.`,
       archive.citablesBlock?.trim() || null,
     ].filter(Boolean);
     return bits.join("\n\n");
@@ -221,6 +222,7 @@ export function formatArchiveCareBlock(archive: ArchiveCareContext): string {
     `Archive context: READY (Drive linked). Use retrieved filenames/folders proactively when answering (cite names; never invent docs). Prefer the user's naming vocabulary from this index — never say BILL in chat.`,
     archive.refreshedAt ? `Refreshed: ${archive.refreshedAt}` : null,
     archive.taxonomy ? `Taxonomy folders:\n${archive.taxonomy.slice(0, 800)}` : null,
+    archive.namingMuscle ? `Naming muscle:\n${archive.namingMuscle.slice(0, 600)}` : null,
     `Index:\n${archive.index.slice(0, 1200)}`,
     archive.citablesBlock?.trim() || null,
   ].filter(Boolean);
@@ -240,6 +242,8 @@ export function formatUserCareContext(opts: {
   extraInstructions?: string | null;
   /** Drive corpus vocabulary hint (already formatted). */
   vocabBlock?: string | null;
+  /** Char-budgeted hybrid retrieval hits from local Drive knowledge. */
+  knowledgeBlock?: string | null;
 }): string {
   const blocks = [
     `Profile card: ${compactCeoLine(opts.ceo)}`,
@@ -255,6 +259,9 @@ export function formatUserCareContext(opts: {
   if (opts.stagingBlock?.trim()) {
     blocks.push(opts.stagingBlock.trim());
   }
+  if (opts.knowledgeBlock?.trim()) {
+    blocks.push(opts.knowledgeBlock.trim());
+  }
   if (opts.sessionSummary?.trim()) {
     blocks.push(`Session summary:\n${opts.sessionSummary.trim().slice(0, 800)}`);
   }
@@ -269,12 +276,14 @@ export function formatBriefingUserCare(
   ceo: CeoProfileCard,
   facts: MemoryFactCard[],
   stagingBlock?: string | null,
+  knowledgeBlock?: string | null,
 ): string {
   const parts = [
     `Profile card: ${compactCeoLine(ceo)}`,
     `Memory facts (≤${MEMORY_FACT_INJECT_LIMIT} recent):\n${compactFactsBlock(facts)}`,
   ];
   if (stagingBlock?.trim()) parts.push(stagingBlock.trim().slice(0, 1200));
+  if (knowledgeBlock?.trim()) parts.push(knowledgeBlock.trim());
   return parts.join("\n\n");
 }
 

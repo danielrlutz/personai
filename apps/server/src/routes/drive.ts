@@ -10,14 +10,6 @@ import {
   verifyDriveConnection,
 } from "../archive/drive.js";
 import {
-  dryRunCombineFolders,
-  listCombineFolders,
-  prepareCombineFoldersExecute,
-  type CombineConflictAction,
-  type CombineExecuteRequest,
-  type CombineFileDecision,
-} from "../archive/folder-combine.js";
-import {
   clearDriveOauthStore,
   consumeOauthPending,
   createOauthPending,
@@ -26,11 +18,24 @@ import {
   writeDrivePrefs,
 } from "../archive/drive-oauth-store.js";
 import { getArchiveContextMeta, refreshArchiveContext } from "../archive/init-context.js";
-import { getActiveProfileId, getPrisma } from "../db/prisma-singleton.js";
+import {
+  enqueueDriveKnowledgeReindexForProfile,
+  getDriveKnowledgeStatus,
+} from "../archive/drive-knowledge/index.js";
+
+import {
+  dryRunCombineFolders,
+  listCombineFolders,
+  prepareCombineFoldersExecute,
+  type CombineConflictAction,
+  type CombineExecuteRequest,
+  type CombineFileDecision,
+} from "../archive/folder-combine.js";
 import {
   enqueueServerJob,
   SERVER_JOB_DRIVE_COMBINE,
 } from "../jobs/server-jobs.js";
+import { getActiveProfileId, getPrisma } from "../db/prisma-singleton.js";
 import { getRequestSession } from "../auth/middleware.js";
 import { sendError, withPrisma, getProfileId } from "./helpers.js";
 
@@ -82,6 +87,7 @@ export async function registerDriveRoutes(app: FastifyInstance): Promise<void> {
       refreshedAt: null as string | null,
       indexPreview: null as string | null,
     };
+    const knowledge = getDriveKnowledgeStatus(profileId);
     try {
       if (profileId) {
         const { prisma } = await withPrisma(req);
@@ -90,7 +96,7 @@ export async function registerDriveRoutes(app: FastifyInstance): Promise<void> {
     } catch {
       // Locked / no session — status-only is fine.
     }
-    return { ...status, archiveContext };
+    return { ...status, archiveContext, knowledge };
   });
 
   app.post("/archive/drive/verify", async (req, reply) => {
@@ -214,12 +220,69 @@ export async function registerDriveRoutes(app: FastifyInstance): Promise<void> {
         });
       }
       const result = await refreshArchiveContext(prisma, profileId);
-      return { ...result, status: driveStatus(profileId) };
+      return {
+        ...result,
+        status: driveStatus(profileId),
+        knowledge: getDriveKnowledgeStatus(profileId),
+      };
     } catch (err) {
       return sendError(reply, err);
     }
   });
 
+
+  /**
+   * Reindex everything under the configured Drive root into the private local
+   * knowledge store (Ollama embeddings when available + FTS). Not Gemini.
+   */
+  app.post("/archive/drive/reindex-knowledge", async (req, reply) => {
+    try {
+      const profileId = getProfileId(req);
+      const { prisma } = await withPrisma(req);
+      const status = driveStatus(profileId);
+      if (!status.enabled && !status.linked) {
+        return reply.status(400).send({
+          error: status.message,
+          code: "DRIVE_NOT_LINKED",
+          status,
+        });
+      }
+      if (!status.rootFolderId) {
+        return reply.status(400).send({
+          error: "Set a Drive root folder ID in Settings before reindexing.",
+          code: "DRIVE_ROOT_REQUIRED",
+          status,
+        });
+      }
+      const { jobId, stats } = await enqueueDriveKnowledgeReindexForProfile(
+        prisma,
+        profileId,
+      );
+      return {
+        ok: true,
+        jobId,
+        message:
+          "Drive knowledge reindex queued. Private local index under your profile data dir — not Google Gemini API.",
+        stats,
+        knowledge: getDriveKnowledgeStatus(profileId),
+        status: driveStatus(profileId),
+      };
+    } catch (err) {
+      return sendError(reply, err);
+    }
+  });
+
+  app.get("/archive/drive/knowledge", async (req, reply) => {
+    try {
+      const profileId = getProfileId(req);
+      return {
+        knowledge: getDriveKnowledgeStatus(profileId),
+        status: driveStatus(profileId),
+      };
+    } catch (err) {
+      return sendError(reply, err);
+    }
+  });
 
   /** Scan archive root for duplicate taxonomy folders (never deletes). */
   app.get("/archive/drive/taxonomy-health", async (req, reply) => {
@@ -261,7 +324,6 @@ export async function registerDriveRoutes(app: FastifyInstance): Promise<void> {
       }
     },
   );
-
   /** Folder map for manual combine (archive-root children). */
   app.get("/archive/drive/combine/folders", async (req, reply) => {
     try {

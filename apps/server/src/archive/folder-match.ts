@@ -152,10 +152,15 @@ export function isArchiveRootName(name: string): boolean {
 function scoreCandidate(
   folder: DriveFolderCandidate,
   category: number,
+  extraSynonyms?: readonly string[],
 ): { score: number; source: FolderMatchResult["source"] } | null {
   const key = normalizeFolderKey(folder.name);
   if (!key) return null;
   const synonyms = synonymKeysForCategory(category);
+  for (const extra of extraSynonyms ?? []) {
+    const nk = normalizeFolderKey(extra);
+    if (nk) synonyms.add(nk);
+  }
   const canonical = taxonomyCanonicalKey(category);
 
   if (key === canonical) return { score: 100, source: "exact" };
@@ -201,6 +206,7 @@ export function preferFolderAmongDuplicates(
 export function matchFolderForCategory(
   category: number,
   folders: DriveFolderCandidate[],
+  opts?: { extraSynonyms?: readonly string[] },
 ): FolderMatchResult | null {
   const hits: Array<{
     folder: DriveFolderCandidate;
@@ -209,7 +215,7 @@ export function matchFolderForCategory(
   }> = [];
 
   for (const folder of folders) {
-    const scored = scoreCandidate(folder, category);
+    const scored = scoreCandidate(folder, category, opts?.extraSynonyms);
     if (scored) hits.push({ folder, score: scored.score, source: scored.source });
   }
 

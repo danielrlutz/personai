@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import { buildKnowledgeInjection } from "../archive/drive-knowledge/index.js";
 import { chatCompletion, resolveOllamaHost } from "../ollama/client.js";
 import { resolveSpecialistModel } from "../specialists/resolve-model.js";
 import { SPECIALISTS, resolveSpecialistId } from "../specialists/roster.js";
@@ -65,6 +66,12 @@ export async function registerTriageRoutes(app: FastifyInstance): Promise<void> 
       const { prisma, profileId } = await withPrisma(req);
       const seed = text || (req.body?.hasFile ? "User dropped a document for filing / OCR." : "");
       let result = heuristicTriage(seed);
+      const knowledgeBlock = await buildKnowledgeInjection({
+        profileId,
+        query: seed,
+        charBudget: 900,
+        topK: 4,
+      });
 
       const [snippets, prefsHint] = await Promise.all([
         searchMemorySnippets(prisma, profileId, { query: seed, limit: 6, snippetChars: 220 }),
@@ -84,7 +91,9 @@ export async function registerTriageRoutes(app: FastifyInstance): Promise<void> 
 Never invent Fristen or amounts. Prefer secretary when unsure.
 Never use raw enum BILL in summary/reason — say Invoice (or the user's word).
 When known prefs / personality notes are provided (hotel budget, location Cham/Zug, Invoice language, etc.), mention a relevant one briefly in reason if it affects routing — do not invent prefs.
-${memoryContext ? `\n${memoryContext}` : ""}`;
+Use Drive knowledge only as hints about existing docs/naming — confirm-before-write still applies.
+${memoryContext ? `\n${memoryContext}` : ""}
+${knowledgeBlock ? `\n${knowledgeBlock}` : ""}`;
 
           const raw = await chatCompletion({
             host,
