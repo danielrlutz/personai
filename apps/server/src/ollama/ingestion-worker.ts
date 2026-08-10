@@ -32,6 +32,7 @@ import {
   finalizeCancelledJob,
   isCancelRequested,
 } from "../ingest/cancel-job.js";
+import { setJobProgress } from "../ingest/progress.js";
 import { safeDate, safeDateOrNow, safeFiniteNumber } from "../lib/safe-data.js";
 import { tickServerJobs, recoverStaleServerJobs } from "../jobs/server-jobs.js";
 
@@ -447,7 +448,11 @@ async function processJob(profileId: string, jobId: string): Promise<void> {
   const release = await vramLock.acquire("VISION", async (reason) => {
     await prisma.ingestionJob.update({
       where: { id: jobId },
-      data: { pausedReason: reason },
+      data: {
+        pausedReason: reason,
+        progressPhase: "waiting_vision",
+        progressDetail: null,
+      },
     });
     ingestionEvents.emit("queue", { profileId });
   });
@@ -460,6 +465,8 @@ async function processJob(profileId: string, jobId: string): Promise<void> {
         pausedReason: null,
         startedAt: new Date(),
         ollamaHost: await resolveOllamaHost(),
+        progressPhase: "rasterize",
+        progressDetail: null,
       },
     });
     ingestionEvents.emit("queue", { profileId });
@@ -488,11 +495,15 @@ async function processJob(profileId: string, jobId: string): Promise<void> {
 
     // OCR every leaf page while holding the VISION lock (no interleaved reasoning)
     const pageOcrs: PageOcr[] = [];
-    for (const page of leafPages) {
+    const totalPages = leafPages.length;
+    for (let i = 0; i < leafPages.length; i++) {
+      const page = leafPages[i]!;
       if (await isCancelRequested(prisma, jobId)) {
         await finalizeCancelledJob(prisma, jobId);
         return;
       }
+      await setJobProgress(prisma, jobId, "ocr", `${i + 1}/${totalPages}`);
+      ingestionEvents.emit("queue", { profileId });
       pageOcrs.push(await ocrPage({ host, page }));
     }
 
@@ -523,6 +534,8 @@ async function processJob(profileId: string, jobId: string): Promise<void> {
     // Keep original bulk filename for child naming (parent filename becomes *_p1.png after rewrite).
     const bulkParentFilename = job.document.filename;
     if (restSegs.length > 0) {
+      await setJobProgress(prisma, jobId, "split", `1/${finalSegments.length}`);
+      ingestionEvents.emit("queue", { profileId });
       const rewritten = await rewriteParentStorageToSegment({
         prisma,
         document: job.document,
@@ -542,11 +555,14 @@ async function processJob(profileId: string, jobId: string): Promise<void> {
       extension: archiveExt,
     });
 
-    for (const segment of restSegs) {
+    for (let si = 0; si < restSegs.length; si++) {
+      const segment = restSegs[si]!;
       if (await isCancelRequested(prisma, jobId)) {
         await finalizeCancelledJob(prisma, jobId);
         return;
       }
+      await setJobProgress(prisma, jobId, "split", `${si + 2}/${finalSegments.length}`);
+      ingestionEvents.emit("queue", { profileId });
       const segOcrs = segment.pages.map((p) => ocrByPage.get(p.pageNumber)!);
       await spawnChildDocument({
         prisma,
@@ -580,7 +596,13 @@ async function processJob(profileId: string, jobId: string): Promise<void> {
 
     await prisma.ingestionJob.update({
       where: { id: jobId },
-      data: { status: "COMPLETED", completedAt: new Date(), pausedReason: null },
+      data: {
+        status: "COMPLETED",
+        completedAt: new Date(),
+        pausedReason: null,
+        progressPhase: "await_confirm",
+        progressDetail: null,
+      },
     });
   } catch (err) {
     if (await isCancelRequested(prisma, jobId).catch(() => false)) {
@@ -594,6 +616,8 @@ async function processJob(profileId: string, jobId: string): Promise<void> {
             errorMessage: err instanceof Error ? err.message : String(err),
             completedAt: new Date(),
             pausedReason: null,
+            progressPhase: "failed",
+            progressDetail: null,
           },
         })
         .catch(() => undefined);
