@@ -198,6 +198,8 @@ On **Home**, the **Fristen** strip shows open deadlines.
 
 Open **Team**. Important changes still ask for confirmation first.
 
+**Pocket huddle** — tap **Huddle** on Team (or **Pocket huddle** after Home triage). Staff speaks first, then up to two specialists take sequenced turns in one thread. Recommended writes still land under **Needs your confirmation** — nothing auto-commits.
+
 | Specialist | Role (short) |
 |------------|----------------|
 | Staff | Triage, archive, morning brief |

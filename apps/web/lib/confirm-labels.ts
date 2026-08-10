@@ -8,6 +8,7 @@ const ACTION_LABELS: Record<string, string> = {
   "export.generate": "Generate export",
   "document.upload": "Document upload",
   "forge.ship": "Ship code",
+  "huddle.propose": "Huddle proposal",
   "premium.spend": "Premium spend (optional cloud)",
   "premium.inference": "Premium inference (optional cloud)",
   "memory.fact": "Remember fact",

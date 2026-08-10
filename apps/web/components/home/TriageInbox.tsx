@@ -2,7 +2,7 @@
 
 import { useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Camera, FileUp, MessageSquare, Sparkles } from "lucide-react";
+import { Camera, FileUp, MessageSquare, Sparkles, UsersRound } from "lucide-react";
 import { apiPost } from "@/lib/api-client";
 import { getOutbox } from "@/lib/outbox";
 import { toast } from "@/lib/toast";
@@ -69,6 +69,29 @@ export function TriageInbox() {
     const id = overrideId || proposal?.specialistId || "secretary";
     const q = text.trim() ? `&message=${encodeURIComponent(text.trim().slice(0, 500))}` : "";
     router.push(`/team/?specialist=${id}${q}`);
+  };
+
+  const openHuddle = () => {
+    const primary = overrideId || proposal?.specialistId || "";
+    const guests: string[] = [];
+    if (primary && primary !== "secretary") guests.push(primary);
+    const action = proposal?.suggestedAction;
+    const complement =
+      action === "finance"
+        ? "legal_aide"
+        : action === "legal"
+          ? "cfo"
+          : action === "medical"
+            ? "bio_mechanic"
+            : "";
+    if (complement && !guests.includes(complement) && guests.length < 2) {
+      guests.push(complement);
+    }
+    if (guests.length === 0) guests.push("cfo");
+    const msg = text.trim()
+      ? `&message=${encodeURIComponent(text.trim().slice(0, 500))}`
+      : "";
+    router.push(`/team/?huddle=1&guests=${guests.join(",")}${msg}`);
   };
 
   const openSuggested = () => {
@@ -189,6 +212,10 @@ export function TriageInbox() {
             <Button onClick={openChat}>
               <MessageSquare className="mr-1.5 h-4 w-4" />
               Open chat
+            </Button>
+            <Button variant="outline" onClick={openHuddle}>
+              <UsersRound className="mr-1.5 h-4 w-4" />
+              Pocket huddle
             </Button>
             <Button variant="outline" onClick={openSuggested}>
               Go to {proposal.suggestedAction}

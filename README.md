@@ -18,8 +18,9 @@ Inspired by Harmonia Hermes (one orchestration path, confirm before irreversible
 | Bio / Mystic / Stylist / Wingman | Rich coaching personas (CEO/memory/archive aware) |
 | Stylist | Optional **photo upload** → vision notes → coaching |
 | Career Strategist | Career HTML→PDF (confirm before download) |
+| **Pocket huddle** | Staff + up to 2 specialists, sequenced takes in one thread (`/team?huddle=1&guests=cfo,legal_aide`) |
 
-Open **Team** in the app (`/team?specialist=cfo`). Money and export actions use **Needs your confirmation** before anything is written.
+Open **Team** in the app (`/team?specialist=cfo`). Money and export actions use **Needs your confirmation** before anything is written. Huddle write proposals also queue confirms — never auto-apply.
 
 **Per-specialist models** (failover within pulled tags — no required new pulls):
 
