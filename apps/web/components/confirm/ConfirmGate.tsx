@@ -36,6 +36,7 @@ import {
   type QrConfirmFields,
 } from "@/lib/qr-confirm";
 import { QrConfirmCockpit } from "./QrConfirmCockpit";
+import { NearDuplicateRadar } from "./NearDuplicateRadar";
 
 interface ConfirmGateProps {
   refreshKey?: number;
@@ -172,6 +173,8 @@ export function ConfirmGate({
   const [error, setError] = useState<string | null>(null);
   /** Drive upload ServerJob ids returned by confirm (pulse strip). */
   const [driveJobIds, setDriveJobIds] = useState<string[]>([]);
+  /** Confirmation ids with near-duplicate hits (Confirm → File anyway). */
+  const [nearDupeIds, setNearDupeIds] = useState<Record<string, boolean>>({});
 
   const closePreview = useCallback(() => {
     setPreview((prev) => {
@@ -202,6 +205,13 @@ export function ConfirmGate({
       }
       setDrafts(next);
       setQrDrafts(nextQr);
+      setNearDupeIds((prev) => {
+        const kept: Record<string, boolean> = {};
+        for (const c of data.confirmations) {
+          if (prev[c.id]) kept[c.id] = true;
+        }
+        return kept;
+      });
       setError(null);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to load confirmations";
@@ -238,29 +248,25 @@ export function ConfirmGate({
     }
   };
 
-  const viewDocument = async (c: PendingConfirmation) => {
-    const documentId = documentIdFromConfirmation(c);
-    if (!documentId) {
-      toast.error("No document linked to this confirmation.");
-      return;
-    }
-    setPreviewBusyId(c.id);
+  const openDocumentPreview = async (
+    documentId: string,
+    opts: { busyKey: string; fallbackName?: string },
+  ) => {
+    setPreviewBusyId(opts.busyKey);
     try {
       const result = await apiGetBlob(`/documents/${documentId}/file`, { silent: true });
       const url = URL.createObjectURL(result.blob);
-      const draft = drafts[c.id];
-      const fallbackName = draft ? buildArchiveName(draft) : documentId;
       setPreview((prev) => {
         if (prev?.url) URL.revokeObjectURL(prev.url);
         return {
           url,
+          filename: result.filename || opts.fallbackName || documentId,
           contentType: result.contentType,
-          filename: result.filename || fallbackName,
           documentId,
         };
       });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not open document", {
+      toast.error(err instanceof Error ? err.message : "Could not open file", {
         title: "Preview failed",
         sticky: true,
         dedupeKey: `confirm-preview:${documentId}`,
@@ -268,6 +274,26 @@ export function ConfirmGate({
     } finally {
       setPreviewBusyId(null);
     }
+  };
+
+  const viewDocument = async (c: PendingConfirmation) => {
+    const documentId = documentIdFromConfirmation(c);
+    if (!documentId) {
+      toast.error("No document linked to this confirmation.");
+      return;
+    }
+    await openDocumentPreview(documentId, { busyKey: c.id });
+  };
+
+  const viewExistingDocument = async (
+    confirmationId: string,
+    documentId: string,
+    archiveName?: string,
+  ) => {
+    await openDocumentPreview(documentId, {
+      busyKey: confirmationId,
+      fallbackName: archiveName || documentId,
+    });
   };
 
   const decide = async (id: string, decision: "confirm" | "reject") => {
@@ -364,7 +390,8 @@ export function ConfirmGate({
           </CardTitle>
           <CardDescription className="text-xs">
             View the file, edit archive naming, then Confirm. QR-Rechnung cards show Zahlteil fields
-            and archive / paid→ledger toggles. Confirm writes Drive/ledger; Decline leaves external
+            and archive / paid→ledger toggles. Likely already-filed matches offer Open existing or
+            File anyway — never auto-skipped. Confirm writes Drive/ledger; Decline leaves external
             systems unchanged.
           </CardDescription>
         </CardHeader>
@@ -484,6 +511,17 @@ export function ConfirmGate({
                     </div>
                   ) : null}
 
+                  {draft && (c.action === "archive.commit" || c.action === "ledger.write") ? (
+                    <NearDuplicateRadar
+                      draft={draft}
+                      excludeDocumentId={documentId}
+                      onHitsChange={(hasHits) =>
+                        setNearDupeIds((prev) => ({ ...prev, [c.id]: hasHits }))
+                      }
+                      onOpenExisting={(id, name) => void viewExistingDocument(c.id, id, name)}
+                    />
+                  ) : null}
+
                   <div className="flex flex-wrap shrink-0 gap-2">
                     {documentId ? (
                       <Button
@@ -501,7 +539,7 @@ export function ConfirmGate({
                       disabled={busyId === c.id}
                       onClick={() => void decide(c.id, "confirm")}
                     >
-                      Confirm
+                      {nearDupeIds[c.id] ? "File anyway" : "Confirm"}
                     </Button>
                     <Button
                       size="sm"
