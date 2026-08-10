@@ -21,7 +21,7 @@ export function taxonomyFolderName(archiveCategory: number): string {
   return `${String(archiveCategory).padStart(2, "0")}_${label}`;
 }
 
-function guessMime(filePath: string, fallback?: string | null): string {
+export function guessMime(filePath: string, fallback?: string | null): string {
   const ext = path.extname(filePath).toLowerCase();
   switch (ext) {
     case ".pdf":
@@ -33,9 +33,29 @@ function guessMime(filePath: string, fallback?: string | null): string {
       return "image/jpeg";
     case ".webp":
       return "image/webp";
+    case ".heic":
+    case ".heif":
+      return "image/heic";
     default:
       return fallback || "application/octet-stream";
   }
+}
+
+/**
+ * Keep archive filename extension aligned with the real source bytes.
+ * Prevents PNG (or JPEG) content being filed/uploaded as a misleading `.pdf`.
+ */
+export function reconcileArchiveExtension(
+  archiveName: string,
+  sourcePath: string,
+): string {
+  const safeBase = path.basename(archiveName || "document").replace(/[<>:"|?*\\/]/g, "_");
+  const sourceExt = path.extname(sourcePath).toLowerCase();
+  if (!sourceExt) return safeBase || "document";
+  const parsed = path.parse(safeBase || "document");
+  const nameExt = parsed.ext.toLowerCase();
+  if (nameExt === sourceExt) return `${parsed.name || "document"}${sourceExt}`;
+  return `${parsed.name || "document"}${sourceExt}`;
 }
 
 /**
@@ -52,7 +72,7 @@ export async function commitDocumentToArchive(opts: {
   const profileId = opts.profileId || getActiveProfileId();
   if (!profileId) throw new Error("No active profile for archive commit");
 
-  const safeName = path.basename(opts.archiveName).replace(/[<>:"|?*\\/]/g, "_");
+  const safeName = reconcileArchiveExtension(opts.archiveName, opts.sourcePath);
   const folderLabel = taxonomyFolderName(opts.archiveCategory);
   const destDir = path.join(profileArchiveDir(profileId), folderLabel);
   fs.mkdirSync(destDir, { recursive: true });
@@ -65,13 +85,15 @@ export async function commitDocumentToArchive(opts: {
 
   await fsp.copyFile(opts.sourcePath, destPath);
 
+  const mimeType = guessMime(destPath, opts.mimeType);
+
   let drive: DriveUploadResult | null = null;
   let driveError: string | null = null;
   try {
     drive = await uploadFileToDrive({
       localPath: destPath,
       name: path.basename(destPath),
-      mimeType: guessMime(destPath, opts.mimeType),
+      mimeType,
       archiveCategory: opts.archiveCategory,
     });
   } catch (err) {

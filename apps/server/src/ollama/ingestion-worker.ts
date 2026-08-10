@@ -12,6 +12,8 @@ import {
   suggestArchiveName,
 } from "../specialists/roster.js";
 import { prepareDocumentForOcr, prepareWarning } from "../ingest/pdf-prepare.js";
+import { imagesToPdf } from "../ingest/images-to-pdf.js";
+import { guessMime } from "../archive/commit.js";
 import {
   expandSegmentsForPhoneScanner,
   mergeContinuationGroups,
@@ -125,11 +127,30 @@ async function createConfirmForExtraction(opts: {
   archiveName: string;
   archiveCategory: number;
   deadline: Date | null;
+  documentType: string;
+  extension: string;
+  mimeType: string;
 }): Promise<void> {
-  const { prisma, documentId, structured, archiveName, archiveCategory, deadline } = opts;
+  const {
+    prisma,
+    documentId,
+    structured,
+    archiveName,
+    archiveCategory,
+    deadline,
+    documentType,
+    extension,
+    mimeType,
+  } = opts;
   const entity = String(
     structured.creditorName ?? structured.vendor ?? structured.provider ?? "Unknown",
   );
+  const namingMeta = {
+    documentType,
+    entity,
+    sourceExtension: extension,
+    mimeType,
+  };
   const iban = structured.iban ? String(structured.iban) : "";
   const hasQr =
     Boolean(structured.hasSwissQrBill) ||
@@ -159,6 +180,7 @@ async function createConfirmForExtraction(opts: {
         archiveName,
         archiveCategory,
         openAmount: amountNum == null,
+        ...namingMeta,
       },
     });
     return;
@@ -181,6 +203,7 @@ async function createConfirmForExtraction(opts: {
         date: safeDateOrNow(structured.date).toISOString(),
         archiveName,
         archiveCategory,
+        ...namingMeta,
       },
     });
     return;
@@ -197,6 +220,7 @@ async function createConfirmForExtraction(opts: {
       archiveCategory,
       deadline: deadline ? deadline.toISOString() : null,
       createFristenTask: Boolean(deadline),
+      ...namingMeta,
     },
   });
 }
@@ -235,6 +259,9 @@ async function persistExtraction(opts: {
   // Invalid OCR dueDate must become null — never Invalid Date into Prisma.
   const deadline = safeDate(structured.dueDate);
 
+  const doc = await prisma.document.findUnique({ where: { id: documentId } });
+  const mimeType = doc?.mimeType || guessMime(`file${extension}`, null);
+
   await prisma.document.update({
     where: { id: documentId },
     data: {
@@ -252,12 +279,17 @@ async function persistExtraction(opts: {
     archiveName,
     archiveCategory,
     deadline,
+    documentType: docType,
+    extension,
+    mimeType,
   });
 }
 
 /**
- * Materialize a confirmable segment as its own archivable file (segment page PNG),
- * never the unsplit multipage parent PDF.
+ * Materialize a confirmable segment as its own archivable file.
+ * Multipage segments (e.g. Genius Scan "Seite 1 von N") become a real PDF so
+ * archive naming/extension match the bytes. Single-page segments keep the
+ * raster extension (usually .png).
  */
 async function materializeSegmentOriginal(
   destDir: string,
@@ -268,12 +300,39 @@ async function materializeSegmentOriginal(
   for (const page of segment.pages) {
     await fs.copyFile(page.path, path.join(pagesDir, page.file));
   }
+
+  if (segment.pages.length > 1) {
+    const storagePath = path.join(destDir, "original.pdf");
+    try {
+      const built = await imagesToPdf(
+        segment.pages.map((p) => p.path),
+        storagePath,
+      );
+      if (built) {
+        const fileSize = (await fs.stat(storagePath)).size;
+        return {
+          storagePath,
+          mimeType: "application/pdf",
+          fileSize,
+          extension: ".pdf",
+        };
+      }
+    } catch {
+      // Fall through to first-page raster when PyMuPDF is unavailable/broken.
+    }
+  }
+
   const primary = segment.pages[0]!;
   const extension = path.extname(primary.file) || ".png";
   const storagePath = path.join(destDir, `original${extension}`);
   await fs.copyFile(primary.path, storagePath);
   const fileSize = (await fs.stat(storagePath)).size;
-  return { storagePath, mimeType: "image/png", fileSize, extension };
+  return {
+    storagePath,
+    mimeType: guessMime(storagePath, "image/png"),
+    fileSize,
+    extension,
+  };
 }
 
 function segmentRangeLabel(segment: PageSegment): string {
