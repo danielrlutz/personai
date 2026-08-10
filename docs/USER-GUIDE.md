@@ -144,6 +144,7 @@ Also listed in **First-launch setup** → **Archive**. Naming pattern after conf
 ### Step G — Optional comfort settings
 
 - **Theme & lock** — theme **system** / **dark** / **light**; optional **Set 4–8 digit PIN** → **Enable PIN** (locks UI on tab hide / idle; database still sealed by password).
+- **Sealed suitcase** — export a password-sealed `.pao` (optional local archive); import stages a **new** sealed profile for confirm (session stays on the current profile).
 - **Password & encryption** — **Change password** anytime.
 - **About you / Personality vault** — edit local markdown (`USER.md`, `SOUL.md`, `preferences.md`, `people.md`, `ADHD.md`) under the profile’s `memory/` folder. Staff and specialists inject budgeted slices (e.g. hotel budget, Cham/Zug). Distinct from the **Soul News** home widget.
 - **Memory facts** — short key/value facts specialists should remember → **Add**. Distill from chats still waits for **Needs your confirmation** before writing.

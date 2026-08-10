@@ -27,6 +27,10 @@ import {
 } from "../memory/filing-memory.js";
 import { persistUserSkill } from "../skills/registry.js";
 import { buildFristKitPayload } from "../legal/frist-kit.js";
+import {
+  applySuitcaseImport,
+  discardSuitcaseStaging,
+} from "../suitcase/service.js";
 
 async function fileDocumentToArchive(prisma, documentId, payload) {
   const doc = await prisma.document.findUnique({ where: { id: documentId } });
@@ -435,6 +439,17 @@ export async function resolveConfirmation(prisma, id, decision) {
   if (!pending) throw new Error("Confirmation not found");
   if (pending.status !== "pending") throw new Error(`Already ${pending.status}`);
   if (decision === "reject") {
+    if (pending.action === "suitcase.import") {
+      const rejectPayload = parsePayload(pending.payload);
+      const stagingId = rejectPayload.stagingId ? String(rejectPayload.stagingId) : "";
+      if (stagingId) {
+        try {
+          await discardSuitcaseStaging(stagingId);
+        } catch (err) {
+          console.warn("[suitcase] staging cleanup on reject failed:", err);
+        }
+      }
+    }
     const updated = await markConfirmation(prisma, id, "rejected");
     await prisma.auditLog.create({
       data: {
@@ -520,6 +535,12 @@ export async function resolveConfirmation(prisma, id, decision) {
         specialists,
         body,
       });
+      break;
+    }
+    case "suitcase.import": {
+      const stagingId = String(payload.stagingId ?? "").trim();
+      if (!stagingId) throw new Error("suitcase.import requires stagingId");
+      result = await applySuitcaseImport(stagingId);
       break;
     }
     default:

@@ -19,6 +19,8 @@ const ACTION_LABELS: Record<string, string> = {
   "calendar.event_staged": "Calendar staged locally",
   "fristen.calendar_pack": "Fristen calendar pack (.ics)",
   "legal.frist_kit": "Legal Frist kit",
+  "suitcase.import": "Import sealed suitcase",
+  "suitcase.export": "Export sealed suitcase",
   "confirm.accept": "Confirmed",
   "confirm.reject": "Rejected",
 };

@@ -15,13 +15,14 @@ import {
   Scale,
   HeartPulse,
   Wand2,
-  } from "lucide-react";,
-  import { ProductSettingsCard } from "@/components/settings/ProductSettingsCard";,
-  import { DriveTaxonomyHealth } from "@/components/settings/DriveTaxonomyHealth";,
-  import { PersonalityVaultCard } from "@/components/settings/PersonalityVaultCard";,
-  import { SkillsStudioCard } from "@/components/settings/SkillsStudioCard";,
-  import { InstallAppCard } from "@/components/shared/InstallAppCard";,
-  import {,
+} from "lucide-react";
+import { ProductSettingsCard } from "@/components/settings/ProductSettingsCard";
+import { DriveTaxonomyHealth } from "@/components/settings/DriveTaxonomyHealth";
+import { PersonalityVaultCard } from "@/components/settings/PersonalityVaultCard";
+import { SkillsStudioCard } from "@/components/settings/SkillsStudioCard";
+import { SealedSuitcaseCard } from "@/components/settings/SealedSuitcaseCard";
+import { InstallAppCard } from "@/components/shared/InstallAppCard";
+import {
   clearAppPin,
   getIdleLockMs,
   isLockEnabled,
@@ -996,6 +997,8 @@ export default function SettingsPage() {
       </Card>
 
       <PersonalityVaultCard />
+
+      <SealedSuitcaseCard />
 
       <Card>
         <CardHeader>
