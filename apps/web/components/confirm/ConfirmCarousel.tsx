@@ -5,6 +5,7 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { PendingConfirmation } from "@/lib/api-client";
 import type { ArchiveDraft } from "@/lib/archive-naming";
+import type { QrConfirmFields } from "@/lib/qr-confirm";
 import { easeHospitality } from "@/lib/motion";
 import { Button } from "@/components/ui/button";
 import { ConfirmItemCard } from "./ConfirmItemCard";
@@ -12,6 +13,7 @@ import { ConfirmItemCard } from "./ConfirmItemCard";
 export interface ConfirmCarouselProps {
   items: PendingConfirmation[];
   drafts: Record<string, ArchiveDraft>;
+  qrDrafts?: Record<string, QrConfirmFields>;
   index: number;
   onIndexChange: (index: number) => void;
   busyId: string | null;
@@ -19,17 +21,20 @@ export interface ConfirmCarouselProps {
   applyEntityToRemaining: boolean;
   onApplyEntityChange: (value: boolean) => void;
   onDraftChange: (id: string, draft: ArchiveDraft) => void;
+  onQrChange?: (id: string, qr: QrConfirmFields) => void;
   onSaveDraft: (id: string) => void;
   onView: (c: PendingConfirmation) => void;
   onOpenExisting?: (confirmationId: string, documentId: string, archiveName?: string) => void;
   onConfirm: (id: string) => void;
   onDecline: (id: string) => void;
   onFlagReinspect?: (id: string) => void;
+  onQueueFrist?: (c: PendingConfirmation) => void;
 }
 
 export function ConfirmCarousel({
   items,
   drafts,
+  qrDrafts = {},
   index,
   onIndexChange,
   busyId,
@@ -37,12 +42,14 @@ export function ConfirmCarousel({
   applyEntityToRemaining,
   onApplyEntityChange,
   onDraftChange,
+  onQrChange,
   onSaveDraft,
   onView,
   onOpenExisting,
   onConfirm,
   onDecline,
   onFlagReinspect,
+  onQueueFrist,
 }: ConfirmCarouselProps) {
   const reduce = useReducedMotion();
   const safeIndex = Math.min(Math.max(index, 0), Math.max(items.length - 1, 0));
@@ -126,12 +133,16 @@ export function ConfirmCarousel({
             <ConfirmItemCard
               confirmation={current}
               draft={drafts[current.id] ?? null}
+              qr={qrDrafts[current.id] ?? null}
               busy={busyId === current.id}
               previewBusy={previewBusyId === current.id}
               remainingCount={remainingAfter}
               applyEntityToRemaining={applyEntityToRemaining}
               onApplyEntityChange={onApplyEntityChange}
               onDraftChange={(d) => onDraftChange(current.id, d)}
+              onQrChange={
+                onQrChange ? (next) => onQrChange(current.id, next) : undefined
+              }
               onSaveDraft={() => onSaveDraft(current.id)}
               onView={() => onView(current)}
               onOpenExisting={(documentId, archiveName) =>
@@ -141,6 +152,9 @@ export function ConfirmCarousel({
               onDecline={() => onDecline(current.id)}
               onFlagReinspect={
                 onFlagReinspect ? () => onFlagReinspect(current.id) : undefined
+              }
+              onQueueFrist={
+                onQueueFrist ? () => onQueueFrist(current) : undefined
               }
               stackActions
             />

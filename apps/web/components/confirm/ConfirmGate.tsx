@@ -47,8 +47,10 @@ import {
   qrFieldsFromPayload,
   type QrConfirmFields,
 } from "@/lib/qr-confirm";
+import { ConfirmCarousel } from "./ConfirmCarousel";
 import { QrConfirmCockpit } from "./QrConfirmCockpit";
 import { NearDuplicateRadar } from "./NearDuplicateRadar";
+import { useNarrowViewport } from "./useNarrowViewport";
 
 interface ConfirmGateProps {
   refreshKey?: number;
@@ -198,6 +200,7 @@ export function ConfirmGate({
   showEmpty = false,
 }: ConfirmGateProps) {
   const router = useRouter();
+  const narrow = useNarrowViewport();
   const [items, setItems] = useState<PendingConfirmation[]>([]);
   const [drafts, setDrafts] = useState<Record<string, ArchiveDraft>>({});
   const [qrDrafts, setQrDrafts] = useState<Record<string, QrConfirmFields>>({});
@@ -209,6 +212,8 @@ export function ConfirmGate({
   const [driveJobIds, setDriveJobIds] = useState<string[]>([]);
   /** Confirmation ids with near-duplicate hits (Confirm → File anyway). */
   const [nearDupeIds, setNearDupeIds] = useState<Record<string, boolean>>({});
+  const [carouselIndex, setCarouselIndex] = useState(0);
+  const [applyEntityToRemaining, setApplyEntityToRemaining] = useState(false);
 
   const closePreview = useCallback(() => {
     setPreview((prev) => {
@@ -246,6 +251,7 @@ export function ConfirmGate({
         }
         return kept;
       });
+      setCarouselIndex((i) => Math.min(i, Math.max(data.confirmations.length - 1, 0)));
       setError(null);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to load confirmations";
@@ -380,8 +386,53 @@ export function ConfirmGate({
     }
   };
 
+  const applyEntityAcrossRemaining = async (
+    entity: string,
+    remaining: PendingConfirmation[],
+    draftsSnapshot: Record<string, ArchiveDraft>,
+  ) => {
+    const trimmed = entity.trim();
+    if (!trimmed || remaining.length === 0) return;
+
+    setDrafts((prev) => {
+      const next = { ...prev };
+      for (const c of remaining) {
+        const d = next[c.id];
+        if (d) next[c.id] = { ...d, entity: trimmed };
+      }
+      return next;
+    });
+
+    await Promise.allSettled(
+      remaining.map(async (c) => {
+        const d = draftsSnapshot[c.id];
+        if (!d) return;
+        const updated = { ...d, entity: trimmed };
+        const archiveName = buildArchiveName(updated);
+        await apiPatch(
+          `/confirmations/${c.id}`,
+          {
+            archiveName,
+            archiveCategory: updated.archiveCategory,
+            summary: `File as ${archiveName} (folder ${updated.archiveCategory})`,
+          },
+          { silent: true },
+        );
+      }),
+    );
+
+    toast.success(`Entity “${trimmed}” applied to ${remaining.length} remaining.`);
+  };
+
   const decide = async (id: string, decision: "confirm" | "reject") => {
     setBusyId(id);
+    const idx = items.findIndex((c) => c.id === id);
+    const remaining = idx >= 0 ? items.slice(idx + 1) : [];
+    const draftsSnapshot = drafts;
+    const entityForStack =
+      decision === "confirm" && applyEntityToRemaining
+        ? draftsSnapshot[id]?.entity?.trim()
+        : "";
     try {
       if (decision === "confirm") {
         const patch: Record<string, unknown> = {};
@@ -411,7 +462,15 @@ export function ConfirmGate({
         undefined,
         { silent: true },
       );
+
+      if (entityForStack) {
+        await applyEntityAcrossRemaining(entityForStack, remaining, draftsSnapshot);
+      }
+
       await load();
+      if (idx >= 0) {
+        setCarouselIndex(Math.min(idx, Math.max(remaining.length - 1, 0)));
+      }
       onResolved?.(decision);
       if (decision === "reject") {
         toast.success("Declined — external systems unchanged; local staging kept.");
@@ -440,6 +499,8 @@ export function ConfirmGate({
       setBusyId(null);
     }
   };
+
+  const useCarousel = narrow && !compact && items.length > 0;
 
   const pulseStrip = (
     <DriveJobPulseStrip jobIds={driveJobIds} compact={compact} className="mb-3" />
@@ -480,15 +541,47 @@ export function ConfirmGate({
             <Badge variant="outline">{items.length}</Badge>
           </CardTitle>
           <CardDescription className="text-xs">
-            View the file, edit archive naming, then Confirm. Flag for closer inspection re-reads
-            neighbor pages with a stronger model — still confirm-gated when Ready. QR-Rechnung cards
-            show Zahlteil fields and archive / paid→ledger toggles. Likely already-filed matches
-            offer Open existing or File anyway — never auto-skipped. Confirm writes Drive/ledger;
-            Decline leaves external systems unchanged.
+            {useCarousel
+              ? "Swipe the stack: View file, edit naming / QR Zahlteil, Flag or Frist kit, then Confirm or Decline. Optional same Entity for a Genius Scan batch."
+              : "View the file, edit archive naming, then Confirm. Flag for closer inspection re-reads neighbor pages with a stronger model — still confirm-gated when Ready. QR-Rechnung cards show Zahlteil fields and archive / paid→ledger toggles. Likely already-filed matches offer Open existing or File anyway — never auto-skipped. Confirm writes Drive/ledger; Decline leaves external systems unchanged."}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           {error ? <p className="text-sm text-destructive">{error}</p> : null}
+          {useCarousel ? (
+            <ConfirmCarousel
+              items={items}
+              drafts={drafts}
+              qrDrafts={qrDrafts}
+              index={carouselIndex}
+              onIndexChange={setCarouselIndex}
+              busyId={busyId}
+              previewBusyId={previewBusyId}
+              applyEntityToRemaining={applyEntityToRemaining}
+              onApplyEntityChange={setApplyEntityToRemaining}
+              onDraftChange={(id, draft) =>
+                setDrafts((prev) => ({
+                  ...prev,
+                  [id]: draft,
+                }))
+              }
+              onQrChange={(id, qr) =>
+                setQrDrafts((prev) => ({
+                  ...prev,
+                  [id]: qr,
+                }))
+              }
+              onSaveDraft={(id) => void saveDraft(id)}
+              onView={(c) => void viewDocument(c)}
+              onOpenExisting={(confirmationId, documentId, archiveName) =>
+                void viewExistingDocument(confirmationId, documentId, archiveName)
+              }
+              onConfirm={(id) => void decide(id, "confirm")}
+              onDecline={(id) => void decide(id, "reject")}
+              onFlagReinspect={(id) => void flagReinspect(id)}
+              onQueueFrist={(c) => void queueFristKit(c)}
+            />
+          ) : (
           <ul className="space-y-3">
             {items.map((c) => {
               const draft = drafts[c.id];
@@ -674,6 +767,7 @@ export function ConfirmGate({
               );
             })}
           </ul>
+          )}
         </CardContent>
       </Card>
     </>

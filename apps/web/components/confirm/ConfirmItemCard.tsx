@@ -17,8 +17,11 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import type { QrConfirmFields } from "@/lib/qr-confirm";
 import { documentIdFromConfirmation } from "./confirm-utils";
+import { FristKitButton, FristKitHint } from "./FristKitActions";
 import { NearDuplicateRadar } from "./NearDuplicateRadar";
+import { QrConfirmCockpit } from "./QrConfirmCockpit";
 
 function badgeVariantForReinspect(
   status: ReinspectStatus,
@@ -59,6 +62,11 @@ export interface ConfirmItemCardProps {
   onDecline: () => void;
   /** Flag incomplete confirm for neighbor OCR + higher-tier refine. */
   onFlagReinspect?: () => void;
+  /** QR-Rechnung Zahlteil + archive/paid toggles (carousel + shared card). */
+  qr?: QrConfirmFields | null;
+  onQrChange?: (next: QrConfirmFields) => void;
+  /** Queue Frist kit propose (Legal task + staged calendar). */
+  onQueueFrist?: () => void;
   /** Tighter actions layout for carousel. */
   stackActions?: boolean;
 }
@@ -78,10 +86,14 @@ export function ConfirmItemCard({
   onConfirm,
   onDecline,
   onFlagReinspect,
+  qr = null,
+  onQrChange,
+  onQueueFrist,
   stackActions = false,
 }: ConfirmItemCardProps) {
   const documentId = documentIdFromConfirmation(c);
   const archivePreview = draft ? buildArchiveName(draft) : null;
+  const showArchiveNaming = Boolean(draft) && (!qr || qr.fileArchive);
   const showApplyEntity =
     Boolean(draft) && remainingCount > 0 && typeof onApplyEntityChange === "function";
   const entityHint = draft?.entity?.trim() || "this Entity";
@@ -93,6 +105,7 @@ export function ConfirmItemCard({
   const reinspectBusy =
     reinspectStatus === "flagged" || reinspectStatus === "reinspecting";
   const actionsDisabled = busy || reinspectBusy;
+  const isMarkPaidAction = c.action === "qr.mark_paid";
 
   return (
     <div className="space-y-3">
@@ -110,7 +123,16 @@ export function ConfirmItemCard({
         </p>
       </div>
 
-      {draft ? (
+      {qr && onQrChange ? (
+        <QrConfirmCockpit
+          fields={qr}
+          isMarkPaidAction={isMarkPaidAction}
+          busy={busy}
+          onChange={onQrChange}
+        />
+      ) : null}
+
+      {showArchiveNaming && draft ? (
         <div className="grid gap-2 sm:grid-cols-2">
           <label className="space-y-1 text-xs text-muted-foreground">
             Date
@@ -200,6 +222,8 @@ export function ConfirmItemCard({
         </label>
       ) : null}
 
+      <FristKitHint confirmation={c} />
+
       <div
         className={
           stackActions
@@ -230,6 +254,13 @@ export function ConfirmItemCard({
             <Flag className="mr-1 h-3.5 w-3.5" />
             {flagButtonLabel(reinspectStatus)}
           </Button>
+        ) : null}
+        {onQueueFrist ? (
+          <FristKitButton
+            confirmation={c}
+            busy={actionsDisabled}
+            onQueue={onQueueFrist}
+          />
         ) : null}
         <div className={stackActions ? "grid grid-cols-2 gap-2" : "contents"}>
           <Button
