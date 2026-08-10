@@ -15,14 +15,17 @@ import { prepareDocumentForOcr, prepareWarning } from "../ingest/pdf-prepare.js"
 import { imagesToPdf } from "../ingest/images-to-pdf.js";
 import { guessMime } from "../archive/commit.js";
 import {
-  expandSegmentsForPhoneScanner,
-  mergeContinuationGroups,
   mergePageExtractions,
+  segmentBlankRunsAfterOcr,
   segmentBulkPages,
   type PageSegment,
   type PreparedPage,
 } from "../ingest/bulk-split.js";
 import { OCR_PROMPT, parseStructured } from "../ingest/ocr-prompt.js";
+import {
+  normalizeStructuredExtraction,
+  pickArchiveEntity,
+} from "../ingest/normalize-extraction.js";
 import {
   findSwissQrInPng,
   isLikelySwissIban,
@@ -32,6 +35,7 @@ import {
   finalizeCancelledJob,
   isCancelRequested,
 } from "../ingest/cancel-job.js";
+import { archiveTypeToken, normalizeDocumentType } from "../archive/doc-type-tokens.js";
 import { safeDate, safeDateOrNow, safeFiniteNumber } from "../lib/safe-data.js";
 import { tickServerJobs, recoverStaleServerJobs } from "../jobs/server-jobs.js";
 
@@ -42,17 +46,6 @@ let timer: NodeJS.Timeout | null = null;
 let serverJobTimer: NodeJS.Timeout | null = null;
 let serverJobRunning = false;
 
-const DOC_TYPES = [
-  "BILL",
-  "MEDICAL_RECORD",
-  "LEGAL",
-  "CONTRACT",
-  "RECEIPT",
-  "OFFICIAL",
-  "OTHER",
-] as const;
-type DocType = (typeof DOC_TYPES)[number];
-
 type PageOcr = {
   page: PreparedPage;
   raw: string;
@@ -60,9 +53,8 @@ type PageOcr = {
   qr: SwissQrBill | null;
 };
 
-function asDocType(value: unknown): DocType {
-  const s = String(value ?? "OTHER");
-  return (DOC_TYPES as readonly string[]).includes(s) ? (s as DocType) : "OTHER";
+function asDocType(value: unknown) {
+  return normalizeDocumentType(value);
 }
 
 function applySwissQr(structured: Record<string, unknown>, qr: SwissQrBill | null): Record<string, unknown> {
@@ -98,7 +90,7 @@ async function ocrPage(opts: { host: string; page: PreparedPage }): Promise<Page
   return {
     page: opts.page,
     raw,
-    structured: applySwissQr(parseStructured(raw), qr),
+    structured: normalizeStructuredExtraction(applySwissQr(parseStructured(raw), qr)),
     qr,
   };
 }
@@ -109,9 +101,8 @@ function combinePageOcrs(pages: PageOcr[]): {
   qr: SwissQrBill | null;
 } {
   const qr = pages.find((p) => p.qr)?.qr ?? null;
-  const structured = applySwissQr(
-    mergePageExtractions(pages.map((p) => p.structured)),
-    qr,
+  const structured = normalizeStructuredExtraction(
+    applySwissQr(mergePageExtractions(pages.map((p) => p.structured)), qr),
   );
   const raw = JSON.stringify({
     pages: pages.map((p) => ({
@@ -145,11 +136,10 @@ async function createConfirmForExtraction(opts: {
     extension,
     mimeType,
   } = opts;
-  const entity = String(
-    structured.creditorName ?? structured.vendor ?? structured.provider ?? "Unknown",
-  );
+  const entity = pickArchiveEntity(structured);
   const namingMeta = {
     documentType,
+    displayType: archiveTypeToken(documentType),
     entity,
     sourceExtension: extension,
     mimeType,
@@ -248,19 +238,18 @@ async function persistExtraction(opts: {
     },
   });
 
-  const docType = asDocType(structured.documentType);
-  const entity = String(
-    structured.creditorName ?? structured.vendor ?? structured.provider ?? "Unknown",
-  );
+  const normalized = normalizeStructuredExtraction(structured);
+  const docType = asDocType(normalized.documentType);
+  const entity = pickArchiveEntity(normalized);
   const archiveName = suggestArchiveName({
-    date: structured.date ? String(structured.date) : null,
+    date: normalized.date ? String(normalized.date) : null,
     documentType: docType,
     entity,
     extension,
   });
   const archiveCategory = suggestArchiveCategory(docType);
   // Invalid OCR dueDate must become null — never Invalid Date into Prisma.
-  const deadline = safeDate(structured.dueDate);
+  const deadline = safeDate(normalized.dueDate);
 
   const doc = await prisma.document.findUnique({ where: { id: documentId } });
   const mimeType = doc?.mimeType || guessMime(`file${extension}`, null);
@@ -278,7 +267,7 @@ async function persistExtraction(opts: {
   await createConfirmForExtraction({
     prisma,
     documentId,
-    structured,
+    structured: normalized,
     archiveName,
     archiveCategory,
     deadline,
@@ -306,23 +295,23 @@ async function materializeSegmentOriginal(
 
   if (segment.pages.length > 1) {
     const storagePath = path.join(destDir, "original.pdf");
-    try {
-      const built = await imagesToPdf(
-        segment.pages.map((p) => p.path),
-        storagePath,
+    const built = await imagesToPdf(
+      segment.pages.map((p) => p.path),
+      storagePath,
+    );
+    if (!built) {
+      // Never silently archive page-1 only — that drops related multipage series.
+      throw new Error(
+        `imagesToPdf unavailable; refusing to drop ${segment.pages.length - 1} page(s) from multipage segment`,
       );
-      if (built) {
-        const fileSize = (await fs.stat(storagePath)).size;
-        return {
-          storagePath,
-          mimeType: "application/pdf",
-          fileSize,
-          extension: ".pdf",
-        };
-      }
-    } catch {
-      // Fall through to first-page raster when PyMuPDF is unavailable/broken.
     }
+    const fileSize = (await fs.stat(storagePath)).size;
+    return {
+      storagePath,
+      mimeType: "application/pdf",
+      fileSize,
+      extension: ".pdf",
+    };
   }
 
   const primary = segment.pages[0]!;
@@ -475,11 +464,10 @@ async function processJob(profileId: string, jobId: string): Promise<void> {
     });
     const warning = prepareWarning(prepared);
 
-    // Blank-page split → phone-scanner per-page expansion
-    let leafPages = expandSegmentsForPhoneScanner(segmentBulkPages(prepared.pages), {
-      pageCount: prepared.manifest?.pageCount ?? prepared.pages.length,
-      creator: prepared.creator,
-    }).flatMap((s) => s.pages);
+    // Blank separators = hard boundaries. Keep related pages together; only split
+    // after OCR when high-confidence signals (distinct Swiss QR / completed series).
+    const blankSegments = segmentBulkPages(prepared.pages);
+    let leafPages = blankSegments.flatMap((s) => s.pages);
 
     if (leafPages.length === 0) {
       leafPages = prepared.pages.filter((p) => !p.blank);
@@ -501,11 +489,20 @@ async function processJob(profileId: string, jobId: string): Promise<void> {
       return;
     }
 
-    // Re-merge "Seite 1 von N" continuations after OCR
-    const finalSegments = mergeContinuationGroups(
-      leafPages,
-      pageOcrs.map((p) => p.structured),
+    const ocrStructuredByPage = new Map(
+      pageOcrs.map((p) => [p.page.pageNumber, p.structured]),
     );
+    const runs =
+      blankSegments.length > 0
+        ? blankSegments
+        : [
+            {
+              pages: leafPages,
+              startPage: leafPages[0]!.pageNumber,
+              endPage: leafPages[leafPages.length - 1]!.pageNumber,
+            },
+          ];
+    const finalSegments = segmentBlankRunsAfterOcr(runs, ocrStructuredByPage);
 
     const ocrByPage = new Map(pageOcrs.map((p) => [p.page.pageNumber, p]));
     const [firstSeg, ...restSegs] = finalSegments;

@@ -298,7 +298,7 @@ export function ConfirmGate({
                               [c.id]: { ...draft, docType: e.target.value },
                             }))
                           }
-                          placeholder="BILL"
+                          placeholder="Invoice"
                         />
                       </label>
                       <label className="space-y-1 text-xs text-muted-foreground sm:col-span-2">

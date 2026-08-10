@@ -44,9 +44,10 @@ const nameFromGarbage = suggestArchiveName({
   entity: "Unknown",
   extension: ".png",
 });
-assert.equal(nameFromGarbage, `${today}_OTHER_Unknown.png`);
+assert.equal(nameFromGarbage, `${today}_Other_Unknown.png`);
 assert.ok(!nameFromGarbage.startsWith("--"));
 assert.ok(!nameFromGarbage.includes("__OTHER"));
+assert.ok(!nameFromGarbage.includes("BILL"));
 
 const nameEmptyEntity = suggestArchiveName({
   date: "not-a-date",
@@ -54,7 +55,21 @@ const nameEmptyEntity = suggestArchiveName({
   entity: "@@@",
   extension: "png",
 });
-assert.equal(nameEmptyEntity, `${today}_OTHER_Unknown.png`);
+assert.equal(nameEmptyEntity, `${today}_Other_Unknown.png`);
+
+assert.equal(
+  suggestArchiveName({
+    date: "2026-08-10",
+    documentType: "BILL",
+    entity: "Swisscom",
+    extension: ".pdf",
+  }),
+  "2026-08-10_Invoice_Swisscom.pdf",
+);
+
+// CH OCR date form
+assert.equal(archiveDatePrefix("10.08.2026"), "2026-08-10");
+assert.ok(safeDate("09.08.2026") instanceof Date);
 
 assert.equal(sanitizeArchiveEntity("  "), "Unknown");
 assert.equal(sanitizeExtension("png"), ".png");
@@ -89,7 +104,8 @@ for (const g of garbage) {
     entity: "X",
     extension: ".png",
   });
-  assert.match(name, /^\d{4}-\d{2}-\d{2}_OTHER_X\.png$/);
+  assert.match(name, /^\d{4}-\d{2}-\d{2}_Other_X\.png$/);
+  assert.ok(!name.includes("BILL"));
 }
 
 console.log("safe-data + archive-name + garbage-date stress checks ok");
