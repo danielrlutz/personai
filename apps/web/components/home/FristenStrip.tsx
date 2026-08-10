@@ -5,6 +5,7 @@ import Link from "next/link";
 import { CalendarClock } from "lucide-react";
 import { apiGet, apiPost } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
+import { FristenCalendarPackButton } from "@/components/legal/FristenCalendarPackButton";
 
 type FristItem = {
   id: string;
@@ -56,11 +57,14 @@ export function FristenStrip() {
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="font-display text-lg tracking-tight">Fristen</h2>
-        <Button variant="ghost" size="sm" asChild>
-          <Link href="/legal/">All deadlines</Link>
-        </Button>
+        <div className="flex flex-wrap items-center gap-1">
+          <FristenCalendarPackButton />
+          <Button variant="ghost" size="sm" asChild>
+            <Link href="/legal/">All deadlines</Link>
+          </Button>
+        </div>
       </div>
       <ul className="divide-y divide-border/60 rounded-2xl border border-border bg-card">
         {items.map((item) => (

@@ -1175,8 +1175,9 @@ export default function SettingsPage() {
             </p>
             <ul className="space-y-2 text-sm text-muted-foreground">
               <li>
-                <span className="font-medium text-foreground">Google Calendar write</span> — proposes
-                can be confirmed and staged locally; remote calendar create is not configured.
+                <span className="font-medium text-foreground">Google Calendar write</span> — Fristen
+                can be staged locally and exported as <span className="font-mono">.ics</span>; remote
+                Google create is not configured yet.
               </li>
               <li>
                 <span className="font-medium text-foreground">Telegram / bot migration</span> — PersonAI

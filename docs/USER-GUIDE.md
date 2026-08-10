@@ -186,6 +186,8 @@ On **Home**, the **Fristen** strip shows open deadlines.
 - **Done** — mark a legal task finished.
 - **All deadlines** — opens **Legal**.
 - Document-linked items can jump to **Archive**.
+- **Stage + .ics** (Home Fristen or Legal) — stages deadlines locally and downloads a portable .ics pack. Google Calendar write is not wired yet; import the file into any calendar app.
+- Morning **Brief** lists Fristen due within **36 hours** (or overdue) first.
 
 ### Team specialists
 
