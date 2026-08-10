@@ -96,6 +96,7 @@ Check status: `GET /archive/drive` (includes `linked` + archive context) or `dri
 | **Session** | Opaque Bearer token (SHA-256 stored server-side in `data/sessions.json`). Sent as `Authorization: Bearer …`. |
 | **API lock** | All routes except `GET /health`, `GET /profiles`, `POST /auth/login`, `POST /auth/setup` require a valid session. Bare `X-Profile-Id` is **not** a credential. |
 | **At rest** | Profile SQLite is sealed as `personai.db.enc` (AES-256-GCM) with a random DEK wrapped by a password-derived KEK. Sign-out / process exit re-seals and deletes plaintext `personai.db`. |
+| **UI lock** | Optional PIN and/or WebAuthn passkey (platform authenticator) lock the PWA UI after password unlock once. Passkeys need HTTPS; they never unwrap the DB. |
 | **Migration** | Existing profiles without a password must **set one on next open** before entering the app. |
 
 ### User setup
