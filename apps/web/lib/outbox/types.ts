@@ -13,6 +13,8 @@ export interface TeamChatPayload {
   imageBlobKey?: string;
   imageMimeType?: string;
   imageFilename?: string;
+  /** Strict cite-from-archive mode (Legal / CFO / Medical). */
+  citeFromArchive?: boolean;
 }
 
 export interface IngestUploadPayload {

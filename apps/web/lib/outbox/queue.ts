@@ -180,12 +180,14 @@ class OutboxQueue {
     clientMessageId?: string;
     image?: File | Blob;
     imageFilename?: string;
+    citeFromArchive?: boolean;
   }): Promise<OutboxOp> {
     const payload: TeamChatPayload = {
       clientMessageId: input.clientMessageId ?? newId("user"),
       message: input.message.trim(),
       specialist: input.specialist,
       sessionId: input.sessionId,
+      ...(input.citeFromArchive ? { citeFromArchive: true } : {}),
     };
     if (input.image) {
       const blobKey = newId("blob");

@@ -69,6 +69,7 @@ async function processTeamChat(op: OutboxOp<"team-chat">, emit: ProcessEmit): Pr
         message: payload.message,
         sessionId: payload.sessionId,
         specialist: payload.specialist,
+        ...(payload.citeFromArchive ? { citeFromArchive: true } : {}),
         ...(imageBase64
           ? { imageBase64, imageMimeType: payload.imageMimeType }
           : {}),
