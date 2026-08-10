@@ -25,6 +25,8 @@ After unlock you arrive at **Home** (**Morning desk**). Optional guided setup li
 
 ---
 
+**Optional passkey:** After password unlock, Settings → Theme & lock can register a device passkey (Face ID / fingerprint) for the UI lock. Needs HTTPS or localhost.
+
 ## 2. Guided setup and Settings (do this once)
 
 You can use **First-launch setup** (steps: **Identity** → **Local AI** → **Google** → **Archive** → **Alerts** → **Finish setup**), then finish the rest under **Settings**.  

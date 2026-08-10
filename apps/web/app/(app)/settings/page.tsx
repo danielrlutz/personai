@@ -15,18 +15,23 @@ import {
   Scale,
   HeartPulse,
   Wand2,
-} from "lucide-react";
-import { ProductSettingsCard } from "@/components/settings/ProductSettingsCard";
-import { DriveTaxonomyHealth } from "@/components/settings/DriveTaxonomyHealth";
-import { PersonalityVaultCard } from "@/components/settings/PersonalityVaultCard";
-import { SkillsStudioCard } from "@/components/settings/SkillsStudioCard";
-import { InstallAppCard } from "@/components/shared/InstallAppCard";
-import {
+  } from "lucide-react";,
+  import { ProductSettingsCard } from "@/components/settings/ProductSettingsCard";,
+  import { DriveTaxonomyHealth } from "@/components/settings/DriveTaxonomyHealth";,
+  import { PersonalityVaultCard } from "@/components/settings/PersonalityVaultCard";,
+  import { SkillsStudioCard } from "@/components/settings/SkillsStudioCard";,
+  import { InstallAppCard } from "@/components/shared/InstallAppCard";,
+  import {,
   clearAppPin,
   getIdleLockMs,
   isLockEnabled,
   setAppPin,
   setIdleLockMs,
+  canUsePlatformPasskey,
+  clearPasskey,
+  isPasskeyEnabled,
+  isSecureWebAuthnContext,
+  registerPasskey,
 } from "@/lib/app-lock";
 import { getStoredTheme, type ThemePreference } from "@/lib/theme";
 import { setThemePreference } from "@/components/shared/ThemeProvider";
@@ -135,8 +140,14 @@ export default function SettingsPage() {
   const [themePref, setThemePref] = useState<ThemePreference>("system");
   const [pinInput, setPinInput] = useState("");
   const [lockNote, setLockNote] = useState<string | null>(null);
+  const [passkeyReady, setPasskeyReady] = useState(false);
+  const [passkeyOn, setPasskeyOn] = useState(false);
+  const [secureCtx, setSecureCtx] = useState(false);
 
   useEffect(() => {
+    setPasskeyOn(isPasskeyEnabled());
+    setSecureCtx(isSecureWebAuthnContext());
+    void canUsePlatformPasskey().then(setPasskeyReady);
     setThemePref(getStoredTheme());
   }, []);
 
@@ -580,7 +591,8 @@ export default function SettingsPage() {
         <CardHeader>
           <CardTitle className="text-base">Theme & lock</CardTitle>
           <CardDescription>
-            OS follow or override. Optional PIN locks the UI on idle / resume (DB still sealed by password).
+            OS follow or override. Optional PIN or passkey locks the UI on idle / resume after you
+            unlock (DB still sealed by password).
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -628,13 +640,53 @@ export default function SettingsPage() {
                 variant="ghost"
                 onClick={() => {
                   clearAppPin();
-                  setLockNote("PIN cleared.");
+                  setLockNote(passkeyOn ? "PIN cleared — passkey still locks the UI." : "PIN cleared.");
                 }}
               >
-                Disable
+                Disable PIN
               </Button>
             ) : null}
+            {passkeyOn ? (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  clearPasskey();
+                  setPasskeyOn(false);
+                  setLockNote("Passkey removed.");
+                }}
+              >
+                Remove passkey
+              </Button>
+            ) : (
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={!secureCtx || !passkeyReady}
+                onClick={() =>
+                  void registerPasskey()
+                    .then(() => {
+                      setPasskeyOn(true);
+                      setLockNote("Passkey registered — Face ID / fingerprint unlocks the UI lock.");
+                    })
+                    .catch((err) =>
+                      setLockNote(err instanceof Error ? err.message : "Passkey registration failed"),
+                    )
+                }
+              >
+                Register passkey
+              </Button>
+            )}
           </div>
+          {!secureCtx ? (
+            <p className="text-xs text-muted-foreground">
+              Passkeys need HTTPS (Tailscale Serve) or localhost. PIN still works anywhere.
+            </p>
+          ) : !passkeyReady ? (
+            <p className="text-xs text-muted-foreground">
+              No platform authenticator detected — PIN unlock remains available.
+            </p>
+          ) : null}
           <p className="text-xs text-muted-foreground">
             Idle lock: {Math.round(getIdleLockMs() / 60000)} min
             <button
