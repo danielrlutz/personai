@@ -725,6 +725,17 @@ export interface MemoryFact {
   createdAt?: string;
 }
 
+export interface DriveKnowledgeStatus {
+  ready: boolean;
+  fileCount: number;
+  chunkCount: number;
+  withEmbedding: number;
+  embedModel: string | null;
+  lastSyncAt: string | null;
+  lastSyncStatus: string | null;
+  keywordOnly: boolean;
+}
+
 export interface DriveStatus {
   configured: boolean;
   enabled: boolean;
@@ -741,6 +752,7 @@ export interface DriveStatus {
     refreshedAt: string | null;
     indexPreview: string | null;
   };
+  knowledge?: DriveKnowledgeStatus;
 }
 
 export interface DriveOauthStart {
@@ -756,6 +768,24 @@ export interface ArchiveRefreshResult {
   fileCount: number;
   model: string | null;
   message: string;
+  knowledgeJobId?: string | null;
+  status?: DriveStatus;
+  knowledge?: DriveKnowledgeStatus;
+}
+
+export interface DriveKnowledgeReindexResult {
+  ok: boolean;
+  jobId: string;
+  message: string;
+  stats?: {
+    fileCount: number;
+    chunkCount: number;
+    withEmbedding: number;
+    embedModel: string | null;
+    lastSyncAt: string | null;
+    lastSyncStatus: string | null;
+  };
+  knowledge?: DriveKnowledgeStatus;
   status?: DriveStatus;
 }
 

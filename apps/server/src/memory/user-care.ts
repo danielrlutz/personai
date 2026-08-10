@@ -198,6 +198,7 @@ export type ArchiveCareContext = {
   index: string | null;
   taxonomy: string | null;
   refreshedAt: string | null;
+  namingMuscle?: string | null;
 };
 
 export function formatArchiveCareBlock(archive: ArchiveCareContext): string {
@@ -205,12 +206,13 @@ export function formatArchiveCareBlock(archive: ArchiveCareContext): string {
     return `Archive context: NOT AVAILABLE. Google Drive is not linked. Tell the user plainly that you do not have their document archive context yet. Still help with general personal advice in your role. Suggest Settings → Link Google Drive when archive/filing is needed.`;
   }
   if (!archive.ready || !archive.index?.trim()) {
-    return `Archive context: Drive is linked, but the archive index has not been built yet (or is empty). Say so if the user asks about filed documents. Suggest Settings → Refresh archive context.`;
+    return `Archive context: Drive is linked, but the archive index has not been built yet (or is empty). Say so if the user asks about filed documents. Suggest Settings → Refresh archive context or Reindex Drive knowledge.`;
   }
   const bits = [
     `Archive context: READY (Drive linked).`,
     archive.refreshedAt ? `Refreshed: ${archive.refreshedAt}` : null,
     archive.taxonomy ? `Taxonomy folders:\n${archive.taxonomy.slice(0, 800)}` : null,
+    archive.namingMuscle ? `Naming muscle:\n${archive.namingMuscle.slice(0, 600)}` : null,
     `Index:\n${archive.index.slice(0, 1200)}`,
   ].filter(Boolean);
   return bits.join("\n");
@@ -223,6 +225,8 @@ export function formatUserCareContext(opts: {
   liveOps: SlimLiveOps;
   sessionSummary?: string | null;
   archive?: ArchiveCareContext | null;
+  /** Char-budgeted hybrid retrieval hits from local Drive knowledge. */
+  knowledgeBlock?: string | null;
 }): string {
   const blocks = [
     `Profile card: ${compactCeoLine(opts.ceo)}`,
@@ -232,6 +236,9 @@ export function formatUserCareContext(opts: {
     `Memory facts (≤${MEMORY_FACT_INJECT_LIMIT} recent):\n${compactFactsBlock(opts.facts)}`,
     `Live ops (slim JSON):\n${JSON.stringify(opts.liveOps)}`,
   ];
+  if (opts.knowledgeBlock?.trim()) {
+    blocks.push(opts.knowledgeBlock.trim());
+  }
   if (opts.sessionSummary?.trim()) {
     blocks.push(`Session summary:\n${opts.sessionSummary.trim().slice(0, 800)}`);
   }
@@ -239,8 +246,17 @@ export function formatUserCareContext(opts: {
 }
 
 /** Compact profile + memory for briefing narrative (no live ops dump). */
-export function formatBriefingUserCare(ceo: CeoProfileCard, facts: MemoryFactCard[]): string {
-  return `Profile card: ${compactCeoLine(ceo)}\n\nMemory facts (≤${MEMORY_FACT_INJECT_LIMIT} recent):\n${compactFactsBlock(facts)}`;
+export function formatBriefingUserCare(
+  ceo: CeoProfileCard,
+  facts: MemoryFactCard[],
+  knowledgeBlock?: string | null,
+): string {
+  const parts = [
+    `Profile card: ${compactCeoLine(ceo)}`,
+    `Memory facts (≤${MEMORY_FACT_INJECT_LIMIT} recent):\n${compactFactsBlock(facts)}`,
+  ];
+  if (knowledgeBlock?.trim()) parts.push(knowledgeBlock.trim());
+  return parts.join("\n\n");
 }
 
 /** Cheap rolling digest — no extra LLM call. */

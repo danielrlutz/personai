@@ -7,11 +7,17 @@ import { EventEmitter } from "node:events";
 import { getPrisma, getActiveProfileId } from "../db/prisma-singleton.js";
 import { uploadFileToDrive, resolveFolderForCategory, loadDriveConfig } from "../archive/drive.js";
 import { guessMime } from "../archive/commit.js";
+import {
+  SERVER_JOB_DRIVE_KNOWLEDGE_REINDEX,
+  runKnowledgeReindexBatch,
+  type KnowledgeReindexPayload,
+} from "../archive/drive-knowledge/sync.js";
 
 export const serverJobEvents = new EventEmitter();
 
 export const SERVER_JOB_DRIVE_UPLOAD = "drive.upload";
 export const SERVER_JOB_DRIVE_ENSURE = "drive.ensure_folders";
+export { SERVER_JOB_DRIVE_KNOWLEDGE_REINDEX };
 
 export type DriveUploadJobPayload = {
   localPath: string;
@@ -172,6 +178,27 @@ async function processDriveEnsure(
   return { mapped };
 }
 
+async function processKnowledgeReindex(
+  prisma: PrismaClient,
+  profileId: string,
+  job: ServerJob,
+): Promise<Record<string, unknown>> {
+  const payload = parsePayload<KnowledgeReindexPayload>(job.payload);
+  const result = await runKnowledgeReindexBatch({ prisma, profileId, payload });
+  if (result.more) {
+    // Continue as a fresh queued job so each batch is durable / recoverable.
+    await enqueueServerJob(prisma, {
+      type: SERVER_JOB_DRIVE_KNOWLEDGE_REINDEX,
+      payload: {
+        offset: result.offset,
+        batchSize: payload.batchSize,
+        pruneMissing: payload.pruneMissing,
+      },
+    });
+  }
+  return result;
+}
+
 async function processOneJob(profileId: string, jobId: string): Promise<void> {
   const prisma = await getPrisma(profileId);
   const job = await prisma.serverJob.findUnique({ where: { id: jobId } });
@@ -196,6 +223,9 @@ async function processOneJob(profileId: string, jobId: string): Promise<void> {
         break;
       case SERVER_JOB_DRIVE_ENSURE:
         result = await processDriveEnsure(profileId, job);
+        break;
+      case SERVER_JOB_DRIVE_KNOWLEDGE_REINDEX:
+        result = await processKnowledgeReindex(prisma, profileId, job);
         break;
       default:
         throw new Error(`Unknown server job type: ${job.type}`);

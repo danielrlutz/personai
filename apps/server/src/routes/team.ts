@@ -27,8 +27,10 @@ import {
   type ArchiveCareContext,
 } from "../memory/user-care.js";
 import { driveStatus } from "../archive/drive.js";
+import { buildKnowledgeInjection } from "../archive/drive-knowledge/index.js";
 import {
   ARCHIVE_INDEX_KEY,
+  ARCHIVE_NAMING_MUSCLE_KEY,
   ARCHIVE_REFRESHED_KEY,
   ARCHIVE_TAXONOMY_KEY,
 } from "../archive/init-context.js";
@@ -80,6 +82,8 @@ export async function registerTeamRoutes(app: FastifyInstance): Promise<void> {
     prisma: Awaited<ReturnType<typeof withPrisma>>["prisma"],
     specialistId: string,
     sessionSummary: string | null | undefined,
+    retrievalQuery?: string | null,
+    profileId?: string | null,
   ) {
     const [ceo, facts, liveOps, archiveFacts] = await Promise.all([
       getCeoProfileCard(prisma),
@@ -87,7 +91,14 @@ export async function registerTeamRoutes(app: FastifyInstance): Promise<void> {
       buildSlimLiveOps(prisma, specialistId),
       prisma.memoryFact.findMany({
         where: {
-          key: { in: [ARCHIVE_INDEX_KEY, ARCHIVE_TAXONOMY_KEY, ARCHIVE_REFRESHED_KEY] },
+          key: {
+            in: [
+              ARCHIVE_INDEX_KEY,
+              ARCHIVE_TAXONOMY_KEY,
+              ARCHIVE_REFRESHED_KEY,
+              ARCHIVE_NAMING_MUSCLE_KEY,
+            ],
+          },
         },
       }),
     ]);
@@ -100,7 +111,17 @@ export async function registerTeamRoutes(app: FastifyInstance): Promise<void> {
       index: archiveMap.get(ARCHIVE_INDEX_KEY) ?? null,
       taxonomy: archiveMap.get(ARCHIVE_TAXONOMY_KEY) ?? null,
       refreshedAt: archiveMap.get(ARCHIVE_REFRESHED_KEY) ?? null,
+      namingMuscle: archiveMap.get(ARCHIVE_NAMING_MUSCLE_KEY) ?? null,
     };
+    const knowledgeBlock = await buildKnowledgeInjection({
+      profileId: profileId ?? null,
+      query:
+        retrievalQuery?.trim() ||
+        `${specialistId} ${sessionSummary ?? ""}`.trim() ||
+        specialistId,
+      charBudget: 1600,
+      topK: 5,
+    });
     return {
       userCare: formatUserCareContext({
         ceo,
@@ -108,9 +129,11 @@ export async function registerTeamRoutes(app: FastifyInstance): Promise<void> {
         liveOps,
         sessionSummary,
         archive,
+        knowledgeBlock,
       }),
       liveOps,
       archive,
+      knowledgeBlock,
     };
   }
 
@@ -120,7 +143,7 @@ export async function registerTeamRoutes(app: FastifyInstance): Promise<void> {
       reply.status(400).send({ error: "message or image is required" });
       return;
     }
-    const { prisma } = await withPrisma(req);
+    const { prisma, profileId } = await withPrisma(req);
     const specialistId = resolveSpecialistId(body.specialist ?? body.persona);
     const specialist = getSpecialist(specialistId);
     const hasImage = Boolean(body.imageBase64?.trim());
@@ -144,15 +167,17 @@ export async function registerTeamRoutes(app: FastifyInstance): Promise<void> {
       });
     }
 
+    const userText =
+      body.message?.trim() ||
+      (hasImage ? "Please analyze this photo for wardrobe and presentation coaching." : "");
+
     const { userCare, liveOps, archive } = await loadUserCare(
       prisma,
       specialistId,
       session.sessionSummary,
+      userText,
+      profileId,
     );
-
-    const userText =
-      body.message?.trim() ||
-      (hasImage ? "Please analyze this photo for wardrobe and presentation coaching." : "");
 
     await prisma.chatMessage.create({
       data: {
