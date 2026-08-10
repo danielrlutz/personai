@@ -11,17 +11,26 @@ function TeamPageInner() {
   const specialist = params.get("specialist") ?? "secretary";
 
   return (
-    <PageEnter className="flex w-full min-w-0 flex-col gap-2 sm:gap-3">
-      <div className="page-header flex min-w-0 flex-col gap-0.5 sm:flex-row sm:items-end sm:justify-between sm:gap-6">
+    <PageEnter
+      className={
+        // Fill main below app header + padding + mobile nav; chat owns leftover height.
+        "flex h-[calc(100dvh-var(--header-height)-5.75rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] min-h-[22rem] min-w-0 flex-col gap-2 overflow-hidden md:h-[calc(100dvh-var(--header-height)-2.75rem)] md:gap-2.5"
+      }
+    >
+      <div className="page-header flex shrink-0 items-baseline justify-between gap-3">
         <div className="min-w-0">
           <h1 className="page-title">Team</h1>
-          <p className="page-subtitle mt-0.5 max-w-3xl">
+          <p className="page-subtitle mt-0.5 hidden max-w-3xl sm:block">
             Ask your specialists anything. Important changes still ask for confirmation first.
           </p>
         </div>
       </div>
-      <ConfirmGate compact />
-      <TeamChat initialSpecialist={specialist} />
+      <div className="shrink-0">
+        <ConfirmGate compact />
+      </div>
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <TeamChat initialSpecialist={specialist} />
+      </div>
     </PageEnter>
   );
 }

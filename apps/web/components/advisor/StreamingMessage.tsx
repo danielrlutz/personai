@@ -39,9 +39,9 @@ export function StreamingMessage({
         failed && "ring-1 ring-destructive/50",
       )}
     >
-      <p className="mb-1.5 md-label-medium text-muted-foreground">
+      <p className="mb-1.5 text-xs font-medium tracking-[0.02em] text-foreground/55">
         {role === "user" ? "You" : "Advisor"}
-        {pending ? <span className="ml-2 text-muted-foreground/80">Sending…</span> : null}
+        {pending ? <span className="ml-2 text-foreground/45">Sending…</span> : null}
         {failed ? <span className="ml-2 text-destructive">Not sent</span> : null}
       </p>
       <div className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">

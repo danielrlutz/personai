@@ -17,32 +17,47 @@ export function SpecialistPicker({ specialists, value, onChange, disabled }: Spe
   }));
 
   return (
-    <div className="space-y-2.5">
-      {groups.map(({ group, items }) =>
+    <div
+      className="-mx-0.5 flex gap-2 overflow-x-auto overscroll-x-contain px-0.5 pb-0.5 [scrollbar-width:thin]"
+      role="listbox"
+      aria-label="Specialists"
+    >
+      {groups.map(({ group, items }, groupIndex) =>
         items.length === 0 ? null : (
-          <div key={group} className="min-w-0">
-            <p className="mb-1.5 text-xs font-semibold uppercase tracking-[0.06em] text-foreground/70">
+          <div
+            key={group}
+            className={cn(
+              "flex shrink-0 items-center gap-1.5",
+              groupIndex > 0 && "border-l border-border/50 pl-2",
+            )}
+          >
+            <span className="sr-only">{GROUP_LABEL[group]}</span>
+            <span
+              aria-hidden
+              className="hidden text-[10px] font-semibold uppercase tracking-[0.06em] text-foreground/55 sm:inline"
+            >
               {GROUP_LABEL[group]}
-            </p>
-            <div className="grid grid-cols-2 gap-1.5 min-[420px]:grid-cols-3 sm:grid-cols-4 lg:grid-cols-[repeat(auto-fill,minmax(7.5rem,1fr))] sm:gap-2">
+            </span>
+            <div className="flex items-center gap-1.5">
               {items.map((s) => {
                 const selected = value === s.id;
                 return (
                   <button
                     key={s.id}
                     type="button"
+                    role="option"
+                    aria-selected={selected}
                     disabled={disabled}
-                    title={s.description}
-                    aria-pressed={selected}
+                    title={`${s.label} — ${s.description}`}
                     onClick={() => onChange(s.id)}
                     className={cn(
-                      "pressable inline-flex min-h-10 w-full min-w-0 items-center justify-center rounded-full px-3 text-sm font-medium transition-colors duration-md ease-md disabled:opacity-50 sm:px-3.5",
+                      "pressable inline-flex h-9 shrink-0 items-center rounded-full px-3 text-sm font-medium transition-colors duration-md ease-md disabled:opacity-50",
                       selected
-                        ? "bg-primary text-primary-foreground shadow-elev-1 ring-1 ring-primary/30"
-                        : "bg-surface-container text-foreground/80 hover:bg-surface-container-high hover:text-foreground",
+                        ? "bg-primary text-primary-foreground shadow-elev-1 ring-1 ring-primary/25"
+                        : "bg-surface-container text-foreground/85 hover:bg-surface-container-high hover:text-foreground",
                     )}
                   >
-                    <span className="truncate">{s.shortLabel}</span>
+                    {s.shortLabel}
                   </button>
                 );
               })}

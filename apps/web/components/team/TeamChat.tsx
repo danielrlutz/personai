@@ -155,18 +155,25 @@ export function TeamChat({ initialSpecialist = "secretary" }: TeamChatProps) {
     <div
       className={
         showSidePanel
-          ? "grid min-w-0 w-full gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,320px)] xl:grid-cols-[minmax(0,1fr)_minmax(0,360px)] lg:gap-4"
-          : "min-w-0 w-full"
+          ? "grid h-full min-h-0 min-w-0 w-full gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,320px)] xl:grid-cols-[minmax(0,1fr)_minmax(0,360px)] lg:gap-4"
+          : "flex h-full min-h-0 min-w-0 w-full flex-col"
       }
     >
-      <Card className="flex h-[calc(100dvh-9.5rem)] min-h-[20rem] min-w-0 w-full flex-col overflow-hidden hover:shadow-elev-2 md:h-[calc(100dvh-7.25rem)]">
-        <CardHeader className="shrink-0 space-y-2.5 border-b border-border/60 p-3.5 pb-3 sm:p-5 sm:pb-4">
+      <Card className="flex h-full min-h-0 min-w-0 w-full flex-col overflow-hidden hover:shadow-elev-2">
+        <CardHeader className="shrink-0 space-y-2 border-b border-border/60 p-3 pb-2.5 sm:p-4 sm:pb-3">
           <div className="flex min-w-0 items-center justify-between gap-2 sm:gap-3">
             <CardTitle className="flex min-w-0 items-center gap-2 sm:gap-2.5">
               <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-container">
                 <Users className="h-4 w-4 text-primary-on-container" />
               </span>
-              <span className="truncate">Pocket team</span>
+              <span className="min-w-0 truncate">
+                {active?.label ?? "Pocket team"}
+                {active?.preferredModel ? (
+                  <span className="ml-2 hidden font-normal text-muted-foreground sm:inline">
+                    · {active.preferredModel}
+                  </span>
+                ) : null}
+              </span>
             </CardTitle>
             <div className="flex shrink-0 items-center gap-0.5 sm:gap-1">
               <Button variant="ghost" size="sm" onClick={openRemember} disabled={streaming}>
@@ -194,19 +201,11 @@ export function TeamChat({ initialSpecialist = "secretary" }: TeamChatProps) {
             disabled={streaming}
           />
           {active ? (
-            <p className="break-words text-sm leading-relaxed text-muted-foreground">
-              <span className="font-medium text-foreground">{active.label}</span>
-              <span className="text-foreground/50"> — </span>
-              {active.description}
-              {active.preferredModel ? (
-                <span className="text-muted-foreground"> · model {active.preferredModel}</span>
-              ) : null}
-            </p>
+            <p className="truncate text-sm leading-snug text-muted-foreground">{active.description}</p>
           ) : null}
           {drive && !drive.linked ? (
-            <p className="rounded-xl border border-border/50 bg-surface-container px-3.5 py-2.5 text-sm leading-relaxed text-muted-foreground">
-              No archive context yet — this specialist can still advise, but not from your filed
-              documents.{" "}
+            <p className="rounded-lg border border-border/50 bg-surface-container px-3 py-2 text-sm leading-snug text-muted-foreground">
+              No archive context yet.{" "}
               <Link
                 href="/settings/?focus=drive"
                 className="font-semibold text-primary underline-offset-2 hover:underline"
@@ -218,13 +217,13 @@ export function TeamChat({ initialSpecialist = "secretary" }: TeamChatProps) {
         </CardHeader>
 
         <CardContent className="flex min-h-0 flex-1 flex-col overflow-hidden p-0">
-          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overflow-x-hidden p-3.5 sm:p-4">
+          <div className="team-chat-thread min-h-0 flex-1 space-y-3.5 overflow-y-auto overflow-x-hidden overscroll-contain px-3 py-3.5 sm:space-y-4 sm:px-5 sm:py-4">
             {messages.length === 0 ? (
               <EmptyState
                 icon={Users}
                 title="Ask your pocket team"
                 description="Staff handles everyday requests. Switch to Finance, Legal, coding, Career, or coaching when you need a specialist."
-                className="py-8 sm:py-10"
+                className="py-10 sm:py-14"
               />
             ) : (
               messages.map((msg, i) => {
@@ -258,7 +257,7 @@ export function TeamChat({ initialSpecialist = "secretary" }: TeamChatProps) {
             ) : null}
           </div>
 
-          <div className="shrink-0 border-t border-border/60 bg-surface-container/30 p-3 sm:p-3.5">
+          <div className="shrink-0 border-t border-border/60 bg-surface-container/40 p-3 sm:p-3.5">
             {showRemember ? (
               <div className="mb-3 animate-scale-in space-y-2 rounded-xl border border-border/70 bg-card/80 p-3">
                 <p className="text-sm text-muted-foreground">
@@ -351,7 +350,7 @@ export function TeamChat({ initialSpecialist = "secretary" }: TeamChatProps) {
                   }
                 }}
                 rows={2}
-                className="min-h-[2.75rem] min-w-0 flex-1 resize-none text-sm"
+                className="min-h-[2.75rem] min-w-0 flex-1 resize-none text-[0.9375rem] leading-relaxed sm:text-base"
               />
               <Button
                 onClick={handleSend}
@@ -371,8 +370,16 @@ export function TeamChat({ initialSpecialist = "secretary" }: TeamChatProps) {
           </div>
         </CardContent>
       </Card>
-      {showCareerPdf ? <CareerPdfPanel /> : null}
-      {showForgeQa ? <ForgeQaPanel /> : null}
+      {showCareerPdf ? (
+        <div className="min-h-0 overflow-y-auto lg:h-full">
+          <CareerPdfPanel />
+        </div>
+      ) : null}
+      {showForgeQa ? (
+        <div className="min-h-0 overflow-y-auto lg:h-full">
+          <ForgeQaPanel />
+        </div>
+      ) : null}
     </div>
   );
 }
