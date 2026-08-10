@@ -1,7 +1,7 @@
 import { config } from "../config.js";
+import { archiveTypeToken, normalizeDocumentType } from "../archive/doc-type-tokens.js";
 import {
   archiveDatePrefix,
-  safeEnum,
   sanitizeArchiveEntity,
   sanitizeExtension,
 } from "../lib/safe-data.js";
@@ -265,16 +265,6 @@ export function suggestArchiveCategory(documentType: string): number {
   }
 }
 
-const ARCHIVE_DOC_TYPES = [
-  "BILL",
-  "MEDICAL_RECORD",
-  "LEGAL",
-  "CONTRACT",
-  "RECEIPT",
-  "OFFICIAL",
-  "OTHER",
-] as const;
-
 export function suggestArchiveName(parts: {
   date?: string | null;
   documentType?: string | null;
@@ -282,11 +272,8 @@ export function suggestArchiveName(parts: {
   extension?: string | null;
 }): string {
   const date = archiveDatePrefix(parts.date);
-  const docType = safeEnum(
-    String(parts.documentType ?? "OTHER").replace(/[^\w]/g, "") || "OTHER",
-    ARCHIVE_DOC_TYPES,
-    "OTHER",
-  );
+  // Drive vocabulary: Invoice / Quittance / Medical — never shouty BILL / MEDICAL_RECORD.
+  const docType = archiveTypeToken(normalizeDocumentType(parts.documentType));
   const entity = sanitizeArchiveEntity(parts.entity);
   const ext = sanitizeExtension(parts.extension);
   return `${date}_${docType}_${entity}${ext}`;

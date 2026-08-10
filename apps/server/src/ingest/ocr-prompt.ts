@@ -5,15 +5,17 @@ Extrahiere strukturierte Daten aus diesem gescannten Dokument (Handy-/Scanner-Fo
 Kontext:
 - Sprache meist Deutsch (Schweiz): ss statt ß, CHF, AHV, Fristen, Rechnungen, QR-Rechnung / Zahlteil.
 - Swiss QR-bill: Suche Empfänger, IBAN/QR-IBAN, Betrag, Währung CHF/EUR, Referenz (QRR/SCOR/NON), Fälligkeit.
-- Dokumenttypen:
-  - Rechnung/QR-Rechnung=BILL
-  - Quittung=RECEIPT
+- Dokumenttypen (interne Codes — Archive-Namen nutzen später Invoice/Quittance, nicht BILL):
+  - Invoice/Rechnung/QR-Rechnung/Faktura=BILL
+  - Quittance/Quittung/Receipt=RECEIPT
   - Arztzeugnis/Arztbericht/Befund/Medizinisches Zeugnis=MEDICAL_RECORD (nicht Misc)
   - Vertrag/Schuldanerkennung/Mietvertrag/privatrechtliche Anwaltsschreiben=LEGAL oder CONTRACT → Archiv 08_Legal
   - Gerichtsunterlagen/Gericht/Gerichtsbeschluss/Vorladung/Klage/Urteil/Prozess/lawsuit=LEGAL → Archiv 08_Legal (nicht Official, nicht Misc)
   - Behördenschreiben/Amt/Gemeinde/Steuerverwaltung/Amtliche Zustellung ohne Gericht=OFFICIAL → Archiv 01_Official (nicht Misc)
   - sonst OTHER
-- Erfinde keine Beträge, IBANs oder Diagnosen. Unleserlich → null.
+- Datum: Bevorzuge ISO YYYY-MM-DD. CH-Formate DD.MM.YYYY / DD.MM.YY ebenfalls erkennen und nach YYYY-MM-DD umrechnen. Unleserlich → null (nicht "Unknown", nicht "--").
+- Entity-Felder (vendor/creditorName/provider): Firmen- oder Personenname des Ausstellers/Empfängers — NIEMALS den Dokumenttyp (nicht "Invoice", "Rechnung", "BILL", "Quittance").
+- Erfinde keine Beträge, IBANs, Daten oder Diagnosen. Unleserlich → null.
 
 Return ONLY valid JSON (no markdown):
 {
@@ -40,7 +42,7 @@ Return ONLY valid JSON (no markdown):
   "summary": string
 }
 
-pageLabel: z.B. "Seite 1 von 2" wenn sichtbar. summary: 1–3 Sätze auf Deutsch.`;
+pageLabel: z.B. "Seite 1 von 2", "Page 1 of 2", "1/2" wenn sichtbar. summary: 1–3 Sätze auf Deutsch.`;
 
 export function parseStructured(raw: string): Record<string, unknown> {
   try {

@@ -9,6 +9,36 @@ export type ArchiveDraft = {
   extension: string;
 };
 
+/** Prisma enum → Drive/archive token (never show BILL). */
+const ENUM_TO_TOKEN: Record<string, string> = {
+  BILL: "Invoice",
+  INVOICE: "Invoice",
+  RECHNUNG: "Invoice",
+  RECEIPT: "Quittance",
+  QUITTANCE: "Quittance",
+  QUITTUNG: "Quittance",
+  MEDICAL_RECORD: "Medical",
+  MEDICAL: "Medical",
+  LEGAL: "Legal",
+  CONTRACT: "Contract",
+  OFFICIAL: "Official",
+  OTHER: "Other",
+  MISC: "Other",
+};
+
+/** Normalize DocType field for archive names / confirm defaults. */
+export function coerceArchiveDocType(value: unknown): string {
+  const raw = String(value ?? "").trim();
+  if (!raw) return "Other";
+  const key = raw.toUpperCase().replace(/[-\s]+/g, "_").replace(/[^\w]/g, "");
+  if (ENUM_TO_TOKEN[key]) return ENUM_TO_TOKEN[key]!;
+  // Already human (Invoice, Rechnung) — keep; soften ALLCAPS unknowns
+  if (raw === raw.toUpperCase() && raw.length > 1 && !/[a-z]/.test(raw)) {
+    return raw.charAt(0) + raw.slice(1).toLowerCase();
+  }
+  return raw.replace(/[^\wÄÖÜäöüéèêà-]+/g, "") || "Other";
+}
+
 export function sanitizeArchiveExtension(value: unknown, fallback = ".pdf"): string {
   let ext = String(value ?? fallback).trim() || fallback;
   if (!ext.startsWith(".")) ext = `.${ext}`;
@@ -30,7 +60,7 @@ export function buildArchiveName(d: ArchiveDraft): string {
       .replace(/[^\wÄÖÜäöüéèêà.\s-]+/g, "")
       .replace(/\s+/g, "_")
       .slice(0, 48) || "Unknown";
-  const docType = d.docType.trim().replace(/[^\w]/g, "") || "OTHER";
+  const docType = coerceArchiveDocType(d.docType);
   const date = /^\d{4}-\d{2}-\d{2}$/.test(d.date)
     ? d.date
     : new Date().toISOString().slice(0, 10);
@@ -51,9 +81,13 @@ export function draftFromArchivePayload(payload: unknown): ArchiveDraft {
         : typeof p.mimeType === "string" && p.mimeType.includes("jpeg")
           ? ".jpg"
           : null;
+  const rawType =
+    m?.[2] ??
+    (typeof p.displayType === "string" ? p.displayType : null) ??
+    String(p.documentType ?? "OTHER");
   return {
     date: m?.[1] ?? new Date().toISOString().slice(0, 10),
-    docType: m?.[2] ?? String(p.documentType ?? "OTHER"),
+    docType: coerceArchiveDocType(rawType),
     entity: (m?.[3] ?? String(p.entity ?? p.creditorName ?? "Unknown")).replace(/_/g, " "),
     archiveCategory: Number(p.archiveCategory ?? 9) || 9,
     extension: sanitizeArchiveExtension(

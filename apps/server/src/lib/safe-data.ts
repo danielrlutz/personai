@@ -29,10 +29,15 @@ export function safeDate(value: unknown): Date | null {
     const d = new Date(value);
     return Number.isFinite(d.getTime()) ? d : null;
   }
-  const s = String(value).trim();
+  let s = String(value).trim();
   if (!s || INVALID_DATE_TOKENS.has(s.toLowerCase())) return null;
   // Require at least one digit — rejects "--", "asap", etc.
   if (!/\d/.test(s)) return null;
+  // CH/EU OCR dates: DD.MM.YYYY / DD/MM/YYYY / DD-MM-YYYY → ISO
+  const eu = s.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{4})$/);
+  if (eu) {
+    s = `${eu[3]}-${eu[2]!.padStart(2, "0")}-${eu[1]!.padStart(2, "0")}`;
+  }
   const d = new Date(s);
   if (!Number.isFinite(d.getTime())) return null;
   const year = d.getUTCFullYear();
