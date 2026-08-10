@@ -1,6 +1,7 @@
 import fs from "node:fs";
+import path from "node:path";
 import { randomUUID } from "node:crypto";
-import { registryPath, config, profilesDir, profileDir } from "../config.js";
+import { registryPath, config, profilesDir, profileDir, profileDbPath } from "../config.js";
 import { getPrisma, shutdownPrisma } from "../db/prisma-singleton.js";
 import {
   assertPasswordStrength,
@@ -14,6 +15,7 @@ import {
   unlockProfileDb,
   clearUnlockedDek,
   dbLooksEncryptedOnDisk,
+  profileEncDbPath,
 } from "../auth/crypto-db.js";
 import { countSessionsForProfile } from "../auth/session.js";
 
@@ -48,19 +50,177 @@ export interface PublicProfileRegistry {
   profiles: PublicProfile[];
 }
 
+export interface OrphanProfileDir {
+  id: string;
+  hasDb: boolean;
+  hasEnc: boolean;
+}
+
+const PROFILE_ID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function isProfileRegistry(value: unknown): value is ProfileRegistry {
+  if (!value || typeof value !== "object") return false;
+  const obj = value as Record<string, unknown>;
+  if (!Array.isArray(obj.profiles)) return false;
+  if (obj.activeProfileId !== null && typeof obj.activeProfileId !== "string") return false;
+  return obj.profiles.every((p) => {
+    if (!p || typeof p !== "object") return false;
+    const row = p as Record<string, unknown>;
+    return typeof row.id === "string" && typeof row.name === "string";
+  });
+}
+
+/** UUID dirs under profiles/ that already hold a DB (plaintext or sealed). */
+export function discoverOrphanProfileDirs(): OrphanProfileDir[] {
+  const root = profilesDir();
+  if (!fs.existsSync(root)) return [];
+  const found: OrphanProfileDir[] = [];
+  for (const name of fs.readdirSync(root)) {
+    if (name === "bootstrap" || !PROFILE_ID_RE.test(name)) continue;
+    const dir = profileDir(name);
+    let st: fs.Stats;
+    try {
+      st = fs.statSync(dir);
+    } catch {
+      continue;
+    }
+    if (!st.isDirectory()) continue;
+    const hasDb = fs.existsSync(profileDbPath(name));
+    const hasEnc = fs.existsSync(profileEncDbPath(name));
+    if (hasDb || hasEnc) {
+      found.push({ id: name, hasDb, hasEnc });
+    }
+  }
+  return found;
+}
+
+function stubFromOrphan(orphan: OrphanProfileDir): Profile {
+  return {
+    id: orphan.id,
+    name: `Recovered ${orphan.id.slice(0, 8)}`,
+    createdAt: new Date().toISOString(),
+    dbEncrypted: orphan.hasEnc || dbLooksEncryptedOnDisk(orphan.id),
+  };
+}
+
+/**
+ * Rebuild registry entries from on-disk profile DBs when profiles.json is
+ * missing/empty/corrupt. Does not invent crypto material — login still needs
+ * a restored profiles.json (or suitcase) if passwordHash/wrappedDek were lost.
+ */
+export function rehydrateRegistryFromDisk(existing?: ProfileRegistry): ProfileRegistry {
+  const orphans = discoverOrphanProfileDirs();
+  const registry: ProfileRegistry = existing
+    ? {
+        activeProfileId: existing.activeProfileId,
+        profiles: [...existing.profiles],
+      }
+    : { activeProfileId: null, profiles: [] };
+  const known = new Set(registry.profiles.map((p) => p.id));
+  let added = 0;
+  for (const orphan of orphans) {
+    if (known.has(orphan.id)) continue;
+    registry.profiles.push(stubFromOrphan(orphan));
+    known.add(orphan.id);
+    added += 1;
+  }
+  if (!registry.activeProfileId && registry.profiles.length > 0) {
+    registry.activeProfileId = registry.profiles[0].id;
+  }
+  if (added > 0 || !fs.existsSync(registryPath())) {
+    console.warn(
+      `[personai] Rehydrated profiles.json from ${orphans.length} on-disk profile dir(s) ` +
+        `(+${added} stub entries). If unlock fails, restore profiles.json backup ` +
+        `(passwordHash/wrappedDek) — sealed DBs alone are not enough.`,
+    );
+    saveRegistry(registry);
+  }
+  return registry;
+}
+
 function ensureRegistry(): ProfileRegistry {
   fs.mkdirSync(config.dataDir, { recursive: true });
   fs.mkdirSync(profilesDir(), { recursive: true });
+  const orphans = discoverOrphanProfileDirs();
+
   if (!fs.existsSync(registryPath())) {
+    if (orphans.length > 0) {
+      console.warn(
+        `[personai] profiles.json missing but found ${orphans.length} sealed/plain profile DB(s) — rehydrating (not creating Default)`,
+      );
+      return rehydrateRegistryFromDisk();
+    }
     const initial: ProfileRegistry = { activeProfileId: null, profiles: [] };
     fs.writeFileSync(registryPath(), JSON.stringify(initial, null, 2), "utf-8");
     return initial;
   }
-  return JSON.parse(fs.readFileSync(registryPath(), "utf-8")) as ProfileRegistry;
+
+  try {
+    const parsed: unknown = JSON.parse(fs.readFileSync(registryPath(), "utf-8"));
+    if (!isProfileRegistry(parsed)) {
+      throw new Error("invalid profiles.json shape");
+    }
+    if (parsed.profiles.length === 0 && orphans.length > 0) {
+      console.warn(
+        `[personai] profiles.json has 0 entries but found ${orphans.length} profile DB(s) under profiles/ — rehydrating (not creating Default)`,
+      );
+      return rehydrateRegistryFromDisk(parsed);
+    }
+    // Merge any orphan dirs not listed (never drop existing JSON entries).
+    const known = new Set(parsed.profiles.map((p) => p.id));
+    const missing = orphans.filter((o) => !known.has(o.id));
+    if (missing.length > 0) {
+      console.warn(
+        `[personai] Found ${missing.length} profile DB dir(s) not listed in profiles.json — merging stubs`,
+      );
+      return rehydrateRegistryFromDisk(parsed);
+    }
+    return parsed;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    const bak = `${registryPath()}.corrupt.${Date.now()}`;
+    try {
+      fs.renameSync(registryPath(), bak);
+    } catch {
+      /* keep going */
+    }
+    if (orphans.length > 0) {
+      console.error(
+        `[personai] profiles.json unreadable (${msg}); backed up to ${path.basename(bak)}; ` +
+          `rehydrating ${orphans.length} on-disk profile dir(s) — NOT creating Default`,
+      );
+      return rehydrateRegistryFromDisk();
+    }
+    console.error(
+      `[personai] profiles.json unreadable (${msg}); backed up to ${path.basename(bak)}; starting empty`,
+    );
+    const initial: ProfileRegistry = { activeProfileId: null, profiles: [] };
+    fs.writeFileSync(registryPath(), JSON.stringify(initial, null, 2), "utf-8");
+    return initial;
+  }
 }
 
 function saveRegistry(registry: ProfileRegistry): void {
-  fs.writeFileSync(registryPath(), JSON.stringify(registry, null, 2), "utf-8");
+  // Never clobber a non-empty registry file with an empty one (boot races / bad DATA_DIR).
+  if (registry.profiles.length === 0 && fs.existsSync(registryPath())) {
+    try {
+      const prevRaw = fs.readFileSync(registryPath(), "utf-8");
+      const prev: unknown = JSON.parse(prevRaw);
+      if (isProfileRegistry(prev) && prev.profiles.length > 0) {
+        console.error(
+          `[personai] Refusing to overwrite profiles.json (${prev.profiles.length} entries) with empty registry`,
+        );
+        throw new Error("Refusing to overwrite non-empty profiles.json with empty registry");
+      }
+    } catch (err) {
+      if (err instanceof Error && err.message.startsWith("Refusing to overwrite")) throw err;
+      // Unreadable previous file — allow write after ensureRegistry already backed it up.
+    }
+  }
+  const tmp = `${registryPath()}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(registry, null, 2), "utf-8");
+  fs.renameSync(tmp, registryPath());
 }
 
 export function toPublicProfile(profile: Profile): PublicProfile {

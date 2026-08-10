@@ -11,6 +11,7 @@ import {
   switchProfile,
   sealAllUnlockedProfiles,
   getProfileById,
+  discoverOrphanProfileDirs,
 } from "./profiles/registry.js";
 import { registerAuthHook } from "./auth/middleware.js";
 import { dbLooksEncryptedOnDisk } from "./auth/crypto-db.js";
@@ -18,6 +19,7 @@ import fs from "node:fs";
 
 async function bootstrap() {
   fs.mkdirSync(config.dataDir, { recursive: true });
+  console.log(`[personai] DATA_DIR=${config.dataDir}`);
 
   // ignoreTrailingSlash: phones / proxies often hit /health/ or /profiles/
   // Do not log request bodies — auth routes carry passwords.
@@ -68,20 +70,35 @@ async function bootstrap() {
   await app.listen({ port: config.port, host: "0.0.0.0" });
   console.log(`[personai] Server listening on http://0.0.0.0:${config.port}`);
 
-  const registry = listProfiles();
-  if (registry.profiles.length === 0) {
-    const profile = await createProfile("Default");
-    console.log(`[personai] Created default profile: ${profile.id} (password setup required)`);
-  } else if (registry.activeProfileId) {
-    const active = getProfileById(registry.activeProfileId);
-    // Never auto-open an encrypted DB without an authenticated unlock.
-    if (active?.passwordHash && (active.dbEncrypted || dbLooksEncryptedOnDisk(active.id))) {
-      console.log(
-        `[personai] Active profile ${active.id} is encrypted — waiting for password login`,
-      );
-    } else {
-      await switchProfile(registry.activeProfileId);
+  // Profile work must never take down a listening server (health / Serve :8443).
+  try {
+    // listProfiles() may rehydrate stubs from profiles/* DBs when JSON is empty/missing.
+    const registry = listProfiles();
+    if (registry.profiles.length === 0) {
+      const orphans = discoverOrphanProfileDirs();
+      if (orphans.length > 0) {
+        console.error(
+          `[personai] Refusing to create Default profile: found ${orphans.length} existing ` +
+            `profile DB(s) under ${config.dataDir}/profiles but registry is still empty. ` +
+            `Check DATA_DIR / volume mounts and restore profiles.json if needed.`,
+        );
+      } else {
+        const profile = await createProfile("Default");
+        console.log(`[personai] Created default profile: ${profile.id} (password setup required)`);
+      }
+    } else if (registry.activeProfileId) {
+      const active = getProfileById(registry.activeProfileId);
+      // Never auto-open an encrypted DB without an authenticated unlock.
+      if (active?.passwordHash && (active.dbEncrypted || dbLooksEncryptedOnDisk(active.id))) {
+        console.log(
+          `[personai] Active profile ${active.id} is encrypted — waiting for password login`,
+        );
+      } else {
+        await switchProfile(registry.activeProfileId);
+      }
     }
+  } catch (err) {
+    console.error("[personai] Profile bootstrap failed (server stays up for /health):", err);
   }
 
   startIngestionWorker();
