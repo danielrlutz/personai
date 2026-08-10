@@ -61,7 +61,7 @@ export function HomeDashboard() {
             Morning desk
           </h1>
           <p className="mt-1.5 max-w-md text-sm text-muted-foreground">
-            Triage, confirms, Fristen, and the rest of your day — arranged how you like.
+            Brief first, then what needs you — Fristen, confirms, and quiet context. Arrange freely.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">

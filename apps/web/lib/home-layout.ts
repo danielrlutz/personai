@@ -63,15 +63,15 @@ export const WIDGET_CATALOG: WidgetCatalogEntry[] = [
   },
   {
     id: "morning-brief",
-    title: "Morning brief",
-    description: "Zurich morning snapshot — regenerate anytime.",
+    title: "Morning desk",
+    description: "Calm Zurich snapshot — regenerate anytime. Not a metric wall.",
     availableFor: () => true,
     defaultSize: "md",
   },
   {
     id: "soul-news",
     title: "Soul News",
-    description: "Reflective sky & weather cards from the Soul News feed.",
+    description: "Quiet reflective cards when the feed is online — never blocks the desk.",
     availableFor: () => true,
     defaultSize: "md",
   },
@@ -141,19 +141,18 @@ export function catalogEntry(id: HomeWidgetId): WidgetCatalogEntry | undefined {
 
 export function defaultHomeLayout(mode: UsageMode): HomeLayout {
   const m = normalizeUsageMode(mode);
+  // Morning desk: brief → action (confirms/Fristen) → quiet context → capture → status.
   if (m === "BUSINESS") {
     return {
       version: 1,
       widgets: [
-        { id: "triage", size: "lg" },
+        { id: "morning-brief", size: "md" },
         { id: "confirms", size: "md" },
         { id: "fristen", size: "md" },
         { id: "finance", size: "md" },
-        { id: "morning-brief", size: "md" },
+        { id: "triage", size: "lg" },
+        { id: "archive-queue", size: "md" },
         { id: "activity", size: "sm" },
-        { id: "team", size: "md" },
-        { id: "archive-queue", size: "sm" },
-        { id: "ollama", size: "sm" },
         { id: "drive", size: "sm" },
       ],
     };
@@ -162,15 +161,14 @@ export function defaultHomeLayout(mode: UsageMode): HomeLayout {
     return {
       version: 1,
       widgets: [
-        { id: "triage", size: "lg" },
+        { id: "morning-brief", size: "md" },
         { id: "confirms", size: "md" },
         { id: "fristen", size: "md" },
+        { id: "soul-news", size: "md" },
         { id: "life-habits", size: "md" },
-        { id: "finance", size: "md" },
-        { id: "morning-brief", size: "md" },
+        { id: "triage", size: "lg" },
+        { id: "archive-queue", size: "md" },
         { id: "activity", size: "sm" },
-        { id: "team", size: "md" },
-        { id: "archive-queue", size: "sm" },
         { id: "drive", size: "sm" },
       ],
     };
@@ -179,15 +177,14 @@ export function defaultHomeLayout(mode: UsageMode): HomeLayout {
   return {
     version: 1,
     widgets: [
-      { id: "triage", size: "lg" },
+      { id: "morning-brief", size: "md" },
       { id: "confirms", size: "md" },
       { id: "fristen", size: "md" },
+      { id: "soul-news", size: "md" },
       { id: "life-habits", size: "md" },
-      { id: "morning-brief", size: "md" },
+      { id: "triage", size: "lg" },
+      { id: "archive-queue", size: "md" },
       { id: "activity", size: "sm" },
-      { id: "team", size: "md" },
-      { id: "archive-queue", size: "sm" },
-      { id: "ollama", size: "sm" },
       { id: "drive", size: "sm" },
     ],
   };

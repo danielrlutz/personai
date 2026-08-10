@@ -102,11 +102,11 @@ export function SoulNewsWidget() {
           <Newspaper className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
           <div>
             <p className="text-sm font-medium">
-              {feed?.ok === false ? "Soul News unavailable" : "No cards yet"}
+              {feed?.ok === false ? "Soul News quiet for now" : "No cards yet"}
             </p>
             <p className="text-xs text-muted-foreground">
               {feed?.error ??
-                "When the Soul News service is running, reflective sky & weather cards appear here."}
+                "Optional atmosphere — when the feed is online, reflective cards land here without crowding the desk."}
             </p>
           </div>
         </div>

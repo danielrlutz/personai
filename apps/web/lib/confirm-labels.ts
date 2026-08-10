@@ -12,7 +12,7 @@ const ACTION_LABELS: Record<string, string> = {
   "huddle.propose": "Huddle proposal",
   "premium.spend": "Premium spend (optional cloud)",
   "premium.inference": "Premium inference (optional cloud)",
-  "memory.fact": "Remember fact",
+  "memory.fact": "Remember for later",
   "skill.create": "Add skill",
   "calendar.event": "Calendar (stage locally — Google write not wired)",
   "calendar.event_staged": "Calendar staged locally",
@@ -55,6 +55,8 @@ export function humanizeConfirmationSummary(summary: string): string {
     .replace(/\bMark paid \+ ledger:\b/gi, "Mark paid and record payment:")
     .replace(/\bCommit QR bill\b/gi, "Save QR bill")
     .replace(/\bCommit expense\b/gi, "Save expense")
+    .replace(/\bUpdate filing memory:\b/gi, "Update how we file:")
+    .replace(/\bRemember filing:\b/gi, "Remember how we file:")
     .replace(/\s*→\s*archive\s+/gi, " · file as ")
     .replace(/\s*\(cat\s+(\d+)\)/gi, " (folder $1)")
     .replace(/\s*·\s*Frist\s+(\d{4}-\d{2}-\d{2})/gi, " · deadline (Frist) $1")

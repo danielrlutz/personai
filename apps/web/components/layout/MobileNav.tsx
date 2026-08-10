@@ -33,7 +33,7 @@ export function MobileNav() {
       className="surface-panel fixed inset-x-0 bottom-0 z-40 border-t shadow-elev-2 md:hidden"
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
-      <ul className="flex items-stretch justify-around px-0.5 pt-1">
+      <ul className="flex items-stretch justify-around gap-0.5 px-1 pt-1">
         {nav.map(({ href, label, icon: Icon }) => {
           const base = href.replace(/\/+$/, "");
           const active = pathname === href || pathname === base || pathname.startsWith(`${base}/`);
@@ -42,17 +42,17 @@ export function MobileNav() {
               <Link
                 href={href}
                 className={cn(
-                  "pressable flex min-h-[3.25rem] min-w-0 flex-col items-center justify-center gap-0.5 px-0.5 py-1 text-[11px] font-medium leading-tight transition-colors duration-md ease-md sm:text-xs",
+                  "pressable flex min-h-[3rem] min-w-0 flex-col items-center justify-center gap-0.5 px-1 py-1 text-[10px] font-medium leading-tight transition-colors duration-md ease-md sm:text-[11px]",
                   active ? "text-primary" : "text-muted-foreground",
                 )}
               >
                 <span
                   className={cn(
-                    "flex h-8 w-11 items-center justify-center rounded-full transition-colors duration-md ease-md sm:w-12",
+                    "flex h-7 w-10 items-center justify-center rounded-full transition-colors duration-md ease-md sm:h-8 sm:w-11",
                     active && "bg-secondary shadow-elev-1",
                   )}
                 >
-                  <Icon className="h-5 w-5" />
+                  <Icon className="h-[1.15rem] w-[1.15rem]" />
                 </span>
                 <span className="max-w-full truncate px-0.5">{label}</span>
               </Link>

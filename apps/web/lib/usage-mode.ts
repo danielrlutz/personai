@@ -80,13 +80,13 @@ export function orderMobileNav<T extends NavItem>(items: T[], mode: UsageMode): 
   const pick = (hrefs: string[]) =>
     hrefs.map((h) => byHref.get(h)).filter((x): x is T => Boolean(x));
 
+  // Five tabs max so Home CTAs stay clear of the bar (Finance/Life still in desktop nav).
   if (mode === "BUSINESS") {
     return pick([
       "/dashboard/",
       "/finance/",
       "/team/",
       "/ingest/",
-      "/life/",
       "/settings/",
     ]);
   }
@@ -94,7 +94,6 @@ export function orderMobileNav<T extends NavItem>(items: T[], mode: UsageMode): 
     "/dashboard/",
     "/life/",
     "/team/",
-    "/finance/",
     "/ingest/",
     "/settings/",
   ]);

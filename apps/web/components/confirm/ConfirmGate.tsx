@@ -368,8 +368,8 @@ export function ConfirmGate({
             <Badge variant="outline">0</Badge>
           </CardTitle>
           <CardDescription className="text-xs">
-            Nothing waiting. Archive naming, ledger writes, and similar actions will ask here before
-            they touch external systems.
+            Clear for now. Filing, ledger, memory, and skills will ask here before they touch
+            external systems.
           </CardDescription>
         </CardHeader>
       </Card>

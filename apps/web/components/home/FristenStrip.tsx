@@ -48,7 +48,7 @@ export function FristenStrip() {
         <div>
           <p className="text-sm font-medium">No open Fristen</p>
           <p className="text-xs text-muted-foreground">
-            Deadlines appear here when archive OCR finds a date or you add a legal task.
+            Clear desk. Deadlines appear when archive OCR finds a date or you track a legal task.
           </p>
         </div>
       </div>
