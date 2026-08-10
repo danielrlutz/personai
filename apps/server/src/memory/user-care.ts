@@ -208,7 +208,7 @@ export function formatArchiveCareBlock(archive: ArchiveCareContext): string {
     return `Archive context: Drive is linked, but the archive index has not been built yet (or is empty). Say so if the user asks about filed documents. Suggest Settings → Refresh archive context.`;
   }
   const bits = [
-    `Archive context: READY (Drive linked).`,
+    `Archive context: READY (Drive linked). Use retrieved filenames/folders proactively when answering (cite names; never invent docs). Prefer the user's naming vocabulary from this index — never say BILL in chat.`,
     archive.refreshedAt ? `Refreshed: ${archive.refreshedAt}` : null,
     archive.taxonomy ? `Taxonomy folders:\n${archive.taxonomy.slice(0, 800)}` : null,
     `Index:\n${archive.index.slice(0, 1200)}`,
@@ -223,6 +223,10 @@ export function formatUserCareContext(opts: {
   liveOps: SlimLiveOps;
   sessionSummary?: string | null;
   archive?: ArchiveCareContext | null;
+  /** Personality vault markdown (already budgeted). */
+  stagingBlock?: string | null;
+  /** Drive corpus vocabulary hint (already formatted). */
+  vocabBlock?: string | null;
 }): string {
   const blocks = [
     `Profile card: ${compactCeoLine(opts.ceo)}`,
@@ -232,6 +236,12 @@ export function formatUserCareContext(opts: {
     `Memory facts (≤${MEMORY_FACT_INJECT_LIMIT} recent):\n${compactFactsBlock(opts.facts)}`,
     `Live ops (slim JSON):\n${JSON.stringify(opts.liveOps)}`,
   ];
+  if (opts.vocabBlock?.trim()) {
+    blocks.push(opts.vocabBlock.trim());
+  }
+  if (opts.stagingBlock?.trim()) {
+    blocks.push(opts.stagingBlock.trim());
+  }
   if (opts.sessionSummary?.trim()) {
     blocks.push(`Session summary:\n${opts.sessionSummary.trim().slice(0, 800)}`);
   }
@@ -239,8 +249,17 @@ export function formatUserCareContext(opts: {
 }
 
 /** Compact profile + memory for briefing narrative (no live ops dump). */
-export function formatBriefingUserCare(ceo: CeoProfileCard, facts: MemoryFactCard[]): string {
-  return `Profile card: ${compactCeoLine(ceo)}\n\nMemory facts (≤${MEMORY_FACT_INJECT_LIMIT} recent):\n${compactFactsBlock(facts)}`;
+export function formatBriefingUserCare(
+  ceo: CeoProfileCard,
+  facts: MemoryFactCard[],
+  stagingBlock?: string | null,
+): string {
+  const parts = [
+    `Profile card: ${compactCeoLine(ceo)}`,
+    `Memory facts (≤${MEMORY_FACT_INJECT_LIMIT} recent):\n${compactFactsBlock(facts)}`,
+  ];
+  if (stagingBlock?.trim()) parts.push(stagingBlock.trim().slice(0, 1200));
+  return parts.join("\n\n");
 }
 
 /** Cheap rolling digest — no extra LLM call. */

@@ -3,6 +3,8 @@ import { chatCompletion, resolveOllamaHost } from "../ollama/client.js";
 import { resolveSpecialistModel } from "../specialists/resolve-model.js";
 import { SPECIALISTS, resolveSpecialistId } from "../specialists/roster.js";
 import { vramLock } from "../ollama/vram-lock.js";
+import { formatSnippetsForPrompt, searchMemorySnippets } from "../memory/rag-lite.js";
+import { loadStagingPrefsHint } from "../memory/staging.js";
 import { sendError, withPrisma } from "./helpers.js";
 
 const SPECIALIST_IDS = SPECIALISTS.map((s) => s.id);
@@ -60,9 +62,16 @@ export async function registerTriageRoutes(app: FastifyInstance): Promise<void> 
         return reply.status(400).send({ error: "Paste text or attach a file to triage" });
       }
 
-      const { prisma } = await withPrisma(req);
+      const { prisma, profileId } = await withPrisma(req);
       const seed = text || (req.body?.hasFile ? "User dropped a document for filing / OCR." : "");
       let result = heuristicTriage(seed);
+
+      const [snippets, prefsHint] = await Promise.all([
+        searchMemorySnippets(prisma, profileId, { query: seed, limit: 6, snippetChars: 220 }),
+        loadStagingPrefsHint(profileId, 700),
+      ]);
+      const snippetBlock = formatSnippetsForPrompt(snippets, 1000);
+      const memoryContext = [prefsHint, snippetBlock].filter(Boolean).join("\n\n").slice(0, 1600);
 
       // Soft AI refine when Ollama is up — never block triage on model failure
       try {
@@ -78,7 +87,10 @@ export async function registerTriageRoutes(app: FastifyInstance): Promise<void> 
                 role: "system",
                 content: `You are PersonAI Staff triage. Classify the user's dump into JSON only (no markdown):
 {"intent":"short.snake","specialistId":"one of ${SPECIALIST_IDS.join("|")}","confidence":0.0-1.0,"summary":"≤120 chars","suggestedAction":"chat|archive|finance|legal|medical|brief","reason":"one short clause"}
-Never invent Fristen or amounts. Prefer secretary when unsure.`,
+Never invent Fristen or amounts. Prefer secretary when unsure.
+Never use raw enum BILL in summary/reason — say Invoice (or the user's word).
+When known prefs / personality notes are provided (hotel budget, location Cham/Zug, Invoice language, etc.), mention a relevant one briefly in reason if it affects routing — do not invent prefs.
+${memoryContext ? `\n${memoryContext}` : ""}`,
               },
               { role: "user", content: seed.slice(0, 4000) },
             ],

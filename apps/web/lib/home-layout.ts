@@ -5,6 +5,7 @@ import { normalizeUsageMode, showsPersonalSection } from "@/lib/usage-mode";
 /** Stable widget ids — catalog + Home layout. */
 export type HomeWidgetId =
   | "triage"
+  | "heads-up"
   | "confirms"
   | "fristen"
   | "morning-brief"
@@ -46,6 +47,13 @@ export const WIDGET_CATALOG: WidgetCatalogEntry[] = [
     description: "Paste or drop something — Staff proposes who should handle it.",
     availableFor: () => true,
     defaultSize: "lg",
+  },
+  {
+    id: "heads-up",
+    title: "Heads-up",
+    description: "Urgent Fristen and unpaid invoices — navigates only; writes stay confirm-gated.",
+    availableFor: () => true,
+    defaultSize: "md",
   },
   {
     id: "confirms",
@@ -146,6 +154,7 @@ export function defaultHomeLayout(mode: UsageMode): HomeLayout {
       version: 1,
       widgets: [
         { id: "triage", size: "lg" },
+        { id: "heads-up", size: "md" },
         { id: "confirms", size: "md" },
         { id: "fristen", size: "md" },
         { id: "finance", size: "md" },
@@ -163,6 +172,7 @@ export function defaultHomeLayout(mode: UsageMode): HomeLayout {
       version: 1,
       widgets: [
         { id: "triage", size: "lg" },
+        { id: "heads-up", size: "md" },
         { id: "confirms", size: "md" },
         { id: "fristen", size: "md" },
         { id: "life-habits", size: "md" },
@@ -180,6 +190,7 @@ export function defaultHomeLayout(mode: UsageMode): HomeLayout {
     version: 1,
     widgets: [
       { id: "triage", size: "lg" },
+      { id: "heads-up", size: "md" },
       { id: "confirms", size: "md" },
       { id: "fristen", size: "md" },
       { id: "life-habits", size: "md" },

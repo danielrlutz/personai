@@ -26,6 +26,11 @@ import {
   refreshSessionSummaryIfNeeded,
   type ArchiveCareContext,
 } from "../memory/user-care.js";
+import { loadStagingForPrompt } from "../memory/staging.js";
+import {
+  extractDriveVocab,
+  formatVocabForPrompt,
+} from "../memory/chat-vocabulary.js";
 import { driveStatus } from "../archive/drive.js";
 import {
   ARCHIVE_INDEX_KEY,
@@ -78,10 +83,11 @@ export async function registerTeamRoutes(app: FastifyInstance): Promise<void> {
 
   async function loadUserCare(
     prisma: Awaited<ReturnType<typeof withPrisma>>["prisma"],
+    profileId: string,
     specialistId: string,
     sessionSummary: string | null | undefined,
   ) {
-    const [ceo, facts, liveOps, archiveFacts] = await Promise.all([
+    const [ceo, facts, liveOps, archiveFacts, staging] = await Promise.all([
       getCeoProfileCard(prisma),
       listRecentMemoryFacts(prisma),
       buildSlimLiveOps(prisma, specialistId),
@@ -90,6 +96,7 @@ export async function registerTeamRoutes(app: FastifyInstance): Promise<void> {
           key: { in: [ARCHIVE_INDEX_KEY, ARCHIVE_TAXONOMY_KEY, ARCHIVE_REFRESHED_KEY] },
         },
       }),
+      loadStagingForPrompt(profileId),
     ]);
     const drive = driveStatus();
     const archiveMap = new Map(archiveFacts.map((f) => [f.key, f.value]));
@@ -101,6 +108,9 @@ export async function registerTeamRoutes(app: FastifyInstance): Promise<void> {
       taxonomy: archiveMap.get(ARCHIVE_TAXONOMY_KEY) ?? null,
       refreshedAt: archiveMap.get(ARCHIVE_REFRESHED_KEY) ?? null,
     };
+    const vocab = extractDriveVocab(
+      [archive.index, archive.taxonomy].filter(Boolean).join("\n"),
+    );
     return {
       userCare: formatUserCareContext({
         ceo,
@@ -108,6 +118,8 @@ export async function registerTeamRoutes(app: FastifyInstance): Promise<void> {
         liveOps,
         sessionSummary,
         archive,
+        stagingBlock: staging.block,
+        vocabBlock: formatVocabForPrompt(vocab),
       }),
       liveOps,
       archive,
@@ -120,7 +132,7 @@ export async function registerTeamRoutes(app: FastifyInstance): Promise<void> {
       reply.status(400).send({ error: "message or image is required" });
       return;
     }
-    const { prisma } = await withPrisma(req);
+    const { prisma, profileId } = await withPrisma(req);
     const specialistId = resolveSpecialistId(body.specialist ?? body.persona);
     const specialist = getSpecialist(specialistId);
     const hasImage = Boolean(body.imageBase64?.trim());
@@ -146,6 +158,7 @@ export async function registerTeamRoutes(app: FastifyInstance): Promise<void> {
 
     const { userCare, liveOps, archive } = await loadUserCare(
       prisma,
+      profileId,
       specialistId,
       session.sessionSummary,
     );

@@ -8,6 +8,7 @@ import {
   profileDbPath,
   profileDir,
   profileExportsDir,
+  profileMemoryDir,
   profileUploadsDir,
 } from "../config.js";
 import { dbLooksEncryptedOnDisk, isProfileUnlocked } from "../auth/crypto-db.js";
@@ -23,6 +24,7 @@ function ensureProfileDirs(profileId: string): void {
   fs.mkdirSync(profileUploadsDir(profileId), { recursive: true });
   fs.mkdirSync(profileExportsDir(profileId), { recursive: true });
   fs.mkdirSync(profileArchiveDir(profileId), { recursive: true });
+  fs.mkdirSync(profileMemoryDir(profileId), { recursive: true });
 }
 
 function ensureDatabase(profileId: string): void {

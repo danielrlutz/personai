@@ -42,16 +42,22 @@ export function humanizeConfirmationSummary(summary: string): string {
       return `(${countLabel(count, "symptom entry", "symptom entries")})`;
     })
     .replace(/\bMark paid \+ ledger:\b/gi, "Mark paid and record payment:")
-    .replace(/\bCommit QR bill\b/gi, "Save QR bill")
+    .replace(/\bCommit QR bill\b/gi, "Save QR invoice")
     .replace(/\bCommit expense\b/gi, "Save expense")
     .replace(/\s*→\s*archive\s+/gi, " · file as ")
     .replace(/\s*\(cat\s+(\d+)\)/gi, " (folder $1)")
     .replace(/\s*·\s*Frist\s+(\d{4}-\d{2}-\d{2})/gi, " · deadline (Frist) $1")
     .replace(/\bGenerate career PDF:\b/gi, "Create career PDF:")
-    .replace(/\bMEDICAL\.EXPORT\b/gi, "Medical export");
+    .replace(/\bMEDICAL\.EXPORT\b/gi, "Medical export")
+    // Ban shouty storage enums in chat-facing confirm copy
+    .replace(/\bBILL\b/g, "Invoice")
+    .replace(/\bMEDICAL_RECORD\b/g, "Medical record");
 }
 
 export function labelForEnum(value: string): string {
+  const upper = value.trim().toUpperCase();
+  if (upper === "BILL") return "Invoice";
+  if (upper === "MEDICAL_RECORD") return "Medical record";
   return value
     .split(/[._]/)
     .filter(Boolean)
