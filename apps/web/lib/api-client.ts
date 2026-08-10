@@ -879,6 +879,80 @@ export interface TaxonomyHealthPreferResult {
   report: TaxonomyHealthReport;
 }
 
+export interface CombineFolderListItem {
+  id: string;
+  name: string;
+  fileCount: number;
+}
+
+export interface CombineFoldersResponse {
+  rootFolderId: string | null;
+  folders: CombineFolderListItem[];
+  note: string;
+}
+
+export type CombineConflictAction =
+  | "keep_destination"
+  | "keep_incoming"
+  | "keep_both"
+  | "skip";
+
+export interface CombineFileSnapshot {
+  fileId: string;
+  name: string;
+  mimeType: string;
+  size: number | null;
+  modifiedTime: string | null;
+  folderId: string;
+  folderName: string;
+  isFolder: boolean;
+}
+
+export interface CombinePlannedMove {
+  fileId: string;
+  name: string;
+  mimeType: string;
+  size: number | null;
+  modifiedTime: string | null;
+  fromFolderId: string;
+  fromFolderName: string;
+  isFolder: boolean;
+  conflict: {
+    incoming: CombineFileSnapshot;
+    existing: CombineFileSnapshot;
+  } | null;
+}
+
+export interface CombineDryRunReport {
+  rootFolderId: string;
+  destination: CombineFolderListItem;
+  sources: CombineFolderListItem[];
+  moves: CombinePlannedMove[];
+  conflictCount: number;
+  moveCount: number;
+  emptySourcesAfter: CombineFolderListItem[];
+  neverSilentDeletes: true;
+  note: string;
+  dryRunAt: string;
+}
+
+export interface CombineFileDecision {
+  action: CombineConflictAction;
+  trashOther?: boolean;
+}
+
+export interface CombineExecuteResult {
+  ok: true;
+  jobId: string;
+  message: string;
+  preview?: {
+    moveCount: number;
+    conflictCount: number;
+    destination: CombineFolderListItem;
+    sources: CombineFolderListItem[];
+  };
+}
+
 export interface DailyBriefing {
   id: string;
   briefingDate: string;

@@ -931,6 +931,164 @@ export async function preferTaxonomyFolderForever(opts: {
   return { ok: true, category, folderId, folderName, report };
 }
 
+export type DriveFolderListItem = {
+  id: string;
+  name: string;
+  fileCount: number;
+};
+
+export type DriveChildItem = {
+  id: string;
+  name: string;
+  mimeType: string;
+  size: number | null;
+  modifiedTime: string | null;
+  isFolder: boolean;
+};
+
+const FOLDER_MIME = "application/vnd.google-apps.folder";
+
+/** List direct child folders under the archive root (for combine multi-select). */
+export async function listArchiveRootChildFolders(profileId?: string | null): Promise<{
+  rootFolderId: string | null;
+  folders: DriveFolderListItem[];
+}> {
+  const cfg = loadDriveConfig(profileId);
+  if (!cfg.enabled || cfg.mode === "none" || !cfg.rootFolderId) {
+    return { rootFolderId: cfg.rootFolderId, folders: [] };
+  }
+  const children = await listDriveFoldersInParent(cfg, cfg.rootFolderId);
+  const enriched = await withFileCounts(cfg, children);
+  return {
+    rootFolderId: cfg.rootFolderId,
+    folders: enriched.map((f) => ({
+      id: f.id,
+      name: f.name,
+      fileCount: f.fileCount ?? 0,
+    })),
+  };
+}
+
+/** List non-trashed direct children (files + folders) with size/modifiedTime. */
+export async function listDriveFolderChildrenDetailed(
+  cfg: DriveConfig,
+  folderId: string,
+): Promise<DriveChildItem[]> {
+  const q = encodeURIComponent(`'${folderId}' in parents and trashed=false`);
+  const out: DriveChildItem[] = [];
+  let pageToken: string | undefined;
+  do {
+    const url =
+      `https://www.googleapis.com/drive/v3/files?q=${q}` +
+      `&fields=nextPageToken,files(id,name,mimeType,size,modifiedTime)` +
+      `&pageSize=100` +
+      (pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : "");
+    const list = await driveFetch(cfg, url);
+    if (!list.ok) {
+      throw new Error(`Drive children list failed: ${list.status} ${await list.text()}`);
+    }
+    const listed = (await list.json()) as {
+      files?: Array<{
+        id: string;
+        name: string;
+        mimeType?: string;
+        size?: string;
+        modifiedTime?: string;
+      }>;
+      nextPageToken?: string;
+    };
+    for (const f of listed.files ?? []) {
+      const mimeType = f.mimeType ?? "application/octet-stream";
+      out.push({
+        id: f.id,
+        name: f.name,
+        mimeType,
+        size: f.size != null && f.size !== "" ? Number(f.size) : null,
+        modifiedTime: f.modifiedTime ?? null,
+        isFolder: mimeType === FOLDER_MIME,
+      });
+    }
+    pageToken = listed.nextPageToken;
+  } while (pageToken);
+  return out;
+}
+
+/**
+ * Move a Drive file/folder by updating parents (no content copy, no delete).
+ * Optional newName renames in the same request (conflict keep-both / rename).
+ */
+export async function moveDriveFileBetweenFolders(
+  cfg: DriveConfig,
+  opts: {
+    fileId: string;
+    fromFolderId: string;
+    toFolderId: string;
+    newName?: string;
+  },
+): Promise<void> {
+  const params = new URLSearchParams({
+    addParents: opts.toFolderId,
+    removeParents: opts.fromFolderId,
+    fields: "id,name,parents",
+    supportsAllDrives: "true",
+  });
+  const body =
+    opts.newName && opts.newName.trim()
+      ? JSON.stringify({ name: opts.newName.trim() })
+      : undefined;
+  const res = await driveFetch(
+    cfg,
+    `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(opts.fileId)}?${params}`,
+    {
+      method: "PATCH",
+      headers: body ? { "Content-Type": "application/json" } : undefined,
+      body,
+    },
+  );
+  if (!res.ok) {
+    throw new Error(`Drive move failed: ${res.status} ${await res.text()}`);
+  }
+}
+
+export async function renameDriveFile(
+  cfg: DriveConfig,
+  fileId: string,
+  newName: string,
+): Promise<void> {
+  const res = await driveFetch(
+    cfg,
+    `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?fields=id,name&supportsAllDrives=true`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: newName }),
+    },
+  );
+  if (!res.ok) {
+    throw new Error(`Drive rename failed: ${res.status} ${await res.text()}`);
+  }
+}
+
+/**
+ * Trash a Drive file/folder. Only called when the combine payload sets an
+ * explicit trash flag (per-file trashOther or remove-empty-source confirm).
+ * Does not use files.delete.
+ */
+export async function trashDriveFile(cfg: DriveConfig, fileId: string): Promise<void> {
+  const res = await driveFetch(
+    cfg,
+    `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?fields=id,trashed&supportsAllDrives=true`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ trashed: true }),
+    },
+  );
+  if (!res.ok) {
+    throw new Error(`Drive trash failed: ${res.status} ${await res.text()}`);
+  }
+}
+
 export async function verifyDriveConnection(profileId?: string | null): Promise<{
   ok: boolean;
   linked: boolean;

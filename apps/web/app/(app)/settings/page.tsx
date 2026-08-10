@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { ProductSettingsCard } from "@/components/settings/ProductSettingsCard";
 import { DriveTaxonomyHealth } from "@/components/settings/DriveTaxonomyHealth";
+import { DriveFolderCombine } from "@/components/settings/DriveFolderCombine";
 import { PersonalityVaultCard } from "@/components/settings/PersonalityVaultCard";
 import { SkillsStudioCard } from "@/components/settings/SkillsStudioCard";
 import { SealedSuitcaseCard } from "@/components/settings/SealedSuitcaseCard";
@@ -901,6 +902,10 @@ export default function SettingsPage() {
             </p>
           ) : null}
           <DriveTaxonomyHealth
+            linked={Boolean(drive?.linked || drive?.enabled)}
+            disabled={driveBusy}
+          />
+          <DriveFolderCombine
             linked={Boolean(drive?.linked || drive?.enabled)}
             disabled={driveBusy}
           />

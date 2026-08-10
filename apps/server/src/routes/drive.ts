@@ -10,6 +10,14 @@ import {
   verifyDriveConnection,
 } from "../archive/drive.js";
 import {
+  dryRunCombineFolders,
+  listCombineFolders,
+  prepareCombineFoldersExecute,
+  type CombineConflictAction,
+  type CombineExecuteRequest,
+  type CombineFileDecision,
+} from "../archive/folder-combine.js";
+import {
   clearDriveOauthStore,
   consumeOauthPending,
   createOauthPending,
@@ -19,8 +27,51 @@ import {
 } from "../archive/drive-oauth-store.js";
 import { getArchiveContextMeta, refreshArchiveContext } from "../archive/init-context.js";
 import { getActiveProfileId, getPrisma } from "../db/prisma-singleton.js";
+import {
+  enqueueServerJob,
+  SERVER_JOB_DRIVE_COMBINE,
+} from "../jobs/server-jobs.js";
 import { getRequestSession } from "../auth/middleware.js";
 import { sendError, withPrisma, getProfileId } from "./helpers.js";
+
+function requireDriveLinked(profileId: string, reply: { status: (code: number) => { send: (body: unknown) => unknown } }) {
+  const status = driveStatus(profileId);
+  if (!status.enabled && !status.linked) {
+    return {
+      blocked: true as const,
+      response: reply.status(400).send({
+        error: status.message,
+        code: "DRIVE_NOT_LINKED",
+        status,
+      }),
+      status,
+    };
+  }
+  return { blocked: false as const, status };
+}
+
+function parseCombineDecisions(raw: unknown): Record<string, CombineFileDecision> {
+  if (!raw || typeof raw !== "object") return {};
+  const out: Record<string, CombineFileDecision> = {};
+  for (const [fileId, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (!fileId || !value || typeof value !== "object") continue;
+    const action = (value as { action?: string }).action;
+    if (
+      action !== "keep_destination" &&
+      action !== "keep_incoming" &&
+      action !== "keep_both" &&
+      action !== "skip"
+    ) {
+      continue;
+    }
+    const decision: CombineFileDecision = { action: action as CombineConflictAction };
+    if ((value as { trashOther?: unknown }).trashOther === true) {
+      decision.trashOther = true;
+    }
+    out[fileId] = decision;
+  }
+  return out;
+}
 
 export async function registerDriveRoutes(app: FastifyInstance): Promise<void> {
   app.get("/archive/drive", async (req) => {
@@ -210,4 +261,95 @@ export async function registerDriveRoutes(app: FastifyInstance): Promise<void> {
       }
     },
   );
+
+  /** Folder map for manual combine (archive-root children). */
+  app.get("/archive/drive/combine/folders", async (req, reply) => {
+    try {
+      const profileId = getProfileId(req);
+      const gate = requireDriveLinked(profileId, reply);
+      if (gate.blocked) return gate.response;
+      return await listCombineFolders(profileId);
+    } catch (err) {
+      return sendError(reply, err);
+    }
+  });
+
+  /** Dry-run: list moves + Explorer-style name conflicts (no Drive writes). */
+  app.post<{
+    Body: { destinationFolderId?: string; sourceFolderIds?: string[] };
+  }>("/archive/drive/combine/dry-run", async (req, reply) => {
+    try {
+      const profileId = getProfileId(req);
+      const gate = requireDriveLinked(profileId, reply);
+      if (gate.blocked) return gate.response;
+      const destinationFolderId =
+        typeof req.body?.destinationFolderId === "string" ? req.body.destinationFolderId : "";
+      const sourceFolderIds = Array.isArray(req.body?.sourceFolderIds)
+        ? req.body.sourceFolderIds.filter((id): id is string => typeof id === "string")
+        : [];
+      return await dryRunCombineFolders(profileId, { destinationFolderId, sourceFolderIds });
+    } catch (err) {
+      return sendError(reply, err);
+    }
+  });
+
+  /**
+   * Execute combine as a durable ServerJob.
+   * Never trashes/deletes unless per-file trashOther or empty-folder confirm flags are set.
+   */
+  app.post<{ Body: CombineExecuteRequest }>("/archive/drive/combine/execute", async (req, reply) => {
+    try {
+      const profileId = getProfileId(req);
+      const gate = requireDriveLinked(profileId, reply);
+      if (gate.blocked) return gate.response;
+
+      const body: CombineExecuteRequest = {
+        destinationFolderId:
+          typeof req.body?.destinationFolderId === "string" ? req.body.destinationFolderId : "",
+        sourceFolderIds: Array.isArray(req.body?.sourceFolderIds)
+          ? req.body.sourceFolderIds.filter((id): id is string => typeof id === "string")
+          : [],
+        dryRunAt: typeof req.body?.dryRunAt === "string" ? req.body.dryRunAt : "",
+        decisions: parseCombineDecisions(req.body?.decisions),
+        removeEmptySourceFolders: req.body?.removeEmptySourceFolders === true,
+        iUnderstandRemoveEmptySourceFolders: req.body?.iUnderstandRemoveEmptySourceFolders === true,
+      };
+
+      const prepared = await prepareCombineFoldersExecute(profileId, body);
+      const { prisma } = await withPrisma(req);
+      const job = await enqueueServerJob(prisma, {
+        type: SERVER_JOB_DRIVE_COMBINE,
+        payload: prepared.payload,
+      });
+
+      await prisma.auditLog.create({
+        data: {
+          action: "archive.drive_combine_enqueue",
+          entity: "ServerJob",
+          entityId: job.id,
+          metadata: JSON.stringify({
+            destinationFolderId: prepared.payload.destinationFolderId,
+            sourceFolderIds: prepared.payload.sourceFolderIds,
+            moveCount: prepared.preview.moveCount,
+            conflictCount: prepared.preview.conflictCount,
+            removeEmptySourceFolders: prepared.payload.removeEmptySourceFolders,
+          }),
+        },
+      });
+
+      return {
+        ok: true as const,
+        jobId: job.id,
+        message: prepared.message,
+        preview: {
+          moveCount: prepared.preview.moveCount,
+          conflictCount: prepared.preview.conflictCount,
+          destination: prepared.preview.destination,
+          sources: prepared.preview.sources,
+        },
+      };
+    } catch (err) {
+      return sendError(reply, err);
+    }
+  });
 }
