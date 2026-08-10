@@ -14,5 +14,7 @@ Use when the user drops mail, PDFs, or asks to file a document.
    Never claim a `.pdf` archive name for PNG bytes (or the reverse).
 3. Taxonomy folders 1–10: Official, Housing, Insurance, Financial, Employment, Health, Education, Legal, Misc, Vehicles.
 4. Summarize proposed name, folder, Fristen, and duplicates — then wait for **Needs your confirmation** in the app.
-   The user can **View file** before Confirm. Never claim the file was archived before confirm.
+   The app runs an **Already filed?** near-duplicate radar on local archive (same/similar Entity + DocType + +/-7d).
+   Show hits with **Open existing** / **File anyway** — never auto-skip. The user can **View file** before Confirm.
+   Never claim the file was archived before confirm.
 5. After confirm, local archive always writes under the profile; Drive is optional/soft-gated and uses the same archive filename + MIME as the local copy.

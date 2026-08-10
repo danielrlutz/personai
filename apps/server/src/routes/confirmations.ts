@@ -6,6 +6,10 @@ import React from "react";
 import { renderToBuffer } from "@react-pdf/renderer";
 import { profileDir, profileExportsDir } from "../config.js";
 import { guessMime } from "../archive/commit.js";
+import {
+  findNearDuplicates,
+  NEAR_DUP_DEFAULT_WINDOW_DAYS,
+} from "../archive/near-duplicates.js";
 import { ARCHIVE_TAXONOMY } from "../specialists/roster.js";
 import { createConfirmation, listPendingConfirmations } from "../confirm/confirm-service.js";
 import { resolveConfirmation } from "../confirm/apply-confirmation.js";
@@ -166,6 +170,49 @@ export async function registerConfirmationRoutes(app) {
             return sendError(reply, err);
         }
     });
+
+    /**
+     * Already-filed near-duplicate radar for archive confirms.
+     * Advisory only — never auto-skips; UI offers open existing / file anyway.
+     */
+    app.get("/archive/near-duplicates", async (req, reply) => {
+        try {
+            const { profileId, prisma } = await withPrisma(req);
+            const q = req.query ?? {};
+            const date = String(q.date ?? "").trim();
+            const docType = String(q.docType ?? "").trim();
+            const entity = String(q.entity ?? "").trim();
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+                return reply.status(400).send({ error: "date must be YYYY-MM-DD" });
+            }
+            if (!docType && !entity) {
+                return reply.status(400).send({ error: "docType or entity required" });
+            }
+            const windowRaw = q.windowDays != null ? Number(q.windowDays) : NEAR_DUP_DEFAULT_WINDOW_DAYS;
+            const windowDays = Number.isFinite(windowRaw)
+                ? Math.min(31, Math.max(0, Math.trunc(windowRaw)))
+                : NEAR_DUP_DEFAULT_WINDOW_DAYS;
+            const categoryRaw = q.archiveCategory != null ? Number(q.archiveCategory) : null;
+            const hits = await findNearDuplicates(prisma, profileId, {
+                date,
+                docType: docType || "OTHER",
+                entity: entity || "Unknown",
+                archiveCategory:
+                    categoryRaw != null && !Number.isNaN(categoryRaw) ? categoryRaw : null,
+                excludeDocumentId: typeof q.excludeDocumentId === "string" ? q.excludeDocumentId : null,
+                windowDays,
+            });
+            return {
+                query: { date, docType, entity, windowDays },
+                hits,
+                autoSkip: false,
+            };
+        }
+        catch (err) {
+            return sendError(reply, err);
+        }
+    });
+
     /**
      * Stream document bytes for in-app preview / open-in-tab.
      * Scoped to the unlocked profile DB + files under that profile's data dir.

@@ -25,6 +25,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { NearDuplicateRadar } from "./NearDuplicateRadar";
 import {
   DriveJobPulseStrip,
   trackDriveJobPulse,
@@ -158,6 +159,7 @@ export function ConfirmGate({
   const [previewBusyId, setPreviewBusyId] = useState<string | null>(null);
   const [preview, setPreview] = useState<PreviewState | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [nearDupeIds, setNearDupeIds] = useState<Record<string, boolean>>({});
   /** Drive upload ServerJob ids returned by confirm (pulse strip). */
   const [driveJobIds, setDriveJobIds] = useState<string[]>([]);
 
@@ -222,24 +224,21 @@ export function ConfirmGate({
     }
   };
 
-  const viewDocument = async (c: PendingConfirmation) => {
-    const documentId = documentIdFromConfirmation(c);
-    if (!documentId) {
-      toast.error("No document linked to this confirmation.");
-      return;
-    }
-    setPreviewBusyId(c.id);
+  const openDocumentPreview = async (
+    documentId: string,
+    opts?: { busyKey?: string; fallbackName?: string },
+  ) => {
+    const busyKey = opts?.busyKey ?? documentId;
+    setPreviewBusyId(busyKey);
     try {
       const result = await apiGetBlob(`/documents/${documentId}/file`, { silent: true });
       const url = URL.createObjectURL(result.blob);
-      const draft = drafts[c.id];
-      const fallbackName = draft ? buildArchiveName(draft) : documentId;
       setPreview((prev) => {
         if (prev?.url) URL.revokeObjectURL(prev.url);
         return {
           url,
           contentType: result.contentType,
-          filename: result.filename || fallbackName,
+          filename: result.filename || opts?.fallbackName || documentId,
           documentId,
         };
       });
@@ -252,6 +251,19 @@ export function ConfirmGate({
     } finally {
       setPreviewBusyId(null);
     }
+  };
+
+  const viewDocument = async (c: PendingConfirmation) => {
+    const documentId = documentIdFromConfirmation(c);
+    if (!documentId) {
+      toast.error("No document linked to this confirmation.");
+      return;
+    }
+    const draft = drafts[c.id];
+    await openDocumentPreview(documentId, {
+      busyKey: c.id,
+      fallbackName: draft ? buildArchiveName(draft) : documentId,
+    });
   };
 
   const decide = async (id: string, decision: "confirm" | "reject") => {
@@ -334,9 +346,8 @@ export function ConfirmGate({
             <Badge variant="outline">{items.length}</Badge>
           </CardTitle>
           <CardDescription className="text-xs">
-            View the file, edit archive naming, then Confirm. Confirm writes Drive/ledger; Decline
-            leaves external systems unchanged. Calendar proposes stage locally until Google Calendar
-            write is wired.
+            View the file, edit archive naming, then Confirm. Likely already-filed matches offer Open
+            existing or File anyway — never auto-skipped. Decline leaves external systems unchanged.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -438,6 +449,25 @@ export function ConfirmGate({
                     </div>
                   ) : null}
 
+
+                  {draft && (c.action === "archive.commit" || c.action === "ledger.write") ? (
+                    <NearDuplicateRadar
+                      draft={draft}
+                      excludeDocumentId={documentId}
+                      onHitsChange={(hasHits) =>
+                        setNearDupeIds((prev) =>
+                          prev[c.id] === hasHits ? prev : { ...prev, [c.id]: hasHits },
+                        )
+                      }
+                      onOpenExisting={(existingId, archiveName) =>
+                        void openDocumentPreview(existingId, {
+                          busyKey: c.id,
+                          fallbackName: archiveName,
+                        })
+                      }
+                    />
+                  ) : null}
+
                   <div className="flex flex-wrap shrink-0 gap-2">
                     {documentId ? (
                       <Button
@@ -455,7 +485,7 @@ export function ConfirmGate({
                       disabled={busyId === c.id}
                       onClick={() => void decide(c.id, "confirm")}
                     >
-                      Confirm
+                      {nearDupeIds[c.id] ? "File anyway" : "Confirm"}
                     </Button>
                     <Button
                       size="sm"
