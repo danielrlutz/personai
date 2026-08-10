@@ -177,6 +177,8 @@ For archive items you can:
 - **Confirm** — writes (local archive and Drive if linked; same filename + MIME)
 - **Decline** — leaves external systems unchanged; local staging kept
 
+After you confirm a filing, PersonAI may offer a second confirm to **remember** that entity→folder mapping (e.g. Swisscom → 4 Financial). Decline skips learning; Confirm trains OCR/Staff for the next bill.
+
 ### Activity
 
 Open **Activity** (nav or Home). Audit trail for confirms, archive writes, triage, and exports. Tap **Refresh** to reload.

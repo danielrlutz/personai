@@ -20,6 +20,10 @@ import {
   serializeServerJob,
   SERVER_JOB_DRIVE_UPLOAD,
 } from "../jobs/server-jobs.js";
+import {
+  queueFilingMemoryProposal,
+  resolveFilingEntity,
+} from "../memory/filing-memory.js";
 
 async function fileDocumentToArchive(prisma, documentId, payload) {
   const doc = await prisma.document.findUnique({ where: { id: documentId } });
@@ -77,10 +81,29 @@ async function fileDocumentToArchive(prisma, documentId, payload) {
       }),
     },
   });
+  // Confirm-learned naming muscle memory — propose entity→category (never silent).
+  const filingEntity = resolveFilingEntity({
+    ...payload,
+    archiveName: archived.archiveName,
+    archiveCategory: archived.archiveCategory,
+  });
+  let filingMemory = null;
+  try {
+    filingMemory = await queueFilingMemoryProposal(prisma, {
+      entity: filingEntity,
+      archiveCategory: archived.archiveCategory,
+      documentId,
+      archiveName: archived.archiveName,
+    });
+  } catch (err) {
+    console.warn("[filing-memory] propose failed:", err);
+    filingMemory = { queued: false, reason: "error" };
+  }
   return {
     doc,
     archived,
     driveJob: driveJob ? serializeServerJob(driveJob) : null,
+    filingMemory,
   };
 }
 
