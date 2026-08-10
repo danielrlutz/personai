@@ -4,12 +4,27 @@ import fsp from "node:fs/promises";
 import path from "node:path";
 import React from "react";
 import { renderToBuffer } from "@react-pdf/renderer";
-import { profileExportsDir } from "../config.js";
+import { profileDir, profileExportsDir } from "../config.js";
+import { guessMime } from "../archive/commit.js";
 import { ARCHIVE_TAXONOMY } from "../specialists/roster.js";
 import { createConfirmation, listPendingConfirmations } from "../confirm/confirm-service.js";
 import { resolveConfirmation } from "../confirm/apply-confirmation.js";
 import { CareerDocument } from "../export/career-document.js";
 import { sendError, withPrisma } from "./helpers.js";
+
+function isPathInside(parent, child) {
+  const resolvedParent = path.resolve(parent);
+  const resolvedChild = path.resolve(child);
+  const rel = path.relative(resolvedParent, resolvedChild);
+  return Boolean(rel) && !rel.startsWith("..") && !path.isAbsolute(rel);
+}
+
+function contentDisposition(filename, inline = true) {
+  const safe = String(filename || "document").replace(/[^\w.\-ÄÖÜäöüéèêà ]+/g, "_");
+  const type = inline ? "inline" : "attachment";
+  return `${type}; filename="${safe}"`;
+}
+
 export async function registerConfirmationRoutes(app) {
     app.get("/confirmations", async (req, reply) => {
         try {
@@ -59,6 +74,8 @@ export async function registerConfirmationRoutes(app) {
             const payload = JSON.parse(pending.payload || "{}");
             if (typeof body.archiveName === "string" && body.archiveName.trim()) {
                 payload.archiveName = body.archiveName.trim();
+                const ext = path.extname(payload.archiveName);
+                if (ext) payload.sourceExtension = ext.toLowerCase();
             }
             if (body.archiveCategory != null && !Number.isNaN(Number(body.archiveCategory))) {
                 payload.archiveCategory = Number(body.archiveCategory);
@@ -104,6 +121,38 @@ export async function registerConfirmationRoutes(app) {
                 },
             });
             return { documents, taxonomy: ARCHIVE_TAXONOMY };
+        }
+        catch (err) {
+            return sendError(reply, err);
+        }
+    });
+    /**
+     * Stream document bytes for in-app preview / open-in-tab.
+     * Scoped to the unlocked profile DB + files under that profile's data dir.
+     */
+    app.get("/documents/:id/file", async (req, reply) => {
+        try {
+            const { profileId, prisma } = await withPrisma(req);
+            const doc = await prisma.document.findUnique({ where: { id: req.params.id } });
+            if (!doc) return reply.status(404).send({ error: "Document not found" });
+            const storagePath = path.resolve(doc.storagePath);
+            const root = path.resolve(profileDir(profileId));
+            if (!isPathInside(root, storagePath)) {
+                return reply.status(403).send({ error: "Document path outside profile" });
+            }
+            try {
+                await fsp.access(storagePath);
+            }
+            catch {
+                return reply.status(404).send({ error: "Document file missing on disk" });
+            }
+            const filename = doc.archiveName || doc.filename || path.basename(storagePath);
+            const mime = doc.mimeType || guessMime(storagePath, null);
+            const inline = String(req.query?.download ?? "") !== "1";
+            reply.header("Content-Type", mime);
+            reply.header("Content-Disposition", contentDisposition(filename, inline));
+            reply.header("Cache-Control", "private, no-store");
+            return reply.send(fs.createReadStream(storagePath));
         }
         catch (err) {
             return sendError(reply, err);

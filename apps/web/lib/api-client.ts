@@ -394,6 +394,51 @@ export async function apiUpload<T>(path: string, formData: FormData, init?: ApiR
   }, silent, path);
 }
 
+export type ApiBlobResult = {
+  blob: Blob;
+  contentType: string;
+  filename: string | null;
+};
+
+/** Authenticated binary GET (document preview / download). Does not force JSON Content-Type. */
+export async function apiGetBlob(path: string, init?: ApiRequestInit): Promise<ApiBlobResult> {
+  const { request, silent } = splitInit(init);
+  return runNotified(async () => {
+    const headers = buildHeaders(request.headers);
+    headers.delete("Content-Type");
+    headers.set("Accept", "*/*");
+    const res = await fetch(apiUrl(path), {
+      ...request,
+      method: "GET",
+      headers,
+    });
+    if (!res.ok) {
+      maybeRedirectOnAuthFailure(res.status, path);
+      const text = await res.text();
+      let body: unknown = text;
+      try {
+        body = text ? JSON.parse(text) : null;
+      } catch {
+        /* keep text */
+      }
+      const message =
+        typeof body === "object" && body !== null && "error" in body
+          ? String((body as { error: unknown }).error)
+          : `Request failed (${res.status})`;
+      throw new ApiError(message, res.status, body);
+    }
+    const cd = res.headers.get("Content-Disposition") ?? "";
+    const quoted = cd.match(/filename="([^"]+)"/i);
+    const plain = cd.match(/filename=([^;]+)/i);
+    const filename = (quoted?.[1] ?? plain?.[1] ?? null)?.trim() || null;
+    return {
+      blob: await res.blob(),
+      contentType: res.headers.get("Content-Type") ?? "application/octet-stream",
+      filename,
+    };
+  }, silent, path);
+}
+
 export type SSEHandler = {
   onEvent?: (event: string, data: unknown) => void;
   onError?: (error: Error) => void;
