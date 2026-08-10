@@ -10,6 +10,7 @@ import {
 } from "../specialists/roster.js";
 import { resolveSpecialistModel } from "../specialists/resolve-model.js";
 import { runForgeQaLoop } from "../specialists/forge-qa-loop.js";
+import { runPocketHuddle } from "../specialists/pocket-huddle.js";
 import {
   humanizeOllamaError,
   resolveOllamaHost,
@@ -48,6 +49,13 @@ type ChatBody = {
 type ForgeQaBody = {
   brief?: string;
   sessionId?: string;
+};
+
+type HuddleBody = {
+  message?: string;
+  sessionId?: string;
+  /** Up to 2 guest specialists after Staff. */
+  specialists?: string[];
 };
 
 function stripDataUrl(base64: string): string {
@@ -315,6 +323,45 @@ export async function registerTeamRoutes(app: FastifyInstance): Promise<void> {
         const result = await runForgeQaLoop({
           prisma,
           brief: body.brief,
+          userCare,
+          onProgress: (event) => {
+            sseWrite(reply, event.phase, event);
+          },
+        });
+        sseWrite(reply, "result", result);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        sseWrite(reply, "error", { message, error: message });
+      } finally {
+        reply.raw.end();
+      }
+    } catch (err) {
+      return sendError(reply, err);
+    }
+  });
+
+  /** Staff + up to 2 specialists sequenced into one Team thread. */
+  app.post("/team/huddle/stream", async (req, reply) => {
+    try {
+      const body = (req.body ?? {}) as HuddleBody;
+      if (!body.message?.trim()) {
+        return reply.status(400).send({ error: "message is required" });
+      }
+      const guests = Array.isArray(body.specialists)
+        ? body.specialists.map(String).slice(0, 2)
+        : [];
+      const { prisma } = await withPrisma(req);
+      const { userCare } = await loadUserCare(prisma, "secretary", null);
+
+      sseStart(reply, req);
+      sseWrite(reply, "context", { kind: "huddle", guests });
+
+      try {
+        const result = await runPocketHuddle({
+          prisma,
+          message: body.message,
+          specialists: guests,
+          sessionId: body.sessionId,
           userCare,
           onProgress: (event) => {
             sseWrite(reply, event.phase, event);

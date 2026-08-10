@@ -9,6 +9,14 @@ import { PageEnter } from "@/components/motion/PageEnter";
 function TeamPageInner() {
   const params = useSearchParams();
   const specialist = params.get("specialist") ?? "secretary";
+  const huddle = params.get("huddle") === "1" || params.get("huddle") === "true";
+  const message =
+    params.get("message")?.trim() || params.get("q")?.trim() || "";
+  const guests = (params.get("guests") ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .slice(0, 2);
 
   return (
     <PageEnter
@@ -21,7 +29,8 @@ function TeamPageInner() {
         <div className="min-w-0">
           <h1 className="page-title">Team</h1>
           <p className="page-subtitle mt-0.5 hidden max-w-3xl sm:block">
-            Ask your specialists anything. Important changes still ask for confirmation first.
+            Ask your specialists anything — or run a Pocket huddle. Important changes still ask for
+            confirmation first.
           </p>
         </div>
       </div>
@@ -29,7 +38,12 @@ function TeamPageInner() {
         <ConfirmGate compact />
       </div>
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <TeamChat initialSpecialist={specialist} />
+        <TeamChat
+          initialSpecialist={specialist}
+          initialHuddle={huddle}
+          initialMessage={message}
+          initialGuests={guests}
+        />
       </div>
     </PageEnter>
   );

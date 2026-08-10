@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { BookmarkPlus, ImagePlus, Send, Trash2, Users, X } from "lucide-react";
+import { BookmarkPlus, ImagePlus, Send, Trash2, Users, UsersRound, X } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,6 +12,8 @@ import { EmptyState } from "@/components/shared/EmptyState";
 import { SpecialistPicker } from "./SpecialistPicker";
 import { CareerPdfPanel } from "./CareerPdfPanel";
 import { ForgeQaPanel } from "./ForgeQaPanel";
+import { HuddlePanel } from "./HuddlePanel";
+import { useHuddleStream } from "./useHuddleStream";
 import { apiGet, apiPost, type DriveStatus, type MemoryFact } from "@/lib/api-client";
 import {
   readChatMarkdownPref,
@@ -24,14 +26,26 @@ import Link from "next/link";
 
 interface TeamChatProps {
   initialSpecialist?: string;
+  /** Open in Pocket huddle mode (e.g. from triage). */
+  initialHuddle?: boolean;
+  /** Prefill composer. */
+  initialMessage?: string;
+  /** Prefill huddle guests (max 2). */
+  initialGuests?: string[];
 }
 
 const MAX_STYLIST_IMAGE_BYTES = 8 * 1024 * 1024;
 
-export function TeamChat({ initialSpecialist = "secretary" }: TeamChatProps) {
+export function TeamChat({
+  initialSpecialist = "secretary",
+  initialHuddle = false,
+  initialMessage = "",
+  initialGuests = [],
+}: TeamChatProps) {
   const [specialists, setSpecialists] = useState<SpecialistMeta[]>(SPECIALIST_FALLBACK);
   const [specialist, setSpecialist] = useState(initialSpecialist);
-  const [input, setInput] = useState("");
+  const [huddleMode, setHuddleMode] = useState(initialHuddle);
+  const [input, setInput] = useState(initialMessage);
   const [photo, setPhoto] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -42,13 +56,18 @@ export function TeamChat({ initialSpecialist = "secretary" }: TeamChatProps) {
   const [rememberSaving, setRememberSaving] = useState(false);
   const [drive, setDrive] = useState<DriveStatus | null>(null);
   const [markdownMode, setMarkdownMode] = useState<ChatMarkdownMode>("formatted");
-  const { messages, streaming, error, sendMessage, retryMessage, clear } = useChatStream({
-    specialist,
-  });
-  const showCareerPdf = specialist === "career_strategist";
-  const showForgeQa = specialist === "forge" || specialist === "qa_auditor";
-  const showStylistPhoto = specialist === "stylist";
-  const showSidePanel = showCareerPdf || showForgeQa;
+  const [huddleGuests, setHuddleGuests] = useState<string[]>(
+    initialGuests.filter((g) => g && g !== "secretary").slice(0, 2),
+  );
+  const chat = useChatStream({ specialist });
+  const huddle = useHuddleStream();
+  const streaming = huddleMode ? huddle.streaming : chat.streaming;
+  const error = huddleMode ? huddle.error : chat.error;
+  const messages = huddleMode ? huddle.messages : chat.messages;
+  const showCareerPdf = !huddleMode && specialist === "career_strategist";
+  const showForgeQa = !huddleMode && (specialist === "forge" || specialist === "qa_auditor");
+  const showStylistPhoto = !huddleMode && specialist === "stylist";
+  const showSidePanel = huddleMode || showCareerPdf || showForgeQa;
   const formatted = markdownMode === "formatted";
 
   useEffect(() => {
@@ -79,7 +98,14 @@ export function TeamChat({ initialSpecialist = "secretary" }: TeamChatProps) {
   }, [initialSpecialist]);
 
   useEffect(() => {
-    // Drop pending photo when leaving Stylist.
+    setHuddleMode(initialHuddle);
+  }, [initialHuddle]);
+
+  useEffect(() => {
+    if (initialMessage) setInput(initialMessage);
+  }, [initialMessage]);
+
+  useEffect(() => {
     if (specialist !== "stylist") {
       clearPhoto();
     }
@@ -93,7 +119,8 @@ export function TeamChat({ initialSpecialist = "secretary" }: TeamChatProps) {
   }, [photoPreview]);
 
   const active = specialists.find((s) => s.id === specialist) ?? specialists[0];
-  const hasUnsent = messages.some((m) => m.role === "user" && m.status !== "sent");
+  const hasUnsent =
+    !huddleMode && chat.messages.some((m) => m.role === "user" && m.status !== "sent");
 
   const clearPhoto = () => {
     setPhoto(null);
@@ -127,17 +154,34 @@ export function TeamChat({ initialSpecialist = "secretary" }: TeamChatProps) {
   };
 
   const handleSend = () => {
+    if (huddleMode) return;
     if (!input.trim() && !photo) return;
-    void sendMessage(input, photo ? { image: photo, imageFilename: photo.name } : undefined).catch(
-      (err) => {
+    void chat
+      .sendMessage(input, photo ? { image: photo, imageFilename: photo.name } : undefined)
+      .catch((err) => {
         toast.error(err instanceof Error ? err.message : "Could not queue message", {
           title: "Message failed to send",
           sticky: true,
         });
-      },
-    );
+      });
     setInput("");
     clearPhoto();
+  };
+
+  const startHuddle = (guests: string[]) => {
+    const text = input.trim();
+    if (!text) {
+      toast.error("Type what you want the huddle to discuss first.", { title: "Pocket huddle" });
+      return;
+    }
+    if (!guests.length) {
+      toast.error("Pick up to two specialists to join Staff.", { title: "Pocket huddle" });
+      return;
+    }
+    setHuddleGuests(guests);
+    setHuddleMode(true);
+    void huddle.runHuddle(text, guests);
+    setInput("");
   };
 
   const openRemember = () => {
@@ -156,8 +200,8 @@ export function TeamChat({ initialSpecialist = "secretary" }: TeamChatProps) {
       await apiPost<MemoryFact>("/memory-facts", {
         key: rememberKey.trim(),
         value: rememberValue.trim(),
-        source: "team-chat",
-        specialistId: specialist,
+        source: huddleMode ? "pocket-huddle" : "team-chat",
+        specialistId: huddleMode ? "secretary" : specialist,
       });
       setRememberNote("Saved to memory.");
       setShowRemember(false);
@@ -169,6 +213,8 @@ export function TeamChat({ initialSpecialist = "secretary" }: TeamChatProps) {
       setRememberSaving(false);
     }
   };
+
+  const title = huddleMode ? "Pocket huddle" : (active?.label ?? "Pocket team");
 
   return (
     <div
@@ -183,11 +229,15 @@ export function TeamChat({ initialSpecialist = "secretary" }: TeamChatProps) {
           <div className="flex min-w-0 items-center justify-between gap-2 sm:gap-3">
             <CardTitle className="flex min-w-0 items-center gap-2 sm:gap-2.5">
               <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-container">
-                <Users className="h-4 w-4 text-primary-on-container" />
+                {huddleMode ? (
+                  <UsersRound className="h-4 w-4 text-primary-on-container" />
+                ) : (
+                  <Users className="h-4 w-4 text-primary-on-container" />
+                )}
               </span>
               <span className="min-w-0 truncate">
-                {active?.label ?? "Pocket team"}
-                {active?.preferredModel ? (
+                {title}
+                {!huddleMode && active?.preferredModel ? (
                   <span className="ml-2 hidden font-normal text-muted-foreground sm:inline">
                     · {active.preferredModel}
                   </span>
@@ -195,6 +245,17 @@ export function TeamChat({ initialSpecialist = "secretary" }: TeamChatProps) {
               </span>
             </CardTitle>
             <div className="flex shrink-0 items-center gap-0.5 sm:gap-1">
+              <Button
+                variant={huddleMode ? "secondary" : "ghost"}
+                size="sm"
+                onClick={() => setHuddleMode((v) => !v)}
+                disabled={streaming}
+                title="Staff + up to 2 specialists in one thread"
+                aria-pressed={huddleMode}
+              >
+                <UsersRound className="h-4 w-4" />
+                <span className="hidden sm:inline">Huddle</span>
+              </Button>
               <Button
                 variant="ghost"
                 size="sm"
@@ -213,25 +274,42 @@ export function TeamChat({ initialSpecialist = "secretary" }: TeamChatProps) {
                 variant="ghost"
                 size="sm"
                 onClick={() => {
-                  clear();
+                  if (huddleMode) huddle.clear();
+                  else chat.clear();
                   clearPhoto();
                 }}
-                disabled={streaming || (messages.length === 0 && !hasUnsent && !photo)}
+                disabled={
+                  streaming ||
+                  (messages.length === 0 && !hasUnsent && !photo)
+                }
               >
                 <Trash2 className="h-4 w-4" />
                 <span className="hidden sm:inline">Clear</span>
               </Button>
             </div>
           </div>
-          <SpecialistPicker
-            specialists={specialists}
-            value={specialist}
-            onChange={setSpecialist}
-            disabled={streaming}
-          />
-          {active ? (
-            <p className="truncate text-sm leading-snug text-muted-foreground">{active.description}</p>
-          ) : null}
+          {huddleMode ? (
+            <p className="text-sm leading-snug text-muted-foreground">
+              Staff chairs, then your guests take turns. Any write proposal goes to{" "}
+              <span className="font-medium text-foreground">Needs your confirmation</span>
+              {huddle.activeSpeaker ? ` · ${huddle.activeSpeaker} speaking…` : null}
+              {huddle.confirmCount > 0 ? ` · ${huddle.confirmCount} queued` : null}
+            </p>
+          ) : (
+            <>
+              <SpecialistPicker
+                specialists={specialists}
+                value={specialist}
+                onChange={setSpecialist}
+                disabled={streaming}
+              />
+              {active ? (
+                <p className="truncate text-sm leading-snug text-muted-foreground">
+                  {active.description}
+                </p>
+              ) : null}
+            </>
+          )}
           {drive && !drive.linked ? (
             <p className="rounded-lg border border-border/50 bg-surface-container px-3 py-2 text-sm leading-snug text-muted-foreground">
               No archive context yet.{" "}
@@ -249,40 +327,57 @@ export function TeamChat({ initialSpecialist = "secretary" }: TeamChatProps) {
           <div className="team-chat-thread min-h-0 flex-1 space-y-3.5 overflow-y-auto overflow-x-hidden overscroll-contain px-3 py-3.5 sm:space-y-4 sm:px-5 sm:py-4">
             {messages.length === 0 ? (
               <EmptyState
-                icon={Users}
-                title="Ask your pocket team"
-                description="Staff handles everyday requests. Switch to Finance, Legal, coding, Career, or coaching when you need a specialist."
+                icon={huddleMode ? UsersRound : Users}
+                title={huddleMode ? "Start a pocket huddle" : "Ask your pocket team"}
+                description={
+                  huddleMode
+                    ? "Type the ask, pick up to two specialists, then Start huddle. Staff frames first."
+                    : "Staff handles everyday requests. Switch to Finance, Legal, coding, Career, or coaching when you need a specialist — or open Huddle for a sequenced roundtable."
+                }
                 className="py-10 sm:py-14"
               />
             ) : (
               messages.map((msg, i) => {
-                const isStreamingAssistant =
-                  streaming &&
-                  msg.role === "assistant" &&
-                  i === messages.length - 1 &&
-                  messages[i - 1]?.status === "pending";
+                const isStreamingAssistant = huddleMode
+                  ? streaming &&
+                    msg.role === "assistant" &&
+                    i === messages.length - 1 &&
+                    Boolean(huddle.activeSpeaker)
+                  : streaming &&
+                    msg.role === "assistant" &&
+                    i === messages.length - 1 &&
+                    "status" in (messages[i - 1] ?? {}) &&
+                    (messages[i - 1] as { status?: string }).status === "pending";
                 if (msg.role === "assistant" && !msg.content.trim() && !isStreamingAssistant) {
                   return null;
                 }
+                const chatMsg = !huddleMode
+                  ? (msg as (typeof chat.messages)[number])
+                  : null;
                 return (
                   <StreamingMessage
                     key={msg.id}
                     role={msg.role}
                     content={msg.content}
                     streaming={isStreamingAssistant}
-                    status={msg.status}
-                    error={msg.error}
+                    status={chatMsg?.status}
+                    error={chatMsg?.error}
                     formatted={formatted}
+                    speakerLabel={
+                      huddleMode && msg.role === "assistant"
+                        ? msg.speakerLabel
+                        : undefined
+                    }
                     onRetry={
-                      msg.role === "user" && msg.status === "failed"
-                        ? () => void retryMessage(msg.outboxOpId ?? msg.id)
+                      chatMsg && chatMsg.role === "user" && chatMsg.status === "failed"
+                        ? () => void chat.retryMessage(chatMsg.outboxOpId ?? chatMsg.id)
                         : undefined
                     }
                   />
                 );
               })
             )}
-            {error && !hasUnsent ? (
+            {error && (huddleMode || !hasUnsent) ? (
               <p className="break-words text-sm text-destructive">{error}</p>
             ) : null}
           </div>
@@ -367,30 +462,45 @@ export function TeamChat({ initialSpecialist = "secretary" }: TeamChatProps) {
               ) : null}
               <Textarea
                 placeholder={
-                  showStylistPhoto
-                    ? `Message Stylist… (optional photo)`
-                    : `Message ${active?.shortLabel ?? "Staff"}…`
+                  huddleMode
+                    ? "What should Staff + guests discuss?"
+                    : showStylistPhoto
+                      ? `Message Stylist… (optional photo)`
+                      : `Message ${active?.shortLabel ?? "Staff"}…`
                 }
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.shiftKey) {
                     e.preventDefault();
-                    handleSend();
+                    if (!huddleMode) handleSend();
                   }
                 }}
                 rows={2}
                 className="min-h-[2.75rem] min-w-0 flex-1 resize-none text-[0.9375rem] leading-relaxed sm:text-base"
+                disabled={huddleMode && streaming}
               />
-              <Button
-                onClick={handleSend}
-                disabled={!input.trim() && !photo}
-                size="icon"
-                className="h-11 w-11 shrink-0"
-              >
-                <Send className="h-4 w-4" />
-              </Button>
+              {!huddleMode ? (
+                <Button
+                  onClick={handleSend}
+                  disabled={!input.trim() && !photo}
+                  size="icon"
+                  className="h-11 w-11 shrink-0"
+                >
+                  <Send className="h-4 w-4" />
+                </Button>
+              ) : null}
             </div>
+            {huddleMode ? (
+              <p className="mt-2 text-sm text-muted-foreground">
+                Use the panel to pick guests and start. Sequence: Staff → guest 1 → guest 2.
+                {huddleGuests.length
+                  ? ` Selected: ${huddleGuests
+                      .map((id) => specialists.find((s) => s.id === id)?.shortLabel ?? id)
+                      .join(", ")}.`
+                  : null}
+              </p>
+            ) : null}
             {showStylistPhoto ? (
               <p className="mt-2 text-sm text-muted-foreground">
                 Attach a photo for wardrobe / presentation feedback. Uses the vision model, then
@@ -400,6 +510,17 @@ export function TeamChat({ initialSpecialist = "secretary" }: TeamChatProps) {
           </div>
         </CardContent>
       </Card>
+      {huddleMode ? (
+        <div className="min-h-0 overflow-y-auto lg:h-full">
+          <HuddlePanel
+            specialists={specialists}
+            disabled={streaming}
+            running={streaming}
+            initialSelected={huddleGuests}
+            onStart={startHuddle}
+          />
+        </div>
+      ) : null}
       {showCareerPdf ? (
         <div className="min-h-0 overflow-y-auto lg:h-full">
           <CareerPdfPanel />

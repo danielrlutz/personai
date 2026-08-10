@@ -360,6 +360,8 @@ export async function resolveConfirmation(prisma, id, decision) {
       break;
     case "forge.ship":
     case "premium.spend":
+    case "huddle.propose":
+      // Advisory huddle write proposals — acknowledge only; never auto-apply side effects.
       result = { acknowledged: true, action: pending.action, payload };
       break;
     case "premium.inference":

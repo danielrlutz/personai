@@ -17,6 +17,8 @@ interface StreamingMessageProps {
   onRetry?: () => void;
   /** When false, show plain text (markdown source). Default true. */
   formatted?: boolean;
+  /** Pocket huddle / multi-speaker label (defaults to Advisor). */
+  speakerLabel?: string;
 }
 
 export function StreamingMessage({
@@ -27,10 +29,12 @@ export function StreamingMessage({
   error,
   onRetry,
   formatted = true,
+  speakerLabel,
 }: StreamingMessageProps) {
   const reduce = useReducedMotion();
   const failed = role === "user" && status === "failed";
   const pending = role === "user" && status === "pending";
+  const who = role === "user" ? "You" : speakerLabel?.trim() || "Advisor";
 
   return (
     <motion.div
@@ -44,7 +48,7 @@ export function StreamingMessage({
       )}
     >
       <p className="mb-1.5 text-xs font-medium tracking-[0.02em] text-foreground/55">
-        {role === "user" ? "You" : "Advisor"}
+        {who}
         {pending ? <span className="ml-2 text-foreground/45">Sending…</span> : null}
         {failed ? <span className="ml-2 text-destructive">Not sent</span> : null}
       </p>
