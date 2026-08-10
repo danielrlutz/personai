@@ -106,7 +106,7 @@ In **Settings** → **Google Drive archive**:
 1. Status should move from **Not linked** toward ready to connect once the vault has Client ID + secret.
 2. Tap **Link Google Drive** (opens Google; approve Drive access).
 3. You return to Settings; badge should become **Linked** / **Your Google account**.
-4. Optional: paste a **Drive root folder ID** → **Save root folder** (or leave empty and let PersonAI create `PersonAI_Archive` / taxonomy folders).
+4. Optional: paste a **Drive root folder ID** → **Save root folder** (or leave empty — PersonAI reuses an existing root such as **Archived Files** / `PersonAI_Archive` when present, otherwise creates `PersonAI_Archive`).
 5. Tap **Verify connection** if you want a quick check.
 6. Tap **Refresh archive context** so specialists can see filed documents (**Archive context ready** when done).
 
@@ -132,6 +132,10 @@ Folders PersonAI uses (local + optional Drive):
 | 10 | Vehicles |
 
 Also listed in **First-launch setup** → **Archive**. Naming pattern after confirm: `{date}_{DocType}_{Entity}{ext}` where `{ext}` matches the stored file (e.g. `2026-08-09_BILL_Swisscom.pdf` or `.png` for a single-page scan).
+
+**Drive folder matching:** PersonAI does **not** invent a second taxonomy next to yours. Under your archive root (`Archived Files`, `PersonAI_Archive`, or similar), it matches category folders by name — numbering style (`01_`, `1.`, `01 -`, …) and EN/DE/FR labels (e.g. `1. Official Documents` ↔ Official, `Versicherung` ↔ Insurance). If regex is unsure, a small local Ollama model may pick once; the mapping is cached per profile so uploads reuse it. New `01_Label` folders are created only when nothing matches. PersonAI **never deletes** Drive folders — if you already have both `01_Official` and `1. Official Documents`, merge or remove the empty duplicate yourself in Google Drive; the app will keep using the richer/legacy match.
+
+**Confirm → Drive is durable:** Approving a filing writes the local archive immediately (the confirm barrier). Google Drive upload continues on the server as a background job even if you close the tab or navigate away. Poll `GET /jobs/:id` if you need status; you do not need to keep the browser open.
 
 ### Step G — Optional comfort settings
 
