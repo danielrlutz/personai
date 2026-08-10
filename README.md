@@ -96,6 +96,7 @@ Check status: `GET /archive/drive` (includes `linked` + archive context) or `dri
 | **Session** | Opaque Bearer token (SHA-256 stored server-side in `data/sessions.json`). Sent as `Authorization: Bearer …`. |
 | **API lock** | All routes except `GET /health`, `GET /profiles`, `POST /auth/login`, `POST /auth/setup` require a valid session. Bare `X-Profile-Id` is **not** a credential. |
 | **At rest** | Profile SQLite is sealed as `personai.db.enc` (AES-256-GCM) with a random DEK wrapped by a password-derived KEK. Sign-out / process exit re-seals and deletes plaintext `personai.db`. |
+| **Suitcase** | Settings → **Sealed suitcase** exports a password-sealed `.pao` (AES-256-GCM + Argon2id). Import stages a **new** sealed profile behind the confirm gate; the current session is not switched. Optional local archive (max 400 MiB / 5000 files). |
 | **Migration** | Existing profiles without a password must **set one on next open** before entering the app. |
 
 ### User setup

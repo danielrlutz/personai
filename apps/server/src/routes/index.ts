@@ -47,6 +47,7 @@ import { registerOpsRoutes } from "./ops.js";
 import { registerProductSettingsRoutes } from "./settings-product.js";
 import { registerTriageRoutes } from "./triage.js";
 import { registerSoulNewsRoutes } from "./soul-news.js";
+import { registerSuitcaseRoutes } from "./suitcase.js";
 import { createConfirmation } from "../confirm/confirm-service.js";
 import { buildFristKitPayload } from "../legal/frist-kit.js";
 import { driveStatus } from "../archive/drive.js";
@@ -66,6 +67,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   await registerProductSettingsRoutes(app);
   await registerTriageRoutes(app);
   await registerSoulNewsRoutes(app);
+  await registerSuitcaseRoutes(app);
 
   app.get("/health", async () => ({
     ok: true,

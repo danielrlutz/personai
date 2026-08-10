@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { ProductSettingsCard } from "@/components/settings/ProductSettingsCard";
 import { DriveTaxonomyHealth } from "@/components/settings/DriveTaxonomyHealth";
+import { SealedSuitcaseCard } from "@/components/settings/SealedSuitcaseCard";
 import { InstallAppCard } from "@/components/shared/InstallAppCard";
 import {
   clearAppPin,
@@ -1067,6 +1068,8 @@ export default function SettingsPage() {
           {passwordNote ? <p className="text-xs text-muted-foreground">{passwordNote}</p> : null}
         </CardContent>
       </Card>
+
+      <SealedSuitcaseCard />
 
       <Card>
         <CardHeader>

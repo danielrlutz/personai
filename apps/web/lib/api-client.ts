@@ -439,6 +439,50 @@ export async function apiGetBlob(path: string, init?: ApiRequestInit): Promise<A
   }, silent, path);
 }
 
+
+/** Authenticated binary POST (e.g. sealed suitcase export). JSON body; binary response. */
+export async function apiPostBlob(
+  path: string,
+  body?: unknown,
+  init?: ApiRequestInit,
+): Promise<ApiBlobResult> {
+  const { request, silent } = splitInit(init);
+  return runNotified(async () => {
+    const headers = buildHeaders(request.headers);
+    headers.set("Accept", "*/*");
+    const res = await fetch(apiUrl(path), {
+      ...request,
+      method: "POST",
+      headers,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+    if (!res.ok) {
+      maybeRedirectOnAuthFailure(res.status, path);
+      const text = await res.text();
+      let parsed: unknown = text;
+      try {
+        parsed = text ? JSON.parse(text) : null;
+      } catch {
+        /* keep text */
+      }
+      const message =
+        typeof parsed === "object" && parsed !== null && "error" in parsed
+          ? String((parsed as { error: unknown }).error)
+          : `Request failed (${res.status})`;
+      throw new ApiError(message, res.status, parsed);
+    }
+    const cd = res.headers.get("Content-Disposition") ?? "";
+    const quoted = cd.match(/filename="([^"]+)"/i);
+    const plain = cd.match(/filename=([^;]+)/i);
+    const filename = (quoted?.[1] ?? plain?.[1] ?? null)?.trim() || null;
+    return {
+      blob: await res.blob(),
+      contentType: res.headers.get("Content-Type") ?? "application/octet-stream",
+      filename,
+    };
+  }, silent, path);
+}
+
 export type SSEHandler = {
   onEvent?: (event: string, data: unknown) => void;
   onError?: (error: Error) => void;
@@ -725,6 +769,17 @@ export interface MemoryFact {
   createdAt?: string;
 }
 
+export interface DriveKnowledgeStatus {
+  ready: boolean;
+  fileCount: number;
+  chunkCount: number;
+  withEmbedding: number;
+  embedModel: string | null;
+  lastSyncAt: string | null;
+  lastSyncStatus: string | null;
+  keywordOnly: boolean;
+}
+
 export interface DriveStatus {
   configured: boolean;
   enabled: boolean;
@@ -741,6 +796,7 @@ export interface DriveStatus {
     refreshedAt: string | null;
     indexPreview: string | null;
   };
+  knowledge?: DriveKnowledgeStatus;
 }
 
 export interface DriveOauthStart {
@@ -756,6 +812,24 @@ export interface ArchiveRefreshResult {
   fileCount: number;
   model: string | null;
   message: string;
+  knowledgeJobId?: string | null;
+  status?: DriveStatus;
+  knowledge?: DriveKnowledgeStatus;
+}
+
+export interface DriveKnowledgeReindexResult {
+  ok: boolean;
+  jobId: string;
+  message: string;
+  stats?: {
+    fileCount: number;
+    chunkCount: number;
+    withEmbedding: number;
+    embedModel: string | null;
+    lastSyncAt: string | null;
+    lastSyncStatus: string | null;
+  };
+  knowledge?: DriveKnowledgeStatus;
   status?: DriveStatus;
 }
 
