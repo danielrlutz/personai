@@ -2,7 +2,14 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { FileText, Loader2, CheckCircle2, XCircle, Clock, X } from "lucide-react";
-import { apiDelete, apiGet, streamSSE, type IngestionJob } from "@/lib/api-client";
+import {
+  apiDelete,
+  apiGet,
+  streamSSE,
+  type IngestQueueResponse,
+  type IngestionJob,
+} from "@/lib/api-client";
+import { cancelConfirmMessage, formatElapsed, phaseLabel } from "@/lib/ingest-phase";
 import { formatRelative } from "@/lib/utils";
 import { toast } from "@/lib/toast";
 import { Badge } from "@/components/ui/badge";
@@ -42,16 +49,10 @@ export function IngestionQueue({ refreshKey, liveUpdates = true }: IngestionQueu
   const [reloadToken, setReloadToken] = useState(0);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
 
-  const applyQueue = useCallback(
-    (data: {
-      jobs: IngestionJob[];
-      vram?: { holder: string | null; waiting: number; pausedReason: string | null };
-    }) => {
-      setJobs(data.jobs);
-      if (data.vram) setVram(data.vram);
-    },
-    [],
-  );
+  const applyQueue = useCallback((data: IngestQueueResponse) => {
+    setJobs(data.jobs);
+    if (data.vram) setVram(data.vram);
+  }, []);
 
   useEffect(() => {
     let abort: (() => void) | undefined;
@@ -61,7 +62,7 @@ export function IngestionQueue({ refreshKey, liveUpdates = true }: IngestionQueu
       setError(null);
       setLoading(true);
       try {
-        const data = await apiGet<{ jobs: IngestionJob[]; vram?: typeof vram }>("/ingest/queue");
+        const data = await apiGet<IngestQueueResponse>("/ingest/queue");
         if (!mounted) return;
         applyQueue(data);
         setLoading(false);
@@ -73,7 +74,7 @@ export function IngestionQueue({ refreshKey, liveUpdates = true }: IngestionQueu
             silent: true,
             onEvent: (event, payload) => {
               if (event === "queue" && typeof payload === "object" && payload) {
-                applyQueue(payload as { jobs: IngestionJob[]; vram?: typeof vram });
+                applyQueue(payload as IngestQueueResponse);
               }
             },
           });
@@ -96,48 +97,42 @@ export function IngestionQueue({ refreshKey, liveUpdates = true }: IngestionQueu
     };
   }, [applyQueue, liveUpdates, refreshKey, reloadToken]);
 
-  const cancelJob = useCallback(
-    async (job: IngestionJob) => {
-      const label = job.document.filename || "this document";
-      const processingNote =
-        job.status === "PROCESSING"
-          ? " OCR may finish the current page, then the item is removed. Archived Drive files are never deleted."
-          : " This only removes the queue item — confirmed archive / Drive files are kept.";
-      if (
-        !window.confirm(
-          `Remove “${label}” from the queue?${processingNote}`,
-        )
-      ) {
-        return;
-      }
-      setCancellingId(job.id);
-      try {
-        const result = await apiDelete<{
-          ok: boolean;
-          mode: "removed" | "cancelling";
-          documentDeleted: boolean;
-        }>(`/ingest/jobs/${job.id}`);
-        if (result.mode === "cancelling") {
-          toast.success("Cancel requested — removing when processing allows.");
-        } else {
-          toast.success(
-            result.documentDeleted
-              ? "Removed from queue (upload discarded)."
-              : "Removed from queue.",
-          );
-        }
-        setJobs((prev) =>
-          result.mode === "removed" ? prev.filter((j) => j.id !== job.id) : prev,
+  const cancelJob = useCallback(async (job: IngestionJob) => {
+    if (
+      !window.confirm(
+        cancelConfirmMessage({
+          filename: job.document.filename,
+          status: job.status,
+          phase: job.phase,
+        }),
+      )
+    ) {
+      return;
+    }
+    setCancellingId(job.id);
+    try {
+      const result = await apiDelete<{
+        ok: boolean;
+        mode: "removed" | "cancelling";
+        documentDeleted: boolean;
+      }>(`/ingest/jobs/${job.id}`);
+      if (result.mode === "cancelling") {
+        toast.success("Cancel requested — finishes current OCR page, then removes.");
+      } else {
+        toast.success(
+          result.documentDeleted
+            ? "Removed — unconfirmed upload discarded. Drive archives untouched."
+            : "Removed from queue. Confirmed archives kept.",
         );
-        setReloadToken((n) => n + 1);
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Could not remove from queue");
-      } finally {
-        setCancellingId(null);
       }
-    },
-    [],
-  );
+      setJobs((prev) => (result.mode === "removed" ? prev.filter((j) => j.id !== job.id) : prev));
+      setReloadToken((n) => n + 1);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not remove from queue");
+    } finally {
+      setCancellingId(null);
+    }
+  }, []);
 
   const queuedCount = jobs.filter((j) => j.status === "QUEUED" || j.status === "PROCESSING").length;
 
@@ -187,15 +182,38 @@ export function IngestionQueue({ refreshKey, liveUpdates = true }: IngestionQueu
                           {job.document.filename}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          {(job.document.fileSize / 1024).toFixed(1)} KB · {formatRelative(job.createdAt)}
+                          {(job.document.fileSize / 1024).toFixed(1)} KB ·{" "}
+                          {formatRelative(job.createdAt)}
+                          {job.phase
+                            ? ` · ${phaseLabel(job.phase)}${
+                                job.phaseDetail ? ` ${job.phaseDetail}` : ""
+                              }`
+                            : ""}
+                          {job.status === "PROCESSING" && formatElapsed(job.startedAt)
+                            ? ` · ${formatElapsed(job.startedAt)}`
+                            : ""}
                         </p>
                         {job.errorMessage && (
                           <p className="mt-0.5 break-words text-xs text-destructive">
                             {job.errorMessage}
                           </p>
                         )}
-                        {job.pausedReason === "cancel_requested" && (
-                          <p className="mt-0.5 text-xs text-muted-foreground">Cancelling…</p>
+                        {(job.phase === "cancelling" ||
+                          job.pausedReason === "cancel_requested") && (
+                          <p className="mt-0.5 text-xs text-muted-foreground">
+                            Cancelling — finishes current OCR page, then removes. Drive archives
+                            stay.
+                          </p>
+                        )}
+                        {job.phase === "waiting_vision" && (
+                          <p className="mt-0.5 text-xs text-muted-foreground">
+                            Waiting for vision VRAM lock…
+                          </p>
+                        )}
+                        {job.phase === "await_confirm" && (
+                          <p className="mt-0.5 text-xs text-muted-foreground">
+                            Awaiting your naming confirm before archive write.
+                          </p>
                         )}
                       </div>
                     </div>
@@ -206,9 +224,14 @@ export function IngestionQueue({ refreshKey, liveUpdates = true }: IngestionQueu
                           variant="ghost"
                           size="sm"
                           className="h-8 gap-1 px-2 text-muted-foreground"
-                          disabled={busy || job.pausedReason === "cancel_requested"}
+                          disabled={
+                            busy ||
+                            job.pausedReason === "cancel_requested" ||
+                            job.phase === "cancelling"
+                          }
                           onClick={() => void cancelJob(job)}
                           aria-label={`Cancel ${job.document.filename}`}
+                          title="Cancel — spells out what is discarded vs kept"
                         >
                           {busy ? (
                             <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -218,9 +241,26 @@ export function IngestionQueue({ refreshKey, liveUpdates = true }: IngestionQueu
                           Cancel
                         </Button>
                       )}
-                      <Badge variant={config.variant} className="w-fit gap-1">
-                        <Icon className={`h-3 w-3 ${job.status === "PROCESSING" ? "animate-spin" : ""}`} />
-                        {config.label}
+                      <Badge
+                        variant={
+                          job.phase === "await_confirm"
+                            ? "warning"
+                            : job.phase === "failed"
+                              ? "destructive"
+                              : config.variant
+                        }
+                        className="w-fit gap-1"
+                      >
+                        <Icon
+                          className={`h-3 w-3 ${
+                            job.status === "PROCESSING" && job.phase !== "cancelling"
+                              ? "animate-spin"
+                              : ""
+                          }`}
+                        />
+                        {job.phase && job.phase !== "queued" && job.phase !== "done"
+                          ? phaseLabel(job.phase)
+                          : config.label}
                       </Badge>
                     </div>
                   </li>

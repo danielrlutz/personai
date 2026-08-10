@@ -69,6 +69,8 @@ export async function cancelIngestJob(
       data: {
         pausedReason: CANCEL_REQUESTED,
         errorMessage: "Cancelled by user",
+        progressPhase: "cancelling",
+        progressDetail: null,
       },
     });
     return {

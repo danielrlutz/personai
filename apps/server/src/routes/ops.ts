@@ -266,6 +266,8 @@ export async function registerOpsRoutes(app: FastifyInstance): Promise<void> {
           status: "QUEUED",
           errorMessage: null,
           pausedReason: null,
+          progressPhase: "queued",
+          progressDetail: null,
           startedAt: null,
           completedAt: null,
         },

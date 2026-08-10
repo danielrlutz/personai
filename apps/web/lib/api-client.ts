@@ -400,6 +400,50 @@ export type ApiBlobResult = {
   filename: string | null;
 };
 
+
+/** Authenticated binary POST (e.g. sealed suitcase export). */
+export async function apiPostBlob(
+  path: string,
+  body?: unknown,
+  init?: ApiRequestInit,
+): Promise<ApiBlobResult> {
+  const { request, silent } = splitInit(init);
+  return runNotified(async () => {
+    const headers = buildHeaders(request.headers);
+    headers.set("Accept", "*/*");
+    const res = await fetch(apiUrl(path), {
+      ...request,
+      method: "POST",
+      headers,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+    if (!res.ok) {
+      maybeRedirectOnAuthFailure(res.status, path);
+      const text = await res.text();
+      let parsed: unknown = text;
+      try {
+        parsed = text ? JSON.parse(text) : null;
+      } catch {
+        /* keep text */
+      }
+      const message =
+        typeof parsed === "object" && parsed !== null && "error" in parsed
+          ? String((parsed as { error: unknown }).error)
+          : `Request failed (${res.status})`;
+      throw new ApiError(message, res.status, parsed);
+    }
+    const cd = res.headers.get("Content-Disposition") ?? "";
+    const quoted = cd.match(/filename="([^"]+)"/i);
+    const plain = cd.match(/filename=([^;]+)/i);
+    const filename = (quoted?.[1] ?? plain?.[1] ?? null)?.trim() || null;
+    return {
+      blob: await res.blob(),
+      contentType: res.headers.get("Content-Type") ?? "application/octet-stream",
+      filename,
+    };
+  }, silent, path);
+}
+
 /** Authenticated binary GET (document preview / download). Does not force JSON Content-Type. */
 export async function apiGetBlob(path: string, init?: ApiRequestInit): Promise<ApiBlobResult> {
   const { request, silent } = splitInit(init);
