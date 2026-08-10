@@ -35,7 +35,7 @@ async function bootstrap() {
         },
       },
     },
-    bodyLimit: 50 * 1024 * 1024,
+    bodyLimit: 512 * 1024 * 1024,
     ignoreTrailingSlash: true,
   });
   // Reflect request Origin for cross-port clients:
@@ -47,10 +47,10 @@ async function bootstrap() {
     credentials: false,
     methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Accept", "X-Profile-Id", "Authorization"],
-    exposedHeaders: ["Content-Type"],
+    exposedHeaders: ["Content-Type", "Content-Disposition"],
     maxAge: 86400,
   });
-  await app.register(multipart, { limits: { fileSize: 40 * 1024 * 1024 } });
+  await app.register(multipart, { limits: { fileSize: 512 * 1024 * 1024 } });
   // Allow empty JSON POSTs (e.g. /briefing/generate)
   app.addContentTypeParser("application/json", { parseAs: "string" }, (req, body, done) => {
     try {
