@@ -13,6 +13,7 @@ import { OllamaStatusWidget } from "./OllamaStatusWidget";
 import { TeamQuickPickWidget } from "./TeamQuickPickWidget";
 import { MemoryFactsWidget } from "./MemoryFactsWidget";
 import { DriveStatusWidget } from "./DriveStatusWidget";
+import { SoulNewsWidget } from "./SoulNewsWidget";
 
 export function renderHomeWidget(id: HomeWidgetId) {
   switch (id) {
@@ -24,6 +25,8 @@ export function renderHomeWidget(id: HomeWidgetId) {
       return <FristenStrip />;
     case "morning-brief":
       return <MorningBriefWidget />;
+    case "soul-news":
+      return <SoulNewsWidget />;
     case "activity":
       return <ActivityRecentWidget />;
     case "finance":

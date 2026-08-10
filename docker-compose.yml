@@ -20,6 +20,8 @@ services:
       LICENSE_TIER: pro
       DATABASE_URL: file:/app/data/profiles/bootstrap/personai.db
       PERSONAI_IN_DOCKER: "1"
+      # Soul News sidecar (Home widget). Host loopback from container:
+      SOUL_NEWS_URL: ${SOUL_NEWS_URL:-http://host.docker.internal:8787}
       # Drive OAuth (Settings → Link Google Drive). Optional — link soft-gates when unset.
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000}
       PUBLIC_API_URL: ${PUBLIC_API_URL:-${NEXT_PUBLIC_API_URL:-http://localhost:4000}}

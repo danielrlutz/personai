@@ -8,6 +8,7 @@ export type HomeWidgetId =
   | "confirms"
   | "fristen"
   | "morning-brief"
+  | "soul-news"
   | "activity"
   | "finance"
   | "life-habits"
@@ -64,6 +65,13 @@ export const WIDGET_CATALOG: WidgetCatalogEntry[] = [
     id: "morning-brief",
     title: "Morning brief",
     description: "Zurich morning snapshot — regenerate anytime.",
+    availableFor: () => true,
+    defaultSize: "md",
+  },
+  {
+    id: "soul-news",
+    title: "Soul News",
+    description: "Reflective sky & weather cards from the Soul News feed.",
     availableFor: () => true,
     defaultSize: "md",
   },

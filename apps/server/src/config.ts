@@ -38,6 +38,8 @@ export const config = {
   qaModel: process.env.OLLAMA_QA_MODEL ?? "deepseek-r1:8b",
   licenseTier: (process.env.LICENSE_TIER ?? "pro") as "core" | "pro",
   keepAlive: "0",
+  /** Soul News sidecar base URL (no trailing slash). Proxied at GET /integrations/soul-news/feed */
+  soulNewsUrl: (process.env.SOUL_NEWS_URL ?? "http://127.0.0.1:8787").replace(/\/$/, ""),
 };
 
 export function profilesDir(): string {

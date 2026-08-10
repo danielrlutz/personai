@@ -18,6 +18,7 @@ services:
       NODE_ENV: production
       DATABASE_URL: file:/app/data/profiles/bootstrap/personai.db
       PERSONAI_IN_DOCKER: "1"
+      SOUL_NEWS_URL: ${SOUL_NEWS_URL:-http://host.docker.internal:8787}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped
