@@ -48,7 +48,7 @@ export const WIDGET_CATALOG: WidgetCatalogEntry[] = [
   },
   {
     id: "confirms",
-    title: "Needs confirmation",
+    title: "Needs your confirmation",
     description: "Approve or decline before Drive, ledger, or other writes.",
     availableFor: () => true,
     defaultSize: "md",

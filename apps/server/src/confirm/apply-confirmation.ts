@@ -250,8 +250,8 @@ async function applyPremiumInference(prisma, payload) {
   return { used, acknowledged: true };
 }
 
-async function applyCalendarEvent(prisma, payload) {
-  // Stage locally until Google Calendar OAuth write is configured; never invent remote IDs.
+/** Stage a calendar event locally until Google Calendar OAuth write is wired. */
+export async function stageCalendarEvent(prisma, payload) {
   const event = {
     title: String(payload.title ?? "Event"),
     start: String(payload.start ?? ""),
@@ -277,6 +277,10 @@ async function applyCalendarEvent(prisma, payload) {
     },
   });
   return { staged: true, event };
+}
+
+async function applyCalendarEvent(prisma, payload) {
+  return stageCalendarEvent(prisma, payload);
 }
 
 export async function resolveConfirmation(prisma, id, decision) {

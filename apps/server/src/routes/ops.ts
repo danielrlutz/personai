@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { createConfirmation } from "../confirm/confirm-service.js";
+import { stageCalendarEvent } from "../confirm/apply-confirmation.js";
 import { config } from "../config.js";
 import { resolveProductConfig } from "../settings/host-vault.js";
 import { ARCHIVE_TAXONOMY } from "../specialists/roster.js";
@@ -385,7 +386,7 @@ export async function registerOpsRoutes(app: FastifyInstance): Promise<void> {
       if (!req.body.confirmed) {
         const confirmation = await createConfirmation(prisma, {
           action: "calendar.event",
-          summary: `Create calendar event: ${title} @ ${start.slice(0, 16)}`,
+          summary: `Stage calendar event: ${title} @ ${start.slice(0, 16)}`,
           entity: "CalendarEvent",
           payload: {
             title,
@@ -397,10 +398,17 @@ export async function registerOpsRoutes(app: FastifyInstance): Promise<void> {
         return reply.status(202).send({
           needsConfirm: true,
           confirmation,
-          message: "Confirm before writing to Google Calendar (or local staging).",
+          message:
+            "Confirm before staging locally. Google Calendar write is not wired yet.",
         });
       }
-      return { ok: true };
+      const result = await stageCalendarEvent(prisma, {
+        title,
+        start,
+        end: req.body.end ?? null,
+        description: req.body.description ?? null,
+      });
+      return { ok: true, ...result };
     } catch (err) {
       return sendError(reply, err);
     }
