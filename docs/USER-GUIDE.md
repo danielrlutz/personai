@@ -139,7 +139,7 @@ Also listed in **First-launch setup** → **Archive**. Naming pattern after conf
 
 ### Step G — Optional comfort settings
 
-- **Theme & lock** — theme **system** / **dark** / **light**; optional **Set 4–8 digit PIN** → **Enable PIN** (locks UI on tab hide / idle; database still sealed by password).
+- **Theme & lock** — theme **system** / **dark** / **light**; optional **Set 4–8 digit PIN** → **Enable PIN**, and on HTTPS (Tailscale Serve / PWA) **Register passkey** for Face ID / fingerprint resume after you unlock with your profile password once (locks UI on tab hide / idle; database still sealed by password; passkeys soft-hide over plain HTTP).
 - **Password & encryption** — **Change password** anytime.
 - **Memory facts** — short facts specialists should remember → **Add**.
 - **First-launch setup** → **Alerts** → **Allow notifications** for Fristen and pending confirms.
@@ -220,7 +220,7 @@ Open **Team**. Important changes still ask for confirmation first.
 
 - Prefer **Sign out** (or **Switch profile**) when you leave a shared or unlocked device — that seals the encrypted profile database until the next **Unlock**.
 - Use a strong profile password (min 8). Change it under **Password & encryption**.
-- Optional **Enable PIN** for quick UI lock on idle / resume — it does **not** replace the password.
+- Optional **Enable PIN** and (on HTTPS / PWA) **Register passkey** for quick UI lock on idle / resume — they do **not** replace the password or unwrap the sealed DB.
 - Never share **Client secret**, **Premium API key**, passwords, or session details. After paste into **Product vault**, secrets stay masked.
 - Desktop and phone against **different** installs do not sync automatically. Same VPS URL on phone + laptop **does** share that profile’s data.
 

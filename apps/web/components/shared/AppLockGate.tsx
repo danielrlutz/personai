@@ -6,6 +6,9 @@ import {
   getIdleLockMs,
   isAppLocked,
   isLockEnabled,
+  isPasskeyEnabled,
+  isPinEnabled,
+  isSecureWebAuthnContext,
   lockApp,
   tryBiometricUnlock,
   unlockApp,
@@ -17,13 +20,25 @@ export function AppLockGate({ children }: { children: React.ReactNode }) {
   const [locked, setLocked] = useState(false);
   const [pin, setPin] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [bioAvailable, setBioAvailable] = useState(false);
+  const [pinOk, setPinOk] = useState(false);
+  const [passkeyOk, setPasskeyOk] = useState(false);
+  const [bioBusy, setBioBusy] = useState(false);
 
   useEffect(() => {
     setLocked(isAppLocked());
+    setPinOk(isPinEnabled());
+    setPasskeyOk(isPasskeyEnabled() && isSecureWebAuthnContext());
+
     const onLock = (e: Event) => {
       const detail = (e as CustomEvent<{ locked: boolean }>).detail;
-      setLocked(Boolean(detail?.locked));
+      const next = Boolean(detail?.locked);
+      setLocked(next);
+      setPinOk(isPinEnabled());
+      setPasskeyOk(isPasskeyEnabled() && isSecureWebAuthnContext());
+      if (next) {
+        setPin("");
+        setError(null);
+      }
     };
     window.addEventListener("personai:app-lock", onLock);
 
@@ -45,17 +60,6 @@ export function AppLockGate({ children }: { children: React.ReactNode }) {
       if (Date.now() - last >= getIdleLockMs()) lockApp();
     }, 15_000);
 
-    void (async () => {
-      try {
-        const ok =
-          typeof PublicKeyCredential !== "undefined" &&
-          (await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable());
-        setBioAvailable(Boolean(ok));
-      } catch {
-        setBioAvailable(false);
-      }
-    })();
-
     return () => {
       window.removeEventListener("personai:app-lock", onLock);
       document.removeEventListener("visibilitychange", onVis);
@@ -64,7 +68,36 @@ export function AppLockGate({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
+  useEffect(() => {
+    if (!locked || !passkeyOk || pinOk) return;
+    // Passkey-only lock: prompt biometrics once when the gate appears.
+    let cancelled = false;
+    setBioBusy(true);
+    void tryBiometricUnlock().then((ok) => {
+      if (cancelled) return;
+      setBioBusy(false);
+      if (ok) {
+        setError(null);
+        setLocked(false);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [locked, passkeyOk, pinOk]);
+
   if (!locked) return <>{children}</>;
+
+  const submitPin = () => {
+    void unlockApp(pin).then((ok) => {
+      if (!ok) setError("Incorrect PIN");
+      else {
+        setError(null);
+        setPin("");
+        setLocked(false);
+      }
+    });
+  };
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-background/95 p-6 backdrop-blur-md">
@@ -74,63 +107,57 @@ export function AppLockGate({ children }: { children: React.ReactNode }) {
           <h2 className="text-lg font-semibold tracking-tight">PersonAI is locked</h2>
         </div>
         <p className="text-sm text-muted-foreground">
-          Enter your PIN to resume. Your profile password still protects the encrypted database.
+          {pinOk
+            ? "Enter your PIN or use a passkey to resume. Your profile password still protects the encrypted database."
+            : "Use Face ID / fingerprint to resume. Your profile password still protects the encrypted database."}
         </p>
-        <Input
-          type="password"
-          inputMode="numeric"
-          autoComplete="one-time-code"
-          placeholder="PIN"
-          value={pin}
-          onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 8))}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              void unlockApp(pin).then((ok) => {
-                if (!ok) setError("Incorrect PIN");
-                else {
-                  setError(null);
-                  setPin("");
-                  setLocked(false);
-                }
-              });
-            }
-          }}
-        />
+        {pinOk ? (
+          <Input
+            type="password"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            placeholder="PIN"
+            value={pin}
+            onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 8))}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") submitPin();
+            }}
+          />
+        ) : null}
         {error ? <p className="text-sm text-destructive">{error}</p> : null}
         <div className="flex flex-wrap gap-2">
-          <Button
-            className="flex-1"
-            onClick={() =>
-              void unlockApp(pin).then((ok) => {
-                if (!ok) setError("Incorrect PIN");
-                else {
-                  setError(null);
-                  setPin("");
-                  setLocked(false);
-                }
-              })
-            }
-          >
-            Unlock
-          </Button>
-          {bioAvailable ? (
+          {pinOk ? (
+            <Button className="flex-1" onClick={submitPin}>
+              Unlock
+            </Button>
+          ) : null}
+          {passkeyOk ? (
             <Button
-              variant="outline"
-              onClick={() =>
+              className={pinOk ? undefined : "flex-1"}
+              variant={pinOk ? "outline" : "default"}
+              disabled={bioBusy}
+              onClick={() => {
+                setBioBusy(true);
                 void tryBiometricUnlock().then((ok) => {
-                  if (!ok) setError("Biometric unlock unavailable");
+                  setBioBusy(false);
+                  if (!ok) setError("Passkey unlock cancelled or unavailable");
                   else {
                     setError(null);
                     setLocked(false);
                   }
-                })
-              }
+                });
+              }}
             >
               <Fingerprint className="mr-1.5 h-4 w-4" />
-              Biometric
+              {bioBusy ? "Waiting…" : "Passkey"}
             </Button>
           ) : null}
         </div>
+        {isPasskeyEnabled() && !isSecureWebAuthnContext() ? (
+          <p className="text-xs text-muted-foreground">
+            Passkeys need HTTPS (Tailscale Serve). Use your PIN on this HTTP connection.
+          </p>
+        ) : null}
       </div>
     </div>
   );
