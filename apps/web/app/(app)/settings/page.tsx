@@ -17,6 +17,7 @@ import {
   Wand2,
 } from "lucide-react";
 import { ProductSettingsCard } from "@/components/settings/ProductSettingsCard";
+import { PersonalityVaultCard } from "@/components/settings/PersonalityVaultCard";
 import { InstallAppCard } from "@/components/shared/InstallAppCard";
 import {
   clearAppPin,
@@ -933,6 +934,8 @@ export default function SettingsPage() {
           {ceoNote ? <p className="text-xs text-muted-foreground">{ceoNote}</p> : null}
         </CardContent>
       </Card>
+
+      <PersonalityVaultCard />
 
       <Card>
         <CardHeader>

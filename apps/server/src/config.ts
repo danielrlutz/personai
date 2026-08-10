@@ -66,6 +66,11 @@ export function profileArchiveDir(profileId: string): string {
   return path.join(profileDir(profileId), "archive");
 }
 
+/** OpenClaw-style personality staging markdown (USER.md, SOUL.md, …). */
+export function profileMemoryDir(profileId: string): string {
+  return path.join(profileDir(profileId), "memory");
+}
+
 export function registryPath(): string {
   return path.join(config.dataDir, "profiles.json");
 }

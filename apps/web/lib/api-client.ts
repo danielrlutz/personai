@@ -725,6 +725,29 @@ export interface MemoryFact {
   createdAt?: string;
 }
 
+/** OpenClaw-style personality staging doc under profile memory/. */
+export interface StagingDoc {
+  id: string;
+  filename: string;
+  title: string;
+  description: string;
+  content: string;
+  exists: boolean;
+  charCount: number;
+  injectBudget: number;
+  maxChars: number;
+  hasSubstance: boolean;
+  updatedAt: string | null;
+}
+
+export interface MemorySnippet {
+  source: "fact" | "staging";
+  ref: string;
+  label: string;
+  text: string;
+  score: number;
+}
+
 export interface DriveStatus {
   configured: boolean;
   enabled: boolean;

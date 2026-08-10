@@ -141,7 +141,8 @@ Also listed in **First-launch setup** → **Archive**. Naming pattern after conf
 
 - **Theme & lock** — theme **system** / **dark** / **light**; optional **Set 4–8 digit PIN** → **Enable PIN** (locks UI on tab hide / idle; database still sealed by password).
 - **Password & encryption** — **Change password** anytime.
-- **Memory facts** — short facts specialists should remember → **Add**.
+- **About you / Personality vault** — edit local markdown (`USER.md`, `SOUL.md`, `preferences.md`, `people.md`, `ADHD.md`) under the profile’s `memory/` folder. Staff and specialists inject budgeted slices (e.g. hotel budget, Cham/Zug). Distinct from the **Soul News** home widget.
+- **Memory facts** — short key/value facts specialists should remember → **Add**. Distill from chats still waits for **Needs your confirmation** before writing.
 - **First-launch setup** → **Alerts** → **Allow notifications** for Fristen and pending confirms.
 - Profile menu: **Switch profile** / **Sign out** (both return to the account picker and seal the session).
 
@@ -244,7 +245,7 @@ You do **not** need SSH for normal Drive linking or day-to-day config once the a
 - **API Server** URL override (phones)
 - **Product vault** (Ollama host, models, public URLs, Google Client ID/secret, redirect URI, premium key)
 - **Ollama status** / **Use this Ollama host**
-- **Your profile** / usage mode / memory facts
+- **Your profile** / usage mode / **About you / Personality vault** / memory facts
 - **Google Drive archive** → **Link Google Drive**, root folder, **Refresh archive context**
 - **Theme & lock** / PIN
 - **Password & encryption**
