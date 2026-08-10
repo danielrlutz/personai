@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
-import { Eye, ExternalLink, Scale, ShieldCheck, X } from "lucide-react";
+import { Eye, ExternalLink, Flag, Scale, ShieldCheck, X } from "lucide-react";
 import {
   apiGet,
   apiGetBlob,
@@ -15,6 +15,11 @@ import {
   humanizeConfirmationSummary,
   labelForConfirmAction,
 } from "@/lib/confirm-labels";
+import {
+  labelForReinspectStatus,
+  reinspectStatusFromPayload,
+  type ReinspectStatus,
+} from "@/lib/reinspect-status";
 import {
   buildArchiveName,
   draftFromArchivePayload,
@@ -74,6 +79,27 @@ function documentIdFromConfirmation(c: PendingConfirmation): string | null {
     return c.entityId.trim();
   }
   return null;
+}
+
+function badgeVariantForReinspect(
+  status: ReinspectStatus,
+): "warning" | "secondary" | "success" | "destructive" {
+  switch (status) {
+    case "flagged":
+      return "warning";
+    case "reinspecting":
+      return "secondary";
+    case "ready":
+      return "success";
+    case "failed":
+      return "destructive";
+  }
+}
+
+function flagButtonLabel(status: ReinspectStatus | null): string {
+  if (status === "flagged" || status === "reinspecting") return "Closer inspection…";
+  if (status === "ready" || status === "failed") return "Flag again";
+  return "Flag for closer inspection";
 }
 
 type PreviewState = {
@@ -236,6 +262,18 @@ export function ConfirmGate({
     void load();
   }, [load, refreshKey]);
 
+  useEffect(() => {
+    const needsPoll = items.some((c) => {
+      const status = reinspectStatusFromPayload(c.payload);
+      return status === "flagged" || status === "reinspecting";
+    });
+    if (!needsPoll) return;
+    const timer = window.setInterval(() => {
+      void load();
+    }, 2200);
+    return () => window.clearInterval(timer);
+  }, [items, load]);
+
   const saveDraft = async (id: string) => {
     const d = drafts[id];
     if (!d) return;
@@ -302,6 +340,23 @@ export function ConfirmGate({
       busyKey: confirmationId,
       fallbackName: archiveName || documentId,
     });
+  };
+
+  const flagReinspect = async (id: string) => {
+    setBusyId(id);
+    try {
+      await apiPost(`/confirmations/${id}/reinspect`, undefined, { silent: true });
+      await load();
+      toast.success("Flagged for closer inspection — review again when Ready.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not flag for closer inspection", {
+        title: "Closer inspection failed",
+        sticky: true,
+        dedupeKey: `confirm-reinspect:${id}`,
+      });
+    } finally {
+      setBusyId(null);
+    }
   };
 
   const queueFristKit = async (c: PendingConfirmation) => {
@@ -425,10 +480,11 @@ export function ConfirmGate({
             <Badge variant="outline">{items.length}</Badge>
           </CardTitle>
           <CardDescription className="text-xs">
-            View the file, edit archive naming, then Confirm. QR-Rechnung cards show Zahlteil fields
-            and archive / paid→ledger toggles. Likely already-filed matches offer Open existing or
-            File anyway — never auto-skipped. Confirm writes Drive/ledger; Decline leaves external
-            systems unchanged.
+            View the file, edit archive naming, then Confirm. Flag for closer inspection re-reads
+            neighbor pages with a stronger model — still confirm-gated when Ready. QR-Rechnung cards
+            show Zahlteil fields and archive / paid→ledger toggles. Likely already-filed matches
+            offer Open existing or File anyway — never auto-skipped. Confirm writes Drive/ledger;
+            Decline leaves external systems unchanged.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -441,14 +497,23 @@ export function ConfirmGate({
               const archivePreview = draft ? buildArchiveName(draft) : null;
               const showArchiveNaming = Boolean(draft) && (!qr || qr.fileArchive);
               const isMarkPaidAction = c.action === "qr.mark_paid";
+              const reinspectStatus = reinspectStatusFromPayload(c.payload);
+              const reinspectBusy =
+                reinspectStatus === "flagged" || reinspectStatus === "reinspecting";
+              const actionsDisabled = busyId === c.id || reinspectBusy;
               return (
                 <li
                   key={c.id}
                   className="space-y-3 rounded-xl border border-border/80 bg-surface-container/60 px-3 py-3"
                 >
                   <div className="min-w-0">
-                    <p className="text-xs font-medium tracking-wide text-muted-foreground">
+                    <p className="flex flex-wrap items-center gap-2 text-xs font-medium tracking-wide text-muted-foreground">
                       {labelForConfirmAction(c.action, c.payload)}
+                      {reinspectStatus ? (
+                        <Badge variant={badgeVariantForReinspect(reinspectStatus)}>
+                          {labelForReinspectStatus(reinspectStatus)}
+                        </Badge>
+                      ) : null}
                     </p>
                     <p className="md-label-large break-words [overflow-wrap:anywhere]">
                       {humanizeConfirmationSummary(c.summary)}
@@ -565,21 +630,32 @@ export function ConfirmGate({
                       <Button
                         size="sm"
                         variant="secondary"
-                        disabled={previewBusyId === c.id || busyId === c.id}
+                        disabled={previewBusyId === c.id || actionsDisabled}
                         onClick={() => void viewDocument(c)}
                       >
                         <Eye className="mr-1 h-3.5 w-3.5" />
                         {previewBusyId === c.id ? "Opening…" : "View file"}
                       </Button>
                     ) : null}
+                    {documentId ? (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={actionsDisabled}
+                        onClick={() => void flagReinspect(c.id)}
+                      >
+                        <Flag className="mr-1 h-3.5 w-3.5" />
+                        {flagButtonLabel(reinspectStatus)}
+                      </Button>
+                    ) : null}
                     <FristKitButton
                       confirmation={c}
-                      busy={busyId === c.id}
+                      busy={actionsDisabled}
                       onQueue={() => void queueFristKit(c)}
                     />
                     <Button
                       size="sm"
-                      disabled={busyId === c.id}
+                      disabled={actionsDisabled}
                       onClick={() => void decide(c.id, "confirm")}
                     >
                       {nearDupeIds[c.id] ? "File anyway" : "Confirm"}
@@ -587,7 +663,7 @@ export function ConfirmGate({
                     <Button
                       size="sm"
                       variant="outline"
-                      disabled={busyId === c.id}
+                      disabled={actionsDisabled}
                       onClick={() => void decide(c.id, "reject")}
                     >
                       <X className="mr-1 h-3 w-3" />

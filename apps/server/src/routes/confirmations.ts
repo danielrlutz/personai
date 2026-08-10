@@ -15,11 +15,29 @@ import { createConfirmation, listPendingConfirmations } from "../confirm/confirm
 import { resolveConfirmation } from "../confirm/apply-confirmation.js";
 import { CareerDocument } from "../export/career-document.js";
 import {
+  enqueueServerJob,
   getServerJob,
   retryServerJob,
   serializeServerJob,
+  SERVER_JOB_CONFIRM_REINSPECT,
 } from "../jobs/server-jobs.js";
 import { sendError, withPrisma } from "./helpers.js";
+
+function documentIdFromConfirm(pending) {
+  let payload = {};
+  try {
+    payload = JSON.parse(pending.payload || "{}");
+  } catch {
+    payload = {};
+  }
+  if (typeof payload.documentId === "string" && payload.documentId.trim()) {
+    return payload.documentId.trim();
+  }
+  if (pending.entity === "Document" && typeof pending.entityId === "string" && pending.entityId.trim()) {
+    return pending.entityId.trim();
+  }
+  return null;
+}
 
 function isPathInside(parent, child) {
   const resolvedParent = path.resolve(parent);
@@ -73,7 +91,91 @@ export async function registerConfirmationRoutes(app) {
             return sendError(reply, err);
         }
     });
-    /** Poll durable ServerJob status (Drive upload / ensure) — keyed by profile, not browser tab. */
+    /**
+     * Flag incomplete confirm for closer inspection.
+     * Enqueues durable confirm.reinspect (neighbor OCR + reinspect-tier refine).
+     * Still confirm-gated when ready — never auto-archives.
+     */
+    app.post("/confirmations/:id/reinspect", async (req, reply) => {
+        try {
+            const { prisma } = await withPrisma(req);
+            const pending = await prisma.pendingConfirmation.findUnique({
+                where: { id: req.params.id },
+            });
+            if (!pending) return reply.status(404).send({ error: "Confirmation not found" });
+            if (pending.status !== "pending") {
+                return reply.status(400).send({ error: `Already ${pending.status}` });
+            }
+            const documentId = documentIdFromConfirm(pending);
+            if (!documentId) {
+                return reply.status(400).send({
+                    error: "This confirmation has no linked document to reinspect",
+                });
+            }
+            let payload = {};
+            try {
+                payload = JSON.parse(pending.payload || "{}");
+            } catch {
+                payload = {};
+            }
+            const status = payload.reinspectStatus;
+            if (status === "flagged" || status === "reinspecting") {
+                const existingJobId = typeof payload.reinspectJobId === "string"
+                    ? payload.reinspectJobId
+                    : null;
+                if (existingJobId) {
+                    const existing = await getServerJob(prisma, existingJobId);
+                    if (existing && (existing.status === "QUEUED" || existing.status === "PROCESSING")) {
+                        return {
+                            confirmation: { ...pending, payload },
+                            job: serializeServerJob(existing),
+                            message: "Closer inspection already in progress",
+                        };
+                    }
+                }
+            }
+            const job = await enqueueServerJob(prisma, {
+                type: SERVER_JOB_CONFIRM_REINSPECT,
+                documentId,
+                payload: {
+                    confirmationId: pending.id,
+                    documentId,
+                    neighborRadius: 1,
+                },
+            });
+            payload.reinspectStatus = "flagged";
+            payload.reinspectJobId = job.id;
+            payload.reinspectError = null;
+            const summary = String(pending.summary || "");
+            const flaggedSummary = summary.startsWith("Flagged · ")
+                ? summary
+                : `Flagged · ${summary}`;
+            const updated = await prisma.pendingConfirmation.update({
+                where: { id: pending.id },
+                data: {
+                    payload: JSON.stringify(payload),
+                    summary: flaggedSummary,
+                },
+            });
+            await prisma.auditLog.create({
+                data: {
+                    action: "confirm.reinspect_flagged",
+                    entity: "PendingConfirmation",
+                    entityId: pending.id,
+                    metadata: JSON.stringify({ documentId, jobId: job.id }),
+                },
+            });
+            return reply.status(202).send({
+                confirmation: { ...updated, payload },
+                job: serializeServerJob(job),
+                message: "Flagged for closer inspection",
+            });
+        }
+        catch (err) {
+            return sendError(reply, err);
+        }
+    });
+    /** Poll durable ServerJob status (Drive / reinspect) — keyed by profile, not browser tab. */
     app.get("/jobs/:id", async (req, reply) => {
         try {
             const { prisma } = await withPrisma(req);

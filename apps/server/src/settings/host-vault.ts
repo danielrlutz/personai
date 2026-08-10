@@ -37,6 +37,8 @@ export type HostVaultData = {
   coachingModel?: string | null;
   stylistModel?: string | null;
   qaModel?: string | null;
+  /** Closer-inspection refine after Flag on a confirm (defaults to deepseek-r1:14b). */
+  reinspectModel?: string | null;
   publicWebUrl?: string | null;
   publicApiUrl?: string | null;
   googleOauthClientId?: string | null;
@@ -165,6 +167,7 @@ export type PublicHostSettings = {
   coachingModel: string | null;
   stylistModel: string | null;
   qaModel: string | null;
+  reinspectModel: string | null;
   suggestedModels: string[];
   publicWebUrl: string | null;
   publicApiUrl: string | null;
@@ -197,6 +200,7 @@ export function resolveProductConfig(): {
   coachingModel: string;
   stylistModel: string;
   qaModel: string;
+  reinspectModel: string;
   publicWebUrl: string;
   publicApiUrl: string | null;
   googleOauthClientId: string | null;
@@ -249,6 +253,13 @@ export function resolveProductConfig(): {
     coachingModel: v.coachingModel || process.env.OLLAMA_COACHING_MODEL || config.coachingModel,
     stylistModel: v.stylistModel || process.env.OLLAMA_STYLIST_MODEL || config.stylistModel,
     qaModel: v.qaModel || process.env.OLLAMA_QA_MODEL || config.qaModel,
+    // Reinspect tier: vault → env → architect fallback → config default (14b, not light 8b).
+    reinspectModel:
+      v.reinspectModel ||
+      process.env.OLLAMA_REINSPECT_MODEL ||
+      v.architectModel ||
+      process.env.OLLAMA_ARCHITECT_MODEL ||
+      config.reinspectModel,
     publicWebUrl: (
       v.publicWebUrl ||
       process.env.PUBLIC_WEB_URL ||
@@ -292,6 +303,7 @@ export function toPublicHostSettings(): PublicHostSettings {
     coachingModel: resolved.coachingModel,
     stylistModel: resolved.stylistModel,
     qaModel: resolved.qaModel,
+    reinspectModel: resolved.reinspectModel,
     suggestedModels: [...KNOWN_MODELS],
     publicWebUrl: resolved.publicWebUrl,
     publicApiUrl: resolved.publicApiUrl,

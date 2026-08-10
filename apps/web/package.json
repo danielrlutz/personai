@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test": "tsx lib/api-errors.test.ts && tsx lib/archive-naming.test.ts && tsx lib/chat-citations.test.ts"
+    "test": "tsx lib/api-errors.test.ts && tsx lib/archive-naming.test.ts && tsx lib/chat-citations.test.ts && tsx lib/reinspect-status.test.ts"
   },
   "dependencies": {
     "class-variance-authority": "^0.7.1",

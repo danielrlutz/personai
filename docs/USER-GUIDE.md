@@ -184,6 +184,7 @@ For archive items you can:
 - Edit **Date**, **DocType**, **Entity**, **Category**
 - Preview line `→ {date}_{DocType}_{Entity}{ext}` (extension matches the real file; header and preview stay in sync)
 - **Save naming (still pending)** — updates the draft without filing
+- **Flag for closer inspection** — when a page looks wrong or incomplete: status moves Flagged → Reinspecting → Ready to review again; re-reads neighbor pages with the Reinspect model (Settings → Product vault); still confirm-gated; originals kept
 - **Confirm** — writes (local archive and Drive if linked; same filename + MIME)
 - **Decline** — leaves external systems unchanged; local staging kept
 

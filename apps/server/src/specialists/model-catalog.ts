@@ -3,6 +3,12 @@
  * Only tags Daniel already runs — never require unknown pulls (no qwen2.5-coder:7b, no flux).
  *
  * Failover walks each role's candidates against /api/tags, then deepseek-r1:8b.
+ *
+ * Model tiers:
+ * - vision: first-pass OCR (LightOnOCR)
+ * - reasoning: Staff/CFO/Legal chat (deepseek-r1:8b)
+ * - architect: heavier design/spec (deepseek-r1:14b)
+ * - reinspect: confirm "Flag for closer inspection" refine (prefer 14b over light 8b)
  */
 export type ModelRole =
   | "vision"
@@ -11,7 +17,9 @@ export type ModelRole =
   | "coder"
   | "coaching"
   | "stylist"
-  | "qa";
+  | "qa"
+  /** Closer inspection after user flags a confirm (neighbor OCR + structured refine). */
+  | "reinspect";
 
 /** Suggested pickers for Settings UI (order = preference). */
 export const MODEL_ROLE_CANDIDATES: Record<ModelRole, readonly string[]> = {
@@ -27,6 +35,8 @@ export const MODEL_ROLE_CANDIDATES: Record<ModelRole, readonly string[]> = {
   stylist: ["gemma4:e4b", "llama3.1:8b", "deepseek-r1:8b"],
   /** QA: deepseek-r1 preferred (user); optional 14b for heavier review — not mistral. */
   qa: ["deepseek-r1:8b", "deepseek-r1:14b"],
+  /** Reinspect refine pass: bump light → deepseek-r1:14b (failover 8b). */
+  reinspect: ["deepseek-r1:14b", "deepseek-r1:8b"],
 };
 
 /** Defaults written to config / Settings vault when unset. */
@@ -38,6 +48,8 @@ export const MODEL_DEFAULTS = {
   coachingModel: "llama3.1:8b",
   stylistModel: "gemma4:e4b",
   qaModel: "deepseek-r1:8b",
+  /** Higher-grade refine for flagged confirms (defaults to architect-class 14b). */
+  reinspectModel: "deepseek-r1:14b",
 } as const;
 
 /** Flat list for Settings suggestions + pull-models (optional). */
@@ -50,6 +62,7 @@ export const KNOWN_MODELS = [
     ...MODEL_ROLE_CANDIDATES.coaching,
     ...MODEL_ROLE_CANDIDATES.stylist,
     ...MODEL_ROLE_CANDIDATES.qa,
+    ...MODEL_ROLE_CANDIDATES.reinspect,
   ]),
 ];
 

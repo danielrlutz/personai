@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { Eye, X } from "lucide-react";
+import { Eye, Flag, X } from "lucide-react";
 import type { PendingConfirmation } from "@/lib/api-client";
 import {
   humanizeConfirmationSummary,
@@ -9,10 +9,37 @@ import {
 } from "@/lib/confirm-labels";
 import { buildArchiveName, type ArchiveDraft } from "@/lib/archive-naming";
 import { ARCHIVE_TAXONOMY_CLIENT } from "@/lib/archive-taxonomy";
+import {
+  labelForReinspectStatus,
+  reinspectStatusFromPayload,
+  type ReinspectStatus,
+} from "@/lib/reinspect-status";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { documentIdFromConfirmation } from "./confirm-utils";
 import { NearDuplicateRadar } from "./NearDuplicateRadar";
+
+function badgeVariantForReinspect(
+  status: ReinspectStatus,
+): "warning" | "secondary" | "success" | "destructive" {
+  switch (status) {
+    case "flagged":
+      return "warning";
+    case "reinspecting":
+      return "secondary";
+    case "ready":
+      return "success";
+    case "failed":
+      return "destructive";
+  }
+}
+
+function flagButtonLabel(status: ReinspectStatus | null): string {
+  if (status === "flagged" || status === "reinspecting") return "Closer inspection…";
+  if (status === "ready" || status === "failed") return "Flag again";
+  return "Flag for closer inspection";
+}
 
 export interface ConfirmItemCardProps {
   confirmation: PendingConfirmation;
@@ -30,6 +57,8 @@ export interface ConfirmItemCardProps {
   onOpenExisting?: (documentId: string, archiveName?: string) => void;
   onConfirm: () => void;
   onDecline: () => void;
+  /** Flag incomplete confirm for neighbor OCR + higher-tier refine. */
+  onFlagReinspect?: () => void;
   /** Tighter actions layout for carousel. */
   stackActions?: boolean;
 }
@@ -48,6 +77,7 @@ export function ConfirmItemCard({
   onOpenExisting,
   onConfirm,
   onDecline,
+  onFlagReinspect,
   stackActions = false,
 }: ConfirmItemCardProps) {
   const documentId = documentIdFromConfirmation(c);
@@ -59,12 +89,21 @@ export function ConfirmItemCard({
   const onHitsChange = useCallback((hasHits: boolean) => {
     setHasNearDupes(hasHits);
   }, []);
+  const reinspectStatus = reinspectStatusFromPayload(c.payload);
+  const reinspectBusy =
+    reinspectStatus === "flagged" || reinspectStatus === "reinspecting";
+  const actionsDisabled = busy || reinspectBusy;
 
   return (
     <div className="space-y-3">
       <div className="min-w-0">
-        <p className="text-xs font-medium tracking-wide text-muted-foreground">
-          {labelForConfirmAction(c.action)}
+        <p className="flex flex-wrap items-center gap-2 text-xs font-medium tracking-wide text-muted-foreground">
+          {labelForConfirmAction(c.action, c.payload)}
+          {reinspectStatus ? (
+            <Badge variant={badgeVariantForReinspect(reinspectStatus)}>
+              {labelForReinspectStatus(reinspectStatus)}
+            </Badge>
+          ) : null}
         </p>
         <p className="md-label-large break-words [overflow-wrap:anywhere]">
           {humanizeConfirmationSummary(c.summary)}
@@ -173,17 +212,29 @@ export function ConfirmItemCard({
             size={stackActions ? "default" : "sm"}
             variant="secondary"
             className={stackActions ? "w-full" : undefined}
-            disabled={previewBusy || busy}
+            disabled={previewBusy || actionsDisabled}
             onClick={onView}
           >
             <Eye className="mr-1 h-3.5 w-3.5" />
             {previewBusy ? "Opening…" : "View file"}
           </Button>
         ) : null}
+        {documentId && onFlagReinspect ? (
+          <Button
+            size={stackActions ? "default" : "sm"}
+            variant="ghost"
+            className={stackActions ? "w-full" : undefined}
+            disabled={actionsDisabled}
+            onClick={onFlagReinspect}
+          >
+            <Flag className="mr-1 h-3.5 w-3.5" />
+            {flagButtonLabel(reinspectStatus)}
+          </Button>
+        ) : null}
         <div className={stackActions ? "grid grid-cols-2 gap-2" : "contents"}>
           <Button
             size={stackActions ? "default" : "sm"}
-            disabled={busy}
+            disabled={actionsDisabled}
             onClick={onConfirm}
           >
             {hasNearDupes ? "File anyway" : "Confirm"}
@@ -191,7 +242,7 @@ export function ConfirmItemCard({
           <Button
             size={stackActions ? "default" : "sm"}
             variant="outline"
-            disabled={busy}
+            disabled={actionsDisabled}
             onClick={onDecline}
           >
             <X className="mr-1 h-3 w-3" />

@@ -36,6 +36,8 @@ export const config = {
   coachingModel: process.env.OLLAMA_COACHING_MODEL ?? "llama3.1:8b",
   stylistModel: process.env.OLLAMA_STYLIST_MODEL ?? "gemma4:e4b",
   qaModel: process.env.OLLAMA_QA_MODEL ?? "deepseek-r1:8b",
+  /** Confirm closer-inspection refine (vault `reinspectModel`; default architect-class 14b). */
+  reinspectModel: process.env.OLLAMA_REINSPECT_MODEL ?? "deepseek-r1:14b",
   licenseTier: (process.env.LICENSE_TIER ?? "pro") as "core" | "pro",
   keepAlive: "0",
   /** Soul News sidecar base URL (no trailing slash). Proxied at GET /integrations/soul-news/feed */
