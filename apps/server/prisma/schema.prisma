@@ -183,6 +183,10 @@ model IngestionJob {
   ollamaHost   String
   errorMessage String?
   pausedReason String?
+  /** Lane phase: queued | waiting_vision | rasterize | ocr | split | await_confirm | cancelling */
+  progressPhase  String?
+  /** Optional detail e.g. "3/12" for OCR page progress */
+  progressDetail String?
   queuePosition Int?
   startedAt    DateTime?
   completedAt  DateTime?
