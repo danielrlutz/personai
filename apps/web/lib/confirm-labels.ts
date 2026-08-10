@@ -13,6 +13,7 @@ const ACTION_LABELS: Record<string, string> = {
   "memory.fact": "Remember fact",
   "calendar.event": "Calendar (stage locally — Google write not wired)",
   "calendar.event_staged": "Calendar staged locally",
+  "fristen.calendar_pack": "Fristen calendar pack (.ics)",
   "confirm.accept": "Confirmed",
   "confirm.reject": "Rejected",
 };

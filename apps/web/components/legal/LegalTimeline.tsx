@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { ApiLoadError } from "@/components/shared/ApiLoadError";
+import { FristenCalendarPackButton } from "@/components/legal/FristenCalendarPackButton";
 
 const statusVariant = {
   TODO: "secondary" as const,
@@ -99,16 +100,27 @@ export function LegalTimeline() {
                   {task.dueDate && (
                     <p className="mt-2 text-xs text-muted-foreground">Due {formatDate(task.dueDate)}</p>
                   )}
-                  {task.status !== "DONE" && task.status !== "BLOCKED" && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="mt-2 h-7 px-2 text-xs"
-                      onClick={() => void apiPatch(`/legal/tasks/${task.id}`, { status: "IN_PROGRESS" }).then(load)}
-                    >
-                      Mark in progress
-                    </Button>
-                  )}
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    {task.dueDate && task.status !== "DONE" ? (
+                      <FristenCalendarPackButton
+                        ids={[`task:${task.id}`]}
+                        variant="ghost"
+                        label="Stage + .ics"
+                      />
+                    ) : null}
+                    {task.status !== "DONE" && task.status !== "BLOCKED" && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2 text-xs"
+                        onClick={() =>
+                          void apiPatch(`/legal/tasks/${task.id}`, { status: "IN_PROGRESS" }).then(load)
+                        }
+                      >
+                        Mark in progress
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </div>
             ))}

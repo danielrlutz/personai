@@ -21,6 +21,25 @@ export function BriefingActionItems({
   const personalFirst = isPersonalFirst(usageMode);
   const personalActions: Action[] = [];
   const businessActions: Action[] = [];
+  const urgentFristen: Action[] = [];
+
+  const seenUrgent = new Set<string>();
+  (snapshot.legal.urgentWithin36h ?? []).forEach((frist) => {
+    const key = `${frist.kind}:${frist.title}:${frist.dueDate}`;
+    if (seenUrgent.has(key)) return;
+    seenUrgent.add(key);
+    const when =
+      frist.hoursUntil < 0
+        ? "overdue"
+        : frist.hoursUntil <= 36
+          ? `≤${Math.max(1, frist.hoursUntil)}h`
+          : "soon";
+    urgentFristen.push({
+      label: `Frist ${when}: ${frist.title}`,
+      href: frist.kind === "document" ? "/ingest" : "/legal",
+      priority: "high",
+    });
+  });
 
   snapshot.personal?.tasksDueToday.forEach((task) => {
     personalActions.push({
@@ -64,6 +83,10 @@ export function BriefingActionItems({
   });
 
   snapshot.legal.tasksDueToday.forEach((task) => {
+    const alreadyUrgent = (snapshot.legal.urgentWithin36h ?? []).some(
+      (u) => u.kind === "legal_task" && u.title === task.title,
+    );
+    if (alreadyUrgent) return;
     businessActions.push({
       label: task.title,
       href: "/legal",
@@ -81,7 +104,7 @@ export function BriefingActionItems({
     });
   }
 
-  if (snapshot.legal.overdueTasks > 0) {
+  if (snapshot.legal.overdueTasks > 0 && urgentFristen.length === 0) {
     businessActions.push({
       label:
         snapshot.legal.overdueTasks === 1
@@ -92,9 +115,10 @@ export function BriefingActionItems({
     });
   }
 
+  // ≤36h Fristen always lead — skill + Swiss deadline priority.
   const actions = personalFirst
-    ? [...personalActions, ...businessActions]
-    : [...businessActions, ...personalActions];
+    ? [...urgentFristen, ...personalActions, ...businessActions]
+    : [...urgentFristen, ...businessActions, ...personalActions];
 
   if (actions.length === 0) {
     actions.push({

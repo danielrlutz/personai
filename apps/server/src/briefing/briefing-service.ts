@@ -28,6 +28,14 @@ export type BriefingSnapshot = {
     tasksDueToday: Array<{ title: string; type: string }>;
     overdueTasks: number;
     upcomingThisWeek: number;
+    /** Open Fristen due within the next 36 hours (or already overdue) — surface first. */
+    urgentWithin36h: Array<{
+      title: string;
+      type: string;
+      dueDate: string;
+      kind: "legal_task" | "document";
+      hoursUntil: number;
+    }>;
   };
   medical: {
     recentComplaints: number;
@@ -117,6 +125,9 @@ export async function buildSnapshot(prisma: PrismaClient): Promise<BriefingSnaps
   // Do not present seed template limits (e.g. 4700 CHF) as "budget remaining".
   const budgetIsTemplateOnly = spent === 0 && monthExpenseCount === 0 && limit > 0;
 
+  const now = new Date();
+  const within36h = new Date(now.getTime() + 36 * 60 * 60 * 1000);
+
   const tasksDueToday = await prisma.legalTask.findMany({
     where: {
       status: { in: ["TODO", "IN_PROGRESS"] },
@@ -137,6 +148,45 @@ export async function buildSnapshot(prisma: PrismaClient): Promise<BriefingSnaps
       dueDate: { gte: todayStart, lte: weekEnd },
     },
   });
+
+  const [urgentTasks, urgentDocs] = await Promise.all([
+    prisma.legalTask.findMany({
+      where: {
+        status: { in: ["TODO", "IN_PROGRESS", "BLOCKED"] },
+        dueDate: { not: null, lte: within36h },
+      },
+      orderBy: { dueDate: "asc" },
+      take: 20,
+    }),
+    prisma.document.findMany({
+      where: { deadline: { not: null, lte: within36h } },
+      orderBy: { deadline: "asc" },
+      take: 20,
+    }),
+  ]);
+
+  const urgentWithin36h = [
+    ...urgentTasks
+      .filter((t): t is typeof t & { dueDate: Date } => Boolean(t.dueDate))
+      .map((t) => ({
+        title: t.title,
+        type: t.type,
+        dueDate: t.dueDate.toISOString(),
+        kind: "legal_task" as const,
+        hoursUntil: Math.round((t.dueDate.getTime() - now.getTime()) / (60 * 60 * 1000)),
+      })),
+    ...urgentDocs
+      .filter((d): d is typeof d & { deadline: Date } => Boolean(d.deadline))
+      .map((d) => ({
+        title: d.archiveName || d.filename,
+        type: "DOCUMENT",
+        dueDate: d.deadline.toISOString(),
+        kind: "document" as const,
+        hoursUntil: Math.round((d.deadline.getTime() - now.getTime()) / (60 * 60 * 1000)),
+      })),
+  ]
+    .sort((a, b) => a.hoursUntil - b.hoursUntil)
+    .slice(0, 12);
 
   const complaints = await prisma.complaintLog.findMany({
     where: { occurredAt: { gte: weekAgo } },
@@ -181,6 +231,7 @@ export async function buildSnapshot(prisma: PrismaClient): Promise<BriefingSnaps
       tasksDueToday: tasksDueToday.map((t) => ({ title: t.title, type: t.type })),
       overdueTasks,
       upcomingThisWeek,
+      urgentWithin36h,
     },
     medical: {
       recentComplaints: complaints.length,
@@ -203,7 +254,8 @@ function snapshotNeedsRefresh(raw: string): boolean {
     return (
       parsed.finance?.budgetIsTemplateOnly === undefined ||
       !parsed.personal ||
-      !parsed.userCare
+      !parsed.userCare ||
+      !parsed.legal?.urgentWithin36h
     );
   } catch {
     return true;
@@ -287,6 +339,7 @@ export async function* streamBriefingNarrative(
 Schreibe eine kurze, klare Tagesbriefing-Zusammenfassung auf Deutsch (de-CH).
 Maximal 3 Absätze. Sei konkret und handlungsorientiert. Keine medizinische Diagnose.
 ${scopeHint}
+Wichtig: Fristen in legal.urgentWithin36h (fällig innerhalb 36h oder überfällig) zuerst nennen — klar und ohne Dramatik.
 Nur mit Daten aus dem Snapshot, nichts erfinden. Keine erfundenen Fristen, MWST-Quartale oder Compliance-Pflichten.
 Wenn budgetIsTemplateOnly true ist, erwähne kein verfügbares Budget / Restbudget — die Kategorie-Limits sind nur Vorlagen.
 Wenn personal-Felder leer/null/0 sind, sage ehrlich, dass dort noch nichts erfasst ist.

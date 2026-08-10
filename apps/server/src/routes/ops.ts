@@ -1,13 +1,13 @@
 import type { FastifyInstance } from "fastify";
 import { createConfirmation } from "../confirm/confirm-service.js";
 import { stageCalendarEvent } from "../confirm/apply-confirmation.js";
+import { buildFristenCalendarPack } from "../calendar/fristen-pack.js";
 import { config } from "../config.js";
 import { resolveProductConfig } from "../settings/host-vault.js";
 import { ARCHIVE_TAXONOMY } from "../specialists/roster.js";
 import { sendError, withPrisma } from "./helpers.js";
 import { ingestionEvents } from "../ollama/ingestion-worker.js";
 import { cancelIngestJob } from "../ingest/cancel-job.js";
-
 function monthKey(d = new Date()): string {
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
 }
@@ -206,6 +206,45 @@ export async function registerOpsRoutes(app: FastifyInstance): Promise<void> {
         },
       });
       return task;
+    } catch (err) {
+      return sendError(reply, err);
+    }
+  });
+
+  /** Stage open Fristen locally + return a portable .ics pack (Google write remains a stub). */
+  app.post<{
+    Body?: { ids?: string[]; stage?: boolean };
+  }>("/fristen/calendar-pack", async (req, reply) => {
+    try {
+      const { prisma } = await withPrisma(req);
+      const ids = Array.isArray(req.body?.ids)
+        ? req.body.ids.map(String).filter(Boolean)
+        : undefined;
+      const pack = await buildFristenCalendarPack(prisma, {
+        ids,
+        stage: req.body?.stage !== false,
+      });
+      return { ok: true, ...pack };
+    } catch (err) {
+      return sendError(reply, err);
+    }
+  });
+
+  /** Download-only .ics (no local staging). */
+  app.get("/fristen/calendar-pack.ics", async (req, reply) => {
+    try {
+      const { prisma } = await withPrisma(req);
+      const q = req.query as { ids?: string };
+      const ids = q.ids
+        ? String(q.ids)
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean)
+        : undefined;
+      const pack = await buildFristenCalendarPack(prisma, { ids, stage: false });
+      reply.header("Content-Type", "text/calendar; charset=utf-8");
+      reply.header("Content-Disposition", `attachment; filename="${pack.filename}"`);
+      return reply.send(pack.ics);
     } catch (err) {
       return sendError(reply, err);
     }

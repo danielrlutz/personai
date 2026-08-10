@@ -722,6 +722,14 @@ export interface BriefingSnapshot {
     tasksDueToday: Array<{ title: string; type: string }>;
     overdueTasks: number;
     upcomingThisWeek: number;
+    /** Open Fristen due within ≤36h (or overdue). Older snapshots may omit this. */
+    urgentWithin36h?: Array<{
+      title: string;
+      type: string;
+      dueDate: string;
+      kind: "legal_task" | "document";
+      hoursUntil: number;
+    }>;
   };
   medical: {
     recentComplaints: number;

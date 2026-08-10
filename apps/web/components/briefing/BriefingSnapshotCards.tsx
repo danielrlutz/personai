@@ -85,6 +85,10 @@ export function BriefingSnapshotCards({
       icon: Scale,
       accent: "text-blue-400",
       items: [
+        {
+          label: "≤36h",
+          value: String(snapshot.legal.urgentWithin36h?.length ?? 0),
+        },
         { label: "Due today", value: String(snapshot.legal.tasksDueToday.length) },
         { label: "Overdue", value: String(snapshot.legal.overdueTasks) },
         { label: "This week", value: String(snapshot.legal.upcomingThisWeek) },
