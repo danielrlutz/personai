@@ -25,6 +25,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import {
+  DriveJobPulseStrip,
+  trackDriveJobPulse,
+  type ServerJobDto,
+} from "@/components/confirm/DriveJobPulse";
 
 interface ConfirmGateProps {
   refreshKey?: number;
@@ -153,6 +158,8 @@ export function ConfirmGate({
   const [previewBusyId, setPreviewBusyId] = useState<string | null>(null);
   const [preview, setPreview] = useState<PreviewState | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /** Drive upload ServerJob ids returned by confirm (pulse strip). */
+  const [driveJobIds, setDriveJobIds] = useState<string[]>([]);
 
   const closePreview = useCallback(() => {
     setPreview((prev) => {
@@ -256,7 +263,10 @@ export function ConfirmGate({
           archiveCategory: drafts[id]!.archiveCategory,
         });
       }
-      await apiPost(
+      const out = await apiPost<{
+        driveJob?: ServerJobDto | null;
+        async?: boolean;
+      }>(
         `/confirmations/${id}/${decision === "confirm" ? "confirm" : "reject"}`,
         undefined,
         { silent: true },
@@ -265,6 +275,12 @@ export function ConfirmGate({
       onResolved?.(decision);
       if (decision === "reject") {
         toast.success("Declined — external systems unchanged; local staging kept.");
+      } else if (out?.driveJob?.id) {
+        trackDriveJobPulse(out.driveJob.id);
+        setDriveJobIds((prev) =>
+          prev.includes(out.driveJob!.id) ? prev : [out.driveJob!.id, ...prev],
+        );
+        toast.success("Filed locally — Drive upload continuing in the background.");
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Action failed";
@@ -279,9 +295,16 @@ export function ConfirmGate({
     }
   };
 
+  const pulseStrip = (
+    <DriveJobPulseStrip jobIds={driveJobIds} compact={compact} className="mb-3" />
+  );
+
   if (items.length === 0 && !error) {
-    if (!showEmpty) return null;
+    // Mount strip even with empty jobIds so session-stored pulses restore after navigation.
+    if (!showEmpty) return pulseStrip;
     return (
+      <>
+        {pulseStrip}
       <Card className={compact ? "border-primary/30" : undefined}>
         <CardHeader className="pb-2">
           <CardTitle className="flex items-center gap-2 text-base">
@@ -295,12 +318,14 @@ export function ConfirmGate({
           </CardDescription>
         </CardHeader>
       </Card>
+      </>
     );
   }
 
   return (
     <>
       {preview ? <DocumentPreviewModal preview={preview} onClose={closePreview} /> : null}
+      {pulseStrip}
       <Card className={compact ? "border-primary/30" : undefined}>
         <CardHeader className="pb-2">
           <CardTitle className="flex items-center gap-2 text-base">

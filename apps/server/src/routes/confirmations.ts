@@ -10,7 +10,11 @@ import { ARCHIVE_TAXONOMY } from "../specialists/roster.js";
 import { createConfirmation, listPendingConfirmations } from "../confirm/confirm-service.js";
 import { resolveConfirmation } from "../confirm/apply-confirmation.js";
 import { CareerDocument } from "../export/career-document.js";
-import { getServerJob, serializeServerJob } from "../jobs/server-jobs.js";
+import {
+  getServerJob,
+  retryServerJob,
+  serializeServerJob,
+} from "../jobs/server-jobs.js";
 import { sendError, withPrisma } from "./helpers.js";
 
 function isPathInside(parent, child) {
@@ -74,6 +78,24 @@ export async function registerConfirmationRoutes(app) {
             return { job: serializeServerJob(job) };
         }
         catch (err) {
+            return sendError(reply, err);
+        }
+    });
+    /** Retry a FAILED ServerJob (Drive upload) without re-filing the local archive. */
+    app.post("/jobs/:id/retry", async (req, reply) => {
+        try {
+            const { prisma } = await withPrisma(req);
+            const job = await retryServerJob(prisma, req.params.id);
+            return { job: serializeServerJob(job) };
+        }
+        catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            if (message === "Job not found") {
+                return reply.status(404).send({ error: message });
+            }
+            if (message === "Only failed jobs can be retried") {
+                return reply.status(400).send({ error: message });
+            }
             return sendError(reply, err);
         }
     });

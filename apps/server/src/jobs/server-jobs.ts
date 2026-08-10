@@ -61,6 +61,39 @@ export async function getServerJob(
   return prisma.serverJob.findUnique({ where: { id } });
 }
 
+/** Re-queue a FAILED ServerJob (e.g. Drive upload) without re-filing locally. */
+export async function retryServerJob(
+  prisma: PrismaClient,
+  id: string,
+): Promise<ServerJob> {
+  const job = await prisma.serverJob.findUnique({ where: { id } });
+  if (!job) throw new Error("Job not found");
+  if (job.status !== "FAILED") {
+    throw new Error("Only failed jobs can be retried");
+  }
+  const updated = await prisma.serverJob.update({
+    where: { id },
+    data: {
+      status: "QUEUED",
+      errorMessage: null,
+      startedAt: null,
+      completedAt: null,
+      result: null,
+    },
+  });
+  await prisma.auditLog.create({
+    data: {
+      action: "server_job.retry",
+      entity: "ServerJob",
+      entityId: job.id,
+      metadata: JSON.stringify({ type: job.type, documentId: job.documentId }),
+    },
+  });
+  const profileId = getActiveProfileId();
+  if (profileId) serverJobEvents.emit("queue", { profileId, jobId: job.id });
+  return updated;
+}
+
 export function serializeServerJob(job: ServerJob) {
   return {
     id: job.id,
