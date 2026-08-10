@@ -27,6 +27,7 @@ import {
   refreshSessionSummaryIfNeeded,
   type ArchiveCareContext,
 } from "../memory/user-care.js";
+import { loadStagingForPrompt } from "../memory/staging.js";
 import { driveStatus } from "../archive/drive.js";
 import {
   ARCHIVE_INDEX_KEY,
@@ -86,10 +87,11 @@ export async function registerTeamRoutes(app: FastifyInstance): Promise<void> {
 
   async function loadUserCare(
     prisma: Awaited<ReturnType<typeof withPrisma>>["prisma"],
+    profileId: string,
     specialistId: string,
     sessionSummary: string | null | undefined,
   ) {
-    const [ceo, facts, liveOps, archiveFacts] = await Promise.all([
+    const [ceo, facts, liveOps, archiveFacts, staging] = await Promise.all([
       getCeoProfileCard(prisma),
       listRecentMemoryFacts(prisma),
       buildSlimLiveOps(prisma, specialistId),
@@ -98,6 +100,7 @@ export async function registerTeamRoutes(app: FastifyInstance): Promise<void> {
           key: { in: [ARCHIVE_INDEX_KEY, ARCHIVE_TAXONOMY_KEY, ARCHIVE_REFRESHED_KEY] },
         },
       }),
+      loadStagingForPrompt(profileId),
     ]);
     const drive = driveStatus();
     const archiveMap = new Map(archiveFacts.map((f) => [f.key, f.value]));
@@ -116,6 +119,7 @@ export async function registerTeamRoutes(app: FastifyInstance): Promise<void> {
         liveOps,
         sessionSummary,
         archive,
+        stagingBlock: staging.block,
       }),
       liveOps,
       archive,
@@ -128,7 +132,7 @@ export async function registerTeamRoutes(app: FastifyInstance): Promise<void> {
       reply.status(400).send({ error: "message or image is required" });
       return;
     }
-    const { prisma } = await withPrisma(req);
+    const { prisma, profileId } = await withPrisma(req);
     const specialistId = resolveSpecialistId(body.specialist ?? body.persona);
     const specialist = getSpecialist(specialistId);
     const hasImage = Boolean(body.imageBase64?.trim());
@@ -154,6 +158,7 @@ export async function registerTeamRoutes(app: FastifyInstance): Promise<void> {
 
     const { userCare, liveOps, archive } = await loadUserCare(
       prisma,
+      profileId,
       specialistId,
       session.sessionSummary,
     );
@@ -314,8 +319,8 @@ export async function registerTeamRoutes(app: FastifyInstance): Promise<void> {
       if (!body.brief?.trim()) {
         return reply.status(400).send({ error: "brief is required" });
       }
-      const { prisma } = await withPrisma(req);
-      const { userCare } = await loadUserCare(prisma, "forge", null);
+      const { prisma, profileId } = await withPrisma(req);
+      const { userCare } = await loadUserCare(prisma, profileId, "forge", null);
 
       sseStart(reply, req);
 

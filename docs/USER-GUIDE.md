@@ -253,7 +253,7 @@ You do **not** need SSH for normal Drive linking or day-to-day config once the a
 - **API Server** URL override (phones)
 - **Product vault** (Ollama host, models, public URLs, Google Client ID/secret, redirect URI, premium key)
 - **Ollama status** / **Use this Ollama host**
-- **Your profile** / usage mode / memory facts
+- **Your profile** / usage mode / **About you / Personality vault** / memory facts
 - **Google Drive archive** → **Link Google Drive**, root folder, **Refresh archive context**
 - **Theme & lock** / PIN
 - **Password & encryption**

@@ -223,6 +223,8 @@ export function formatUserCareContext(opts: {
   liveOps: SlimLiveOps;
   sessionSummary?: string | null;
   archive?: ArchiveCareContext | null;
+  /** Personality vault markdown (already budgeted). */
+  stagingBlock?: string | null;
 }): string {
   const blocks = [
     `Profile card: ${compactCeoLine(opts.ceo)}`,
@@ -232,6 +234,9 @@ export function formatUserCareContext(opts: {
     `Memory facts (≤${MEMORY_FACT_INJECT_LIMIT} recent):\n${compactFactsBlock(opts.facts)}`,
     `Live ops (slim JSON):\n${JSON.stringify(opts.liveOps)}`,
   ];
+  if (opts.stagingBlock?.trim()) {
+    blocks.push(opts.stagingBlock.trim());
+  }
   if (opts.sessionSummary?.trim()) {
     blocks.push(`Session summary:\n${opts.sessionSummary.trim().slice(0, 800)}`);
   }
@@ -239,8 +244,17 @@ export function formatUserCareContext(opts: {
 }
 
 /** Compact profile + memory for briefing narrative (no live ops dump). */
-export function formatBriefingUserCare(ceo: CeoProfileCard, facts: MemoryFactCard[]): string {
-  return `Profile card: ${compactCeoLine(ceo)}\n\nMemory facts (≤${MEMORY_FACT_INJECT_LIMIT} recent):\n${compactFactsBlock(facts)}`;
+export function formatBriefingUserCare(
+  ceo: CeoProfileCard,
+  facts: MemoryFactCard[],
+  stagingBlock?: string | null,
+): string {
+  const parts = [
+    `Profile card: ${compactCeoLine(ceo)}`,
+    `Memory facts (≤${MEMORY_FACT_INJECT_LIMIT} recent):\n${compactFactsBlock(facts)}`,
+  ];
+  if (stagingBlock?.trim()) parts.push(stagingBlock.trim().slice(0, 1200));
+  return parts.join("\n\n");
 }
 
 /** Cheap rolling digest — no extra LLM call. */

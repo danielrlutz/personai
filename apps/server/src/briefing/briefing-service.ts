@@ -10,6 +10,8 @@ import {
   type CeoProfileCard,
   type MemoryFactCard,
 } from "../memory/user-care.js";
+import { loadStagingForPrompt } from "../memory/staging.js";
+import { getActiveProfileId } from "../db/prisma-singleton.js";
 
 export type BriefingSnapshot = {
   greeting: string;
@@ -318,11 +320,15 @@ export async function* streamBriefingNarrative(
     data: { status: "GENERATING" },
   });
 
-  const [ceo, facts] = await Promise.all([
+  const profileId = getActiveProfileId();
+  const [ceo, facts, staging] = await Promise.all([
     getCeoProfileCard(prisma),
     listRecentMemoryFacts(prisma),
+    profileId
+      ? loadStagingForPrompt(profileId)
+      : Promise.resolve({ block: "", slices: [], totalInjected: 0 }),
   ]);
-  const userCareBlock = formatBriefingUserCare(ceo, facts);
+  const userCareBlock = formatBriefingUserCare(ceo, facts, staging.block);
 
   const release = await vramLock.acquire("REASONING");
   let full = "";
@@ -343,7 +349,7 @@ Wichtig: Fristen in legal.urgentWithin36h (fällig innerhalb 36h oder überfäll
 Nur mit Daten aus dem Snapshot, nichts erfinden. Keine erfundenen Fristen, MWST-Quartale oder Compliance-Pflichten.
 Wenn budgetIsTemplateOnly true ist, erwähne kein verfügbares Budget / Restbudget — die Kategorie-Limits sind nur Vorlagen.
 Wenn personal-Felder leer/null/0 sind, sage ehrlich, dass dort noch nichts erfasst ist.
-Nutze die Profil-Karte und Memory-Facts nur als kompakten Kontext (Name/Locale/usageMode/bekannte Fakten) — erfinde nichts dazu.
+Nutze die Profil-Karte, Memory-Facts und Personality vault nur als kompakten Kontext (Name/Locale/usageMode/bekannte Prefs) — erfinde nichts dazu.
 
 ${userCareBlock}`;
 
