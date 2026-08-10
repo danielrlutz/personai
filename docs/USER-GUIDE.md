@@ -135,6 +135,8 @@ Also listed in **First-launch setup** → **Archive**. Naming pattern after conf
 
 **Drive folder matching:** PersonAI does **not** invent a second taxonomy next to yours. Under your archive root (`Archived Files`, `PersonAI_Archive`, or similar), it matches category folders by name — numbering style (`01_`, `1.`, `01 -`, …) and EN/DE/FR labels (e.g. `1. Official Documents` ↔ Official, `Versicherung` ↔ Insurance). If regex is unsure, a small local Ollama model may pick once; the mapping is cached per profile so uploads reuse it. New `01_Label` folders are created only when nothing matches. PersonAI **never deletes** Drive folders — if you already have both `01_Official` and `1. Official Documents`, merge or remove the empty duplicate yourself in Google Drive; the app will keep using the richer/legacy match.
 
+**Taxonomy health (Settings → Google Drive archive):** Tap **Scan folder map** to list duplicate candidates under your archive root, see the suggested winner (more files / legacy name), and **Prefer forever** to cache that folder for uploads. This only updates PersonAI's mapping — it does not delete or merge Drive folders.
+
 **Confirm → Drive is durable:** Approving a filing writes the local archive immediately (the confirm barrier). Google Drive upload continues on the server as a background job even if you close the tab or navigate away. After Confirm, a **Drive upload** strip on Home / Needs your confirmation polls job status (Queued → Done / Failed), links to **Activity**, and lets you **Retry** a failed upload without re-filing locally.
 
 ### Step G — Optional comfort settings

@@ -759,6 +759,51 @@ export interface ArchiveRefreshResult {
   status?: DriveStatus;
 }
 
+
+export interface TaxonomyHealthFolder {
+  id: string;
+  name: string;
+  fileCount: number;
+  isPersonAiStyle: boolean;
+}
+
+export interface TaxonomyHealthIssue {
+  category: number;
+  label: string;
+  suggested: TaxonomyHealthFolder;
+  duplicates: TaxonomyHealthFolder[];
+  reason: string;
+  cachedFolderId: string | null;
+  cachedMatchesSuggested: boolean;
+}
+
+export interface TaxonomyHealthMapping {
+  category: number;
+  label: string;
+  folderId: string | null;
+  folderName: string | null;
+  source: string | null;
+  hasDuplicates: boolean;
+}
+
+export interface TaxonomyHealthReport {
+  rootFolderId: string | null;
+  scannedAt: string;
+  childFolderCount: number;
+  issues: TaxonomyHealthIssue[];
+  mappings: TaxonomyHealthMapping[];
+  neverDeletesFolders: true;
+  note: string;
+}
+
+export interface TaxonomyHealthPreferResult {
+  ok: true;
+  category: number;
+  folderId: string;
+  folderName: string | null;
+  report: TaxonomyHealthReport;
+}
+
 export interface DailyBriefing {
   id: string;
   briefingDate: string;

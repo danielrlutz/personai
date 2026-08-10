@@ -17,6 +17,7 @@ import {
   Wand2,
 } from "lucide-react";
 import { ProductSettingsCard } from "@/components/settings/ProductSettingsCard";
+import { DriveTaxonomyHealth } from "@/components/settings/DriveTaxonomyHealth";
 import { InstallAppCard } from "@/components/shared/InstallAppCard";
 import {
   clearAppPin,
@@ -842,6 +843,10 @@ export default function SettingsPage() {
                 : ""}
             </p>
           ) : null}
+          <DriveTaxonomyHealth
+            linked={Boolean(drive?.linked || drive?.enabled)}
+            disabled={driveBusy}
+          />
           {driveNote ? <p className="text-xs text-muted-foreground">{driveNote}</p> : null}
         </CardContent>
       </Card>

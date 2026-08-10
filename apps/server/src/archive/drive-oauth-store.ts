@@ -156,7 +156,16 @@ function prunePending(): void {
 }
 
 export type DriveFolderMatchMeta = {
-  source: "cache" | "regex" | "synonym" | "exact" | "reconcile" | "llm" | "created";
+  source:
+    | "cache"
+    | "regex"
+    | "synonym"
+    | "exact"
+    | "reconcile"
+    | "llm"
+    | "created"
+    /** Explicit Settings → taxonomy health “prefer forever”. */
+    | "prefer";
   matchedName?: string | null;
   duplicates?: Array<{ id: string; name: string }>;
   at: string;
