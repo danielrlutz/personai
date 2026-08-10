@@ -6,12 +6,17 @@ import type { PrismaClient, ServerJob } from "@prisma/client";
 import { EventEmitter } from "node:events";
 import { getPrisma, getActiveProfileId } from "../db/prisma-singleton.js";
 import { uploadFileToDrive, resolveFolderForCategory, loadDriveConfig } from "../archive/drive.js";
+import {
+  processCombineFoldersJob,
+  type DriveCombineJobPayload,
+} from "../archive/folder-combine.js";
 import { guessMime } from "../archive/commit.js";
 
 export const serverJobEvents = new EventEmitter();
 
 export const SERVER_JOB_DRIVE_UPLOAD = "drive.upload";
 export const SERVER_JOB_DRIVE_ENSURE = "drive.ensure_folders";
+export const SERVER_JOB_DRIVE_COMBINE = "drive.combine_folders";
 
 export type DriveUploadJobPayload = {
   localPath: string;
@@ -24,6 +29,8 @@ export type DriveUploadJobPayload = {
 export type DriveEnsureJobPayload = {
   categories?: number[];
 };
+
+export type { DriveCombineJobPayload };
 
 function parsePayload<T>(raw: string): T {
   try {
@@ -172,6 +179,18 @@ async function processDriveEnsure(
   return { mapped };
 }
 
+async function processDriveCombine(
+  profileId: string,
+  job: ServerJob,
+): Promise<Record<string, unknown>> {
+  const payload = parsePayload<DriveCombineJobPayload>(job.payload);
+  if (!payload.destinationFolderId || !Array.isArray(payload.sourceFolderIds)) {
+    throw new Error("drive.combine_folders payload missing destination/source folders");
+  }
+  const result = await processCombineFoldersJob(profileId, payload);
+  return result as unknown as Record<string, unknown>;
+}
+
 async function processOneJob(profileId: string, jobId: string): Promise<void> {
   const prisma = await getPrisma(profileId);
   const job = await prisma.serverJob.findUnique({ where: { id: jobId } });
@@ -196,6 +215,9 @@ async function processOneJob(profileId: string, jobId: string): Promise<void> {
         break;
       case SERVER_JOB_DRIVE_ENSURE:
         result = await processDriveEnsure(profileId, job);
+        break;
+      case SERVER_JOB_DRIVE_COMBINE:
+        result = await processDriveCombine(profileId, job);
         break;
       default:
         throw new Error(`Unknown server job type: ${job.type}`);

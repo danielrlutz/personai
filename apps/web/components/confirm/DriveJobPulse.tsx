@@ -17,8 +17,17 @@ export type ServerJobDto = {
   type: string;
   status: "QUEUED" | "PROCESSING" | "COMPLETED" | "FAILED" | string;
   documentId?: string | null;
-  payload?: { name?: string; archiveCategory?: number } | null;
-  result?: { webViewLink?: string; name?: string; skipped?: boolean } | null;
+  payload?: {
+    name?: string;
+    archiveCategory?: number;
+    destinationFolderName?: string;
+  } | null;
+  result?: {
+    webViewLink?: string;
+    name?: string;
+    skipped?: boolean;
+    moved?: number;
+  } | null;
   errorMessage?: string | null;
   attempts?: number;
 };
@@ -54,12 +63,13 @@ function dismissDriveJobPulse(jobId: string) {
   writePulseIds(readPulseIds().filter((id) => id !== jobId));
 }
 
-function statusLabel(status: string): string {
+function statusLabel(status: string, jobType?: string): string {
+  const combining = jobType === "drive.combine_folders";
   switch (status) {
     case "QUEUED":
       return "Queued";
     case "PROCESSING":
-      return "Uploading…";
+      return combining ? "Combining…" : "Uploading…";
     case "COMPLETED":
       return "Done";
     case "FAILED":
@@ -136,10 +146,14 @@ function DriveJobPulseRow({
 
   const status = job?.status ?? "QUEUED";
   const done = status === "COMPLETED";
-  const name =
-    (typeof job?.payload?.name === "string" && job.payload.name) ||
-    (typeof job?.result?.name === "string" && job.result.name) ||
-    "Archive file";
+  const isCombine = job?.type === "drive.combine_folders";
+  const name = isCombine
+    ? typeof job?.payload?.destinationFolderName === "string"
+      ? `Combine → ${job.payload.destinationFolderName}`
+      : "Combine folders"
+    : (typeof job?.payload?.name === "string" && job.payload.name) ||
+      (typeof job?.result?.name === "string" && job.result.name) ||
+      "Archive file";
   const webViewLink =
     job?.result && typeof job.result.webViewLink === "string" ? job.result.webViewLink : null;
 
@@ -158,12 +172,16 @@ function DriveJobPulseRow({
           {error
             ? error
             : failed
-              ? job?.errorMessage || "Drive upload failed"
+              ? job?.errorMessage || (isCombine ? "Folder combine failed" : "Drive upload failed")
               : done
-                ? job?.result?.skipped
-                  ? "Done — Drive not enabled"
-                  : "Done — in Google Drive"
-                : `${statusLabel(status)} · Drive courier`}
+                ? isCombine
+                  ? typeof job?.result?.moved === "number"
+                    ? `Done — moved ${job.result.moved} item(s)`
+                    : "Done — folders combined"
+                  : job?.result?.skipped
+                    ? "Done — Drive not enabled"
+                    : "Done — in Google Drive"
+                : `${statusLabel(status, job?.type)} · Drive courier`}
         </p>
       </div>
       <div className="flex shrink-0 flex-wrap gap-1.5">
