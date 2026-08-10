@@ -19,6 +19,7 @@ import {
 import { ProductSettingsCard } from "@/components/settings/ProductSettingsCard";
 import { DriveTaxonomyHealth } from "@/components/settings/DriveTaxonomyHealth";
 import { PersonalityVaultCard } from "@/components/settings/PersonalityVaultCard";
+import { SkillsStudioCard } from "@/components/settings/SkillsStudioCard";
 import { InstallAppCard } from "@/components/shared/InstallAppCard";
 import {
   clearAppPin,
@@ -572,6 +573,8 @@ export default function SettingsPage() {
       </Card>
 
       <ProductSettingsCard />
+
+      <SkillsStudioCard />
 
       <Card>
         <CardHeader>

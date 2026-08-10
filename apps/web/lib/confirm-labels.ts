@@ -11,6 +11,7 @@ const ACTION_LABELS: Record<string, string> = {
   "premium.spend": "Premium spend (optional cloud)",
   "premium.inference": "Premium inference (optional cloud)",
   "memory.fact": "Remember fact",
+  "skill.create": "Add skill",
   "calendar.event": "Calendar (stage locally — Google write not wired)",
   "calendar.event_staged": "Calendar staged locally",
   "fristen.calendar_pack": "Fristen calendar pack (.ics)",
