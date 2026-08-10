@@ -20,6 +20,9 @@ function publicSafeError(err: unknown, fallback: string): string {
   if (/password/i.test(message) && /invalid|incorrect|must be|already set|not set|too long/i.test(message)) {
     return message;
   }
+  if (/Unlock keys missing|emergency-reset|sealed database|profiles\.json/i.test(message)) {
+    return message;
+  }
   if (/not found|required|Authentication|Profile/i.test(message)) {
     return message;
   }
@@ -39,7 +42,16 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       if (!profile) {
         return reply.status(404).send({ error: "Profile not found" });
       }
-      if (!profile.passwordHash) {
+      const pub = toPublicProfile(profile);
+      if (pub.needsCryptoRestore) {
+        return reply.status(409).send({
+          error:
+            "Unlock keys missing from profiles.json for a sealed database. " +
+            "Restore a backup, or run scripts/emergency-reset-profile-crypto.sh",
+          code: "CRYPTO_RESTORE_REQUIRED",
+        });
+      }
+      if (!pub.hasPassword) {
         return reply.status(400).send({
           error: "Password not set. Complete setup first.",
           code: "PASSWORD_SETUP_REQUIRED",
@@ -57,6 +69,12 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       if (message === "Invalid password") {
         return reply.status(401).send({ error: "Invalid password", code: "INVALID_PASSWORD" });
       }
+      if (/Unlock keys missing/i.test(message)) {
+        return reply.status(409).send({
+          error: publicSafeError(err, "Unlock keys missing"),
+          code: "CRYPTO_RESTORE_REQUIRED",
+        });
+      }
       return reply.status(400).send({ error: publicSafeError(err, "Login failed") });
     }
   });
@@ -69,10 +87,26 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       if (!profileId || typeof password !== "string") {
         return reply.status(400).send({ error: "profileId and password are required" });
       }
+      const existing = getProfileById(profileId);
+      if (existing && toPublicProfile(existing).needsCryptoRestore) {
+        return reply.status(409).send({
+          error:
+            "Unlock keys missing for a sealed database. Restore profiles.json or run " +
+            "scripts/emergency-reset-profile-crypto.sh before setting a new password.",
+          code: "CRYPTO_RESTORE_REQUIRED",
+        });
+      }
       const publicProfile = await setupProfilePassword(profileId, password);
       const token = createSession(profileId);
       return { token, profile: publicProfile };
     } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (/Unlock keys missing|Sealed database exists/i.test(message)) {
+        return reply.status(409).send({
+          error: publicSafeError(err, "Crypto restore required"),
+          code: "CRYPTO_RESTORE_REQUIRED",
+        });
+      }
       return reply.status(400).send({ error: publicSafeError(err, "Setup failed") });
     }
   });

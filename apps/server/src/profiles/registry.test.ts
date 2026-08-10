@@ -7,9 +7,13 @@ import { randomUUID } from "node:crypto";
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "personai-registry-"));
 process.env.DATA_DIR = tmp;
 
-const { discoverOrphanProfileDirs, listProfiles, rehydrateRegistryFromDisk } = await import(
-  "./registry.js"
-);
+const {
+  discoverOrphanProfileDirs,
+  listProfiles,
+  listPublicProfiles,
+  rehydrateRegistryFromDisk,
+  setupProfilePassword,
+} = await import("./registry.js");
 
 const profileId = randomUUID();
 const dir = path.join(tmp, "profiles", profileId);
@@ -50,6 +54,27 @@ const kept = rehydrateRegistryFromDisk(named);
 assert.equal(kept.profiles.length, 1);
 assert.equal(kept.profiles[0].name, "Daniel Robin Lutz");
 assert.equal(kept.profiles[0].passwordHash, "keep-me");
+
+// Sealed stub without unlock material → public needsCryptoRestore; setup refused.
+const sealedOnly = {
+  activeProfileId: profileId,
+  profiles: [
+    {
+      id: profileId,
+      name: "Daniel Robin Lutz",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      dbEncrypted: true,
+    },
+  ],
+};
+fs.writeFileSync(path.join(tmp, "profiles.json"), JSON.stringify(sealedOnly, null, 2));
+const pub = listPublicProfiles();
+assert.equal(pub.profiles[0].hasPassword, false);
+assert.equal(pub.profiles[0].needsCryptoRestore, true);
+await assert.rejects(
+  () => setupProfilePassword(profileId, "new-password-123"),
+  /Unlock keys missing/,
+);
 
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log("registry bootstrap checks ok");

@@ -595,6 +595,8 @@ export interface Profile {
   createdAt: string;
   hasPassword?: boolean;
   dbEncrypted?: boolean;
+  /** Sealed DB but profiles.json lost passwordHash/kdfSalt/wrappedDek. */
+  needsCryptoRestore?: boolean;
 }
 
 export interface ProfileRegistry {

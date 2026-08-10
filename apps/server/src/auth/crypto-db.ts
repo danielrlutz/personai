@@ -118,6 +118,16 @@ export async function enableEncryptionForProfile(
   const encPath = profileEncDbPath(profileId);
   fs.mkdirSync(profileDir(profileId), { recursive: true });
 
+  // Never mint a new DEK beside an existing sealed DB — that orphan ciphertext
+  // cannot be opened with the new keys (looks like "can't login" forever).
+  if (!fs.existsSync(dbPath) && fs.existsSync(encPath)) {
+    throw new Error(
+      "Sealed database exists but unlock keys are missing. Restore profiles.json " +
+        "(passwordHash/kdfSalt/wrappedDek), or quarantine the .enc via " +
+        "scripts/emergency-reset-profile-crypto.sh before setting a new password.",
+    );
+  }
+
   if (fs.existsSync(dbPath)) {
     const plaintext = await fsp.readFile(dbPath);
     const encrypted = encryptBuffer(plaintext, dek);

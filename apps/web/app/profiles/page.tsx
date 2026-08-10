@@ -48,6 +48,14 @@ export default function ProfilesPage() {
   const selectProfile = (profile: Profile) => {
     setError(null);
     resetPasswordFields();
+    if (profile.needsCryptoRestore) {
+      setError(
+        `Unlock keys missing for “${profile.name}”. On the VPS restore profiles.json ` +
+          `(passwordHash/kdfSalt/wrappedDek), or run ` +
+          `./scripts/emergency-reset-profile-crypto.sh ${profile.id} then Set password.`,
+      );
+      return;
+    }
     if (profile.hasPassword) {
       setStep({ kind: "login", profile });
     } else {
@@ -187,7 +195,11 @@ export default function ProfilesPage() {
                               {profile.name}
                             </span>
                             <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                              {profile.hasPassword ? (
+                              {profile.needsCryptoRestore ? (
+                                <>
+                                  <Lock className="h-3 w-3" /> Restore unlock keys
+                                </>
+                              ) : profile.hasPassword ? (
                                 <>
                                   <Lock className="h-3 w-3" /> Password protected
                                 </>

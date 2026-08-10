@@ -319,6 +319,12 @@ https://debi9.tail8175e6.ts.net:8443/archive/drive/oauth/callback
 
 Browse-only HTTP (not installable): `http://debi9.tail8175e6.ts.net:3000` / API `:4000`.
 
+### Can't unlock (sealed DB / missing unlock keys)
+
+If `/profiles/` shows **Restore unlock keys**, or Unlock returns that unlock keys are missing: `profiles.json` no longer has `passwordHash` / `kdfSalt` / `wrappedDek` for that account. Restoring a `profiles.json` backup is the only way to keep the sealed SQLite. Otherwise on the VPS run `./scripts/emergency-reset-profile-crypto.sh <profile-uuid>` (keeps uploads/archive; fresh empty DB) — see [VPS-SETUP.md](./VPS-SETUP.md).
+
+If the UI only says **Could not load profiles**, the phone cannot reach the API (wrong URL, Serve `:8443` down, or API crash) — use the Serve recovery steps below.
+
 ### ralph@debi9 — Serve / Drive recovery
 
 If Settings shows **Loading encrypted Settings…**, Active API `https://…:8443`, and `/ceo-profile` / `/memory-facts` fail, Tailscale Serve for the API is usually broken. Product vault and **Link Google Drive** cannot load until the API answers.

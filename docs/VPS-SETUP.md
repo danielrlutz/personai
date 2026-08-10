@@ -529,6 +529,38 @@ docker compose exec api wget -qO- http://host.docker.internal:11434/api/tags
 
 Ensure `.env` has `OLLAMA_HOST=http://host.docker.internal:11434` (not `127.0.0.1` — that's the container's loopback).
 
+### Can't unlock / "Restore unlock keys" / CRYPTO_RESTORE_REQUIRED
+
+Symptom: profile `Daniel Robin Lutz` (`21deba4b-…`) still listed, but Unlock fails or the UI says **Restore unlock keys** / API returns `CRYPTO_RESTORE_REQUIRED`.
+
+Cause: `profiles.json` lost `passwordHash` / `kdfSalt` / `wrappedDek` (empty-registry / Default-profile chaos, bad `DATA_DIR`, or partial restore) while `profiles/<uuid>/personai.db.enc` remains. Password alone cannot unwrap the DEK without those fields.
+
+**Prefer restore (keeps sealed DB):**
+
+```bash
+cd /etc/personaios
+docker compose stop api
+ls -lt data/profiles.json* /etc/personaios/data/profiles.json* 2>/dev/null | head
+# Restore the newest backup that still contains wrappedDek for 21deba4b-…
+# Example:
+#   cp -a data/profiles.json.bak.<stamp> data/profiles.json
+docker compose start api
+curl -sS http://127.0.0.1:4000/profiles | python3 -m json.tool | head
+```
+
+Phone: clear site data if needed → open `http://debi9.tail8175e6.ts.net:3000/profiles/` (or HTTPS once Serve is up) → **Unlock** with the old password.
+
+**Emergency reset (one profile — keeps uploads/archive files, fresh empty DB):**
+
+```bash
+cd /etc/personaios
+docker compose stop api
+./scripts/emergency-reset-profile-crypto.sh 21deba4b-391d-4467-a7ea-4bd3fce304d0
+docker compose start api
+```
+
+Phone → `/profiles/` → **Set password & continue**. Quarantined `*.quarantine.*` under the profile dir can be deleted later; they are unreadable without the old `wrappedDek`.
+
 ### Nuclear recovery
 
 ```bash

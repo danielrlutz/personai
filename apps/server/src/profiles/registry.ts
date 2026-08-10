@@ -36,8 +36,14 @@ export interface PublicProfile {
   name: string;
   avatar?: string;
   createdAt: string;
+  /** True only when passwordHash + kdfSalt + wrappedDek are all present. */
   hasPassword: boolean;
   dbEncrypted: boolean;
+  /**
+   * Sealed (or marked encrypted) DB on disk but unlock material missing from
+   * profiles.json — login/setup cannot work until restore or emergency reset.
+   */
+  needsCryptoRestore: boolean;
 }
 
 export interface ProfileRegistry {
@@ -223,14 +229,25 @@ function saveRegistry(registry: ProfileRegistry): void {
   fs.renameSync(tmp, registryPath());
 }
 
+function profileHasUnlockMaterial(profile: Profile): boolean {
+  return Boolean(profile.passwordHash && profile.kdfSalt && profile.wrappedDek);
+}
+
+function profileNeedsCryptoRestore(profile: Profile): boolean {
+  if (profileHasUnlockMaterial(profile)) return false;
+  return Boolean(profile.dbEncrypted) || dbLooksEncryptedOnDisk(profile.id);
+}
+
 export function toPublicProfile(profile: Profile): PublicProfile {
+  const dbEncrypted = Boolean(profile.dbEncrypted) || dbLooksEncryptedOnDisk(profile.id);
   return {
     id: profile.id,
     name: profile.name,
     avatar: profile.avatar,
     createdAt: profile.createdAt,
-    hasPassword: Boolean(profile.passwordHash),
-    dbEncrypted: Boolean(profile.dbEncrypted) || dbLooksEncryptedOnDisk(profile.id),
+    hasPassword: profileHasUnlockMaterial(profile),
+    dbEncrypted,
+    needsCryptoRestore: profileNeedsCryptoRestore(profile),
   };
 }
 
@@ -351,8 +368,15 @@ export async function setupProfilePassword(profileId: string, password: string):
   assertPasswordStrength(password);
   const profile = getProfileById(profileId);
   if (!profile) throw new Error(`Profile not found: ${profileId}`);
-  if (profile.passwordHash) {
+  if (profileHasUnlockMaterial(profile)) {
     throw new Error("Password already set. Use change-password while signed in.");
+  }
+  if (profileNeedsCryptoRestore(profile)) {
+    throw new Error(
+      "Unlock keys missing for a sealed database. Restore profiles.json backup " +
+        "(passwordHash/kdfSalt/wrappedDek), or run scripts/emergency-reset-profile-crypto.sh " +
+        "for this profile id (quarantines .enc; keeps uploads/archive; fresh empty DB).",
+    );
   }
 
   const passwordHash = await hashPassword(password);
@@ -372,14 +396,20 @@ export async function setupProfilePassword(profileId: string, password: string):
 export async function loginProfile(profileId: string, password: string): Promise<Profile> {
   const profile = getProfileById(profileId);
   if (!profile) throw new Error(`Profile not found: ${profileId}`);
-  if (!profile.passwordHash || !profile.kdfSalt || !profile.wrappedDek) {
+  if (!profileHasUnlockMaterial(profile)) {
+    if (profileNeedsCryptoRestore(profile)) {
+      throw new Error(
+        "Unlock keys missing from profiles.json. Restore a backup or run " +
+          "scripts/emergency-reset-profile-crypto.sh",
+      );
+    }
     throw new Error("Password not set for this profile. Complete setup first.");
   }
 
-  const ok = await verifyPassword(password, profile.passwordHash);
+  const ok = await verifyPassword(password, profile.passwordHash!);
   if (!ok) throw new Error("Invalid password");
 
-  await unlockProfileDb(profileId, password, profile.kdfSalt, profile.wrappedDek);
+  await unlockProfileDb(profileId, password, profile.kdfSalt!, profile.wrappedDek!);
   updateProfile(profileId, { dbEncrypted: true });
   await switchProfile(profileId);
   return getProfileById(profileId)!;
