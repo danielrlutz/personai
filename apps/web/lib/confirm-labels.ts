@@ -5,6 +5,7 @@ const ACTION_LABELS: Record<string, string> = {
   "archive.commit": "File in archive",
   "qr.mark_paid": "Mark bill paid",
   "career.pdf": "Career PDF",
+  "jahresakte.export": "Jahresakte year pack",
   "export.generate": "Generate export",
   "document.upload": "Document upload",
   "forge.ship": "Ship code",

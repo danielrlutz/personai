@@ -44,6 +44,7 @@ import { registerConfirmationRoutes } from "./confirmations.js";
 import { registerAuthRoutes } from "./auth.js";
 import { registerDriveRoutes } from "./drive.js";
 import { registerOpsRoutes } from "./ops.js";
+import { registerJahresakteRoutes } from "./jahresakte.js";
 import { registerProductSettingsRoutes } from "./settings-product.js";
 import { registerTriageRoutes } from "./triage.js";
 import { registerSoulNewsRoutes } from "./soul-news.js";
@@ -62,6 +63,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   await registerConfirmationRoutes(app);
   await registerDriveRoutes(app);
   await registerOpsRoutes(app);
+  await registerJahresakteRoutes(app);
   await registerProductSettingsRoutes(app);
   await registerTriageRoutes(app);
   await registerSoulNewsRoutes(app);

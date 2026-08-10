@@ -14,6 +14,7 @@ import { getActiveProfileId } from "../db/prisma-singleton.js";
 import { profileExportsDir } from "../config.js";
 import { getActiveProfile } from "../profiles/registry.js";
 import { MedicalReportDocument } from "../export/medical-report.js";
+import { applyJahresakteExport } from "../export/apply-jahresakte.js";
 import { safeDate, safeDateOrNow, safeFiniteNumberOr } from "../lib/safe-data.js";
 import {
   enqueueServerJob,
@@ -353,6 +354,9 @@ export async function resolveConfirmation(prisma, id, decision) {
       break;
     case "medical.export":
       result = await applyMedicalExport(prisma, payload);
+      break;
+    case "jahresakte.export":
+      result = await applyJahresakteExport(prisma, payload);
       break;
     case "career.pdf":
       // CareerPdfPanel re-requests /career/pdf with confirmed:true after gate approve.

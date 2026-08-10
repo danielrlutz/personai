@@ -32,6 +32,17 @@ export default function IngestPage() {
         </p>
       </div>
 
+      <div className="flex flex-wrap items-center gap-2">
+        <Button asChild size="sm" variant="outline">
+          <Link href="/archive/jahresakte/">Jahresakte year pack</Link>
+        </Button>
+        {!linked ? (
+          <Button asChild size="sm" variant="ghost">
+            <Link href="/settings/?focus=drive">Drive settings</Link>
+          </Button>
+        ) : null}
+      </div>
+
       {!linked ? (
         <div className="flex items-start gap-3 rounded-2xl border border-border bg-card px-4 py-4">
           <HardDrive className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
@@ -41,9 +52,6 @@ export default function IngestPage() {
               Confirm still writes to this profile&apos;s disk. Link Google Drive in Settings when you
               want cloud copies.
             </p>
-            <Button asChild size="sm" variant="outline">
-              <Link href="/settings/?focus=drive">Drive settings</Link>
-            </Button>
           </div>
         </div>
       ) : null}

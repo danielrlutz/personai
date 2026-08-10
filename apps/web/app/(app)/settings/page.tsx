@@ -1160,6 +1160,20 @@ export default function SettingsPage() {
               </li>
               <li>
                 <Link
+                  href="/archive/jahresakte/"
+                  className="md-list-row flex items-center gap-3 px-3.5 py-3 text-sm hover:bg-surface-container-high"
+                >
+                  <HardDrive className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  <span className="min-w-0">
+                    <span className="font-medium">Jahresakte year pack</span>
+                    <span className="mt-0.5 block text-xs text-muted-foreground">
+                      Swiss tax-season ZIP + PDF index — confirm-gated; optional Drive.
+                    </span>
+                  </span>
+                </Link>
+              </li>
+              <li>
+                <Link
                   href="/setup/"
                   className="md-list-row flex items-center gap-3 px-3.5 py-3 text-sm hover:bg-surface-container-high"
                 >

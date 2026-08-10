@@ -22,6 +22,7 @@ const commandItems = [
   { label: "Transactions", href: "/finance/transactions/", keys: "G X" },
   { label: "Ask finance", href: "/team/?specialist=cfo", keys: "G C" },
   { label: "Archive documents", href: "/ingest/", keys: "G A" },
+  { label: "Jahresakte year pack", href: "/archive/jahresakte/", keys: "G J" },
   { label: "Settings", href: "/settings/", keys: "G S" },
   { label: "Legal tasks (advanced)", href: "/legal/", keys: "G L" },
   { label: "Medical log (advanced)", href: "/medical/", keys: "G M" },
