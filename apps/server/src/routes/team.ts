@@ -28,6 +28,10 @@ import {
   type ArchiveCareContext,
 } from "../memory/user-care.js";
 import { loadStagingForPrompt } from "../memory/staging.js";
+import {
+  extractDriveVocab,
+  formatVocabForPrompt,
+} from "../memory/chat-vocabulary.js";
 import { driveStatus } from "../archive/drive.js";
 import {
   ARCHIVE_INDEX_KEY,
@@ -124,6 +128,9 @@ export async function registerTeamRoutes(app: FastifyInstance): Promise<void> {
       refreshedAt: archiveMap.get(ARCHIVE_REFRESHED_KEY) ?? null,
       citablesBlock: formatCitableDocsBlock(citables),
     };
+    const vocab = extractDriveVocab(
+      [archive.index, archive.taxonomy].filter(Boolean).join("\n"),
+    );
     return {
       userCare: formatUserCareContext({
         ceo,
@@ -132,6 +139,7 @@ export async function registerTeamRoutes(app: FastifyInstance): Promise<void> {
         sessionSummary,
         archive,
         stagingBlock: staging.block,
+        vocabBlock: formatVocabForPrompt(vocab),
         extraInstructions: citationModeInstructions(Boolean(opts?.citeFromArchive)),
       }),
       liveOps,

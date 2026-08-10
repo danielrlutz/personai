@@ -14,11 +14,14 @@ import { TeamQuickPickWidget } from "./TeamQuickPickWidget";
 import { MemoryFactsWidget } from "./MemoryFactsWidget";
 import { DriveStatusWidget } from "./DriveStatusWidget";
 import { SoulNewsWidget } from "./SoulNewsWidget";
+import { HeadsUpWidget } from "./HeadsUpWidget";
 
 export function renderHomeWidget(id: HomeWidgetId) {
   switch (id) {
     case "triage":
       return <TriageInbox />;
+    case "heads-up":
+      return <HeadsUpWidget />;
     case "confirms":
       return <ConfirmsWidget />;
     case "fristen":

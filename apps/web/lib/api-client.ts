@@ -964,6 +964,30 @@ export interface QRBill {
   notes?: string | null;
 }
 
+/** Light Home heads-up — urgent Fristen + unpaid invoices (confirm-gated actions only). */
+export interface HomeHeadsUp {
+  generatedAt: string;
+  fristen: Array<{
+    id: string;
+    kind: "legal_task" | "document";
+    title: string;
+    dueDate: string | null;
+    overdue: boolean;
+    href: string;
+  }>;
+  unpaidInvoices: Array<{
+    id: string;
+    creditor: string;
+    amount: number;
+    currency: string;
+    dueDate: string | null;
+    overdue: boolean;
+    href: string;
+  }>;
+  pendingConfirmations: number;
+  actionsConfirmGated: boolean;
+}
+
 export interface Transaction {
   id: string;
   type: "INCOME" | "EXPENSE" | "TRANSFER";

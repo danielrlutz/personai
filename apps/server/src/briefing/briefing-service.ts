@@ -350,6 +350,7 @@ Nur mit Daten aus dem Snapshot, nichts erfinden. Keine erfundenen Fristen, MWST-
 Wenn budgetIsTemplateOnly true ist, erwähne kein verfügbares Budget / Restbudget — die Kategorie-Limits sind nur Vorlagen.
 Wenn personal-Felder leer/null/0 sind, sage ehrlich, dass dort noch nichts erfasst ist.
 Nutze die Profil-Karte, Memory-Facts und Personality vault nur als kompakten Kontext (Name/Locale/usageMode/bekannte Prefs) — erfinde nichts dazu.
+Sage nie BILL — nutze Invoice / Rechnung wenn Rechnungen gemeint sind.
 
 ${userCareBlock}`;
 

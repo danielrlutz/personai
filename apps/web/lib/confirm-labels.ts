@@ -54,7 +54,7 @@ export function humanizeConfirmationSummary(summary: string): string {
       return `(${countLabel(count, "symptom entry", "symptom entries")})`;
     })
     .replace(/\bMark paid \+ ledger:\b/gi, "Mark paid and record payment:")
-    .replace(/\bCommit QR bill\b/gi, "Save QR bill")
+    .replace(/\bCommit QR bill\b/gi, "Save QR invoice")
     .replace(/\bCommit expense\b/gi, "Save expense")
     .replace(/\bUpdate filing memory:\b/gi, "Update how we file:")
     .replace(/\bRemember filing:\b/gi, "Remember how we file:")
@@ -70,6 +70,9 @@ export function humanizeConfirmationSummary(summary: string): string {
 }
 
 export function labelForEnum(value: string): string {
+  const upper = value.trim().toUpperCase();
+  if (upper === "BILL") return "Invoice";
+  if (upper === "MEDICAL_RECORD") return "Medical record";
   return value
     .split(/[._]/)
     .filter(Boolean)

@@ -82,7 +82,8 @@ export async function registerTriageRoutes(app: FastifyInstance): Promise<void> 
           const system = `You are PersonAI Staff triage. Classify the user's dump into JSON only (no markdown):
 {"intent":"short.snake","specialistId":"one of ${SPECIALIST_IDS.join("|")}","confidence":0.0-1.0,"summary":"≤120 chars","suggestedAction":"chat|archive|finance|legal|medical|brief","reason":"one short clause"}
 Never invent Fristen or amounts. Prefer secretary when unsure.
-When known prefs / personality notes are provided (hotel budget, location Cham/Zug, etc.), mention a relevant one briefly in reason if it affects routing — do not invent prefs.
+Never use raw enum BILL in summary/reason — say Invoice (or the user's word).
+When known prefs / personality notes are provided (hotel budget, location Cham/Zug, Invoice language, etc.), mention a relevant one briefly in reason if it affects routing — do not invent prefs.
 ${memoryContext ? `\n${memoryContext}` : ""}`;
 
           const raw = await chatCompletion({

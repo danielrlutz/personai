@@ -165,7 +165,7 @@ Also listed in **First-launch setup** → **Archive**. Naming pattern after conf
    - **Open chat** — talk to that specialist on **Team**, or
    - **Go to …** — jump to the suggested area (archive, finance, legal, medical, …).
 
-Pending work appears under **Needs your confirmation**. **Fristen** lists upcoming deadlines. **Brief** is the morning snapshot. Shortcuts: **Activity**, **Team**.
+Pending work appears under **Needs your confirmation**. **Heads-up** lightly flags urgent Fristen and unpaid invoices (links only — writes still need confirm). **Fristen** lists upcoming deadlines. **Brief** is the morning snapshot. Shortcuts: **Activity**, **Team**. Specialists speak your archive vocabulary (e.g. **Invoice**, not raw `BILL`).
 
 ### Confirm gates (edit naming before filing)
 

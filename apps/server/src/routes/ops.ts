@@ -190,6 +190,94 @@ export async function registerOpsRoutes(app: FastifyInstance): Promise<void> {
     }
   });
 
+  /**
+   * Light proactive heads-up for Home — urgent Fristen + unpaid invoices.
+   * Actions are links only; writes stay behind ConfirmGate.
+   */
+  app.get("/home/heads-up", async (req, reply) => {
+    try {
+      const { prisma } = await withPrisma(req);
+      const now = new Date();
+      const horizon = new Date(now.getTime() + 36 * 60 * 60 * 1000);
+
+      const [tasks, docs, unpaid, pendingConfirms] = await Promise.all([
+        prisma.legalTask.findMany({
+          where: {
+            status: { in: ["TODO", "IN_PROGRESS", "BLOCKED"] },
+            dueDate: { not: null, lte: horizon },
+          },
+          orderBy: { dueDate: "asc" },
+          take: 8,
+        }),
+        prisma.document.findMany({
+          where: { deadline: { not: null, lte: horizon } },
+          orderBy: { deadline: "asc" },
+          take: 8,
+        }),
+        prisma.qRBill.findMany({
+          where: { status: { in: ["PENDING", "OVERDUE"] } },
+          orderBy: { dueDate: "asc" },
+          take: 5,
+          select: {
+            id: true,
+            creditorName: true,
+            amount: true,
+            currency: true,
+            dueDate: true,
+            status: true,
+          },
+        }),
+        prisma.pendingConfirmation.count({ where: { status: "pending" } }),
+      ]);
+
+      const fristen = [
+        ...tasks.map((t) => ({
+          id: `task:${t.id}`,
+          kind: "legal_task" as const,
+          title: t.title,
+          dueDate: t.dueDate?.toISOString() ?? null,
+          overdue: Boolean(t.dueDate && t.dueDate < now),
+          href: "/legal/",
+        })),
+        ...docs.map((d) => ({
+          id: `doc:${d.id}`,
+          kind: "document" as const,
+          title: (d.archiveName || d.filename).replace(/\bBILL\b/g, "Invoice"),
+          dueDate: d.deadline?.toISOString() ?? null,
+          overdue: Boolean(d.deadline && d.deadline < now),
+          href: "/ingest/",
+        })),
+      ]
+        .sort((a, b) => {
+          const ad = a.dueDate ? Date.parse(a.dueDate) : Number.MAX_SAFE_INTEGER;
+          const bd = b.dueDate ? Date.parse(b.dueDate) : Number.MAX_SAFE_INTEGER;
+          return ad - bd;
+        })
+        .slice(0, 6);
+
+      const invoices = unpaid.map((b) => ({
+        id: b.id,
+        creditor: b.creditorName,
+        amount: b.amount,
+        currency: b.currency,
+        dueDate: b.dueDate?.toISOString() ?? null,
+        overdue: b.status === "OVERDUE" || Boolean(b.dueDate && b.dueDate < now),
+        href: "/finance/",
+      }));
+
+      return {
+        generatedAt: now.toISOString(),
+        fristen,
+        unpaidInvoices: invoices,
+        pendingConfirmations: pendingConfirms,
+        /** UI should only offer confirm-gated or navigational CTAs. */
+        actionsConfirmGated: true,
+      };
+    } catch (err) {
+      return sendError(reply, err);
+    }
+  });
+
   app.post<{ Params: { id: string } }>("/fristen/tasks/:id/done", async (req, reply) => {
     try {
       const { prisma } = await withPrisma(req);

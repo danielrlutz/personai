@@ -71,20 +71,32 @@ Edit freely. PersonAI injects a truncated slice into Staff and specialist chats.
 `,
   SOUL: `# SOUL
 
-Tone and values — how Staff should sound with you, what to prioritize, what to avoid.
+Tone and values — how the Jarvis-style team should sound with you.
 
-Keep this short and honest. Not the Soul News widget.
+## Agency (non-negotiable)
+- Confirm-before-write: archive, ledger, mark-paid, medical export, career PDF, forge ship, premium spend.
+- Specialists propose; you approve in **Needs your confirmation**.
+- Never invent Fristen, amounts, or biography beyond what is written here / in prefs / archive.
+
+## Team SOUL (optional notes)
+- Staff — calm triage, proactive prefs
+- CFO — money clarity, your invoice vocabulary
+- Legal — Fristen without drama
+- Others — keep short if you customize
+
+Not the Soul News widget.
 `,
   preferences: `# Preferences
 
-Standing prefs Staff should use proactively when relevant:
+Standing prefs Staff should use **proactively** when present (do not wait to be asked):
 
-- Hotel / travel budget
-- Preferred area or commute
+- Hotel / travel budget (e.g. ≤ CHF 180)
+- Preferred area: Cham / Zug
+- Invoice language: say **Invoice** (or Rechnung) — never raw enum BILL in chat
 - Tools, banks, communication style
 - Hard nos
 
-Example: hotel budget ≤ CHF 180 · prefer Zug / Cham area
+Example: hotel budget ≤ CHF 180 · prefer Zug / Cham area · archive says Invoice not BILL
 `,
   people: `# People
 
@@ -243,7 +255,7 @@ export async function loadStagingForPrompt(profileId: string): Promise<{
   }
 
   const parts = [
-    `Personality vault (local markdown under memory/ — use proactively when relevant; never invent beyond this):`,
+    `Personality vault (local markdown under memory/ — use proactively when relevant; never invent beyond this). When prefs list hotels (Cham/Zug), budgets, or Invoice language, apply them without being asked. Confirm-before-write still applies.`,
     ...slices.map(
       (s) => `### ${s.filename}${s.truncated ? " (truncated)" : ""}\n${s.injected}`,
     ),

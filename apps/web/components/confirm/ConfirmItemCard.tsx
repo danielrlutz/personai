@@ -86,7 +86,7 @@ export function ConfirmItemCard({
             <Input
               value={draft.docType}
               onChange={(e) => onDraftChange({ ...draft, docType: e.target.value })}
-              placeholder="BILL"
+              placeholder="Invoice"
             />
           </label>
           <label className="space-y-1 text-xs text-muted-foreground sm:col-span-2">

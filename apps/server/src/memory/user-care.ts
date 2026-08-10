@@ -218,7 +218,7 @@ export function formatArchiveCareBlock(archive: ArchiveCareContext): string {
     return bits.join("\n\n");
   }
   const bits = [
-    `Archive context: READY (Drive linked).`,
+    `Archive context: READY (Drive linked). Use retrieved filenames/folders proactively when answering (cite names; never invent docs). Prefer the user's naming vocabulary from this index — never say BILL in chat.`,
     archive.refreshedAt ? `Refreshed: ${archive.refreshedAt}` : null,
     archive.taxonomy ? `Taxonomy folders:\n${archive.taxonomy.slice(0, 800)}` : null,
     `Index:\n${archive.index.slice(0, 1200)}`,
@@ -238,6 +238,8 @@ export function formatUserCareContext(opts: {
   stagingBlock?: string | null;
   /** Extra system instructions (e.g. cite-from-archive mode). */
   extraInstructions?: string | null;
+  /** Drive corpus vocabulary hint (already formatted). */
+  vocabBlock?: string | null;
 }): string {
   const blocks = [
     `Profile card: ${compactCeoLine(opts.ceo)}`,
@@ -247,6 +249,9 @@ export function formatUserCareContext(opts: {
     `Memory facts (≤${MEMORY_FACT_INJECT_LIMIT} recent):\n${compactFactsBlock(opts.facts)}`,
     `Live ops (slim JSON):\n${JSON.stringify(opts.liveOps)}`,
   ];
+  if (opts.vocabBlock?.trim()) {
+    blocks.push(opts.vocabBlock.trim());
+  }
   if (opts.stagingBlock?.trim()) {
     blocks.push(opts.stagingBlock.trim());
   }
