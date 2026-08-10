@@ -20,6 +20,7 @@ import {
   serializeServerJob,
   SERVER_JOB_DRIVE_UPLOAD,
 } from "../jobs/server-jobs.js";
+import { persistUserSkill } from "../skills/registry.js";
 
 async function fileDocumentToArchive(prisma, documentId, payload) {
   const doc = await prisma.document.findUnique({ where: { id: documentId } });
@@ -385,6 +386,25 @@ export async function resolveConfirmation(prisma, id, decision) {
           source: String(payload.source ?? "session-distill").slice(0, 80),
           specialistId: payload.specialistId ? String(payload.specialistId) : null,
         },
+      });
+      break;
+    }
+    case "skill.create": {
+      const name = String(payload.name ?? "").trim();
+      const description = String(payload.description ?? "").trim();
+      const body = String(payload.body ?? "").trim();
+      if (!name || !description || !body) {
+        throw new Error("skill.create requires name, description, and body");
+      }
+      const specialists = Array.isArray(payload.specialists)
+        ? payload.specialists.map((x) => String(x).trim()).filter(Boolean)
+        : ["*"];
+      result = await persistUserSkill({
+        dirName: payload.dirName ? String(payload.dirName) : undefined,
+        name,
+        description,
+        specialists,
+        body,
       });
       break;
     }

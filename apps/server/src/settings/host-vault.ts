@@ -14,6 +14,20 @@ const ALGO = "aes-256-gcm";
 const IV_LEN = 12;
 const TAG_LEN = 16;
 
+/** Per-skill injection prefs (Skills studio in Settings / Product vault). */
+export type SkillStudioPref = {
+  /** Master toggle — false disables for all specialists. Default true. */
+  enabled?: boolean;
+  /** Char budget when injecting into the system prompt. */
+  maxChars?: number;
+  /** Specialist IDs that should not receive this skill even if SKILL.md lists them. */
+  disabledSpecialists?: string[];
+};
+
+export type SkillStudioVault = {
+  prefs?: Record<string, SkillStudioPref>;
+};
+
 export type HostVaultData = {
   ollamaHost?: string | null;
   visionModel?: string | null;
@@ -35,6 +49,8 @@ export type HostVaultData = {
   premiumProvider?: string | null;
   premiumMonthlyQuota?: number | null;
   notificationsEnabled?: boolean | null;
+  /** Skills studio: toggle/trim injected SOPs per specialist. */
+  skillStudio?: SkillStudioVault | null;
   updatedAt?: string;
 };
 

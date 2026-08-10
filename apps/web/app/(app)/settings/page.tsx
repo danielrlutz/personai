@@ -17,6 +17,7 @@ import {
   Wand2,
 } from "lucide-react";
 import { ProductSettingsCard } from "@/components/settings/ProductSettingsCard";
+import { SkillsStudioCard } from "@/components/settings/SkillsStudioCard";
 import { InstallAppCard } from "@/components/shared/InstallAppCard";
 import {
   clearAppPin,
@@ -570,6 +571,8 @@ export default function SettingsPage() {
       </Card>
 
       <ProductSettingsCard />
+
+      <SkillsStudioCard />
 
       <Card>
         <CardHeader>
