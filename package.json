@@ -13,7 +13,7 @@
     "db:generate": "pnpm --filter @personai/server db:generate",
     "db:push": "pnpm --filter @personai/server db:push",
     "lint": "pnpm -r lint",
-    "test": "pnpm --filter @personai/server test",
+    "test": "pnpm --filter @personai/server test && pnpm --filter @personai/web test",
     "pull-models": "bash scripts/pull-models.sh",
     "pull-models:win": "powershell -File scripts/pull-models.ps1",
     "tauri:dev": "cd src-tauri && cargo tauri dev",

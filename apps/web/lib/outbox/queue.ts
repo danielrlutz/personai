@@ -319,10 +319,14 @@ class OutboxQueue {
       await this.removeOp(inflight);
       this.emit({ kind: "changed", ops: this.snapshot() });
     } catch (err) {
-      const { describeApiFailure } = await import("@/lib/api-errors");
+      const { collapseApiFailureMessage, describeApiFailure } = await import("@/lib/api-errors");
       const path = inflight.type === "team-chat" ? "/team/chat/stream" : "/ingest/upload";
-      // describeApiFailure is idempotent when processOp/streamSSE already humanized.
-      const message = describeApiFailure(err, { path }).message;
+      // processOp usually throws an already-humanized Error — collapse nested wraps, don't grow copy.
+      const raw = err instanceof Error ? err.message : String(err);
+      const message =
+        /Can['’]t reach API at |tailscale serve status|Check API URL matches page scheme/i.test(raw)
+          ? collapseApiFailureMessage(raw)
+          : describeApiFailure(err, { path }).message;
       if (inflight.type === "team-chat") {
         this.emit({
           kind: "team-chat-progress",

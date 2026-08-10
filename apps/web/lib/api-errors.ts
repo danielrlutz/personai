@@ -73,18 +73,67 @@ function isMixedContentApi(apiBase: string): boolean {
   return /^http:\/\//i.test(apiBase);
 }
 
+/** Short scheme + unlock tip (never paste the long Serve script paragraph). */
+const REACHABILITY_HINT =
+  "Check API URL matches page scheme (http vs https). Unlock profile if health works but chat returns 401.";
+
+const LEGACY_HINT_MARKERS =
+  /tailscale serve status|--serve-only|Serve :8443|No serve config|vps-tailscale\.sh|Check API URL matches page scheme/i;
+
 /**
  * streamSSE → outbox processor → queue each used to call describeApiFailure.
- * If we re-wrap, the serve/8443 help text repeats three times in one toast.
+ * Prefix-only checks missed nested wraps where the outer message still matched
+ * looksLikeNetworkFailure ("Failed to fetch" inside parens) and re-appended the hint.
  */
 function alreadyDescribed(message: string): boolean {
   const m = message.trim();
   if (!m) return false;
   return (
-    /^(Can't reach API at |Mixed content:|Browser blocked the request to |Request timed out talking to API at |Sign-in required|Not allowed \(403\)|Server \d{3}:|Ollama )/i.test(
+    /Can['’]t reach API at |Mixed content:|Browser blocked the request to |Request timed out talking to API at /i.test(
       m,
-    ) || /tailscale serve status|mixed content|Serve :8443|--serve-only/i.test(m)
+    ) ||
+    /Sign-in required|Not allowed \(403\)|^Server \d{3}:|^Ollama /i.test(m) ||
+    LEGACY_HINT_MARKERS.test(m)
   );
+}
+
+function countOccurrences(haystack: string, pattern: RegExp): number {
+  const flags = pattern.flags.includes("g") ? pattern.flags : `${pattern.flags}g`;
+  return (haystack.match(new RegExp(pattern.source, flags)) ?? []).length;
+}
+
+/**
+ * Collapse triple-wrapped reachability copy into one short line.
+ * Exported for unit tests.
+ */
+export function collapseApiFailureMessage(message: string): string {
+  const m = message.trim();
+  if (!m) return m;
+
+  const reachHits = countOccurrences(m, /Can['’]t reach API at /i);
+  const hintHits = countOccurrences(m, LEGACY_HINT_MARKERS);
+  const nestedOrLong =
+    reachHits > 1 ||
+    hintHits > 1 ||
+    (reachHits >= 1 && hintHits >= 1 && m.length > 220);
+
+  if (!nestedOrLong && !/^Can['’]t reach API at /i.test(m)) {
+    return m;
+  }
+
+  if (!/Can['’]t reach API at /i.test(m) && !LEGACY_HINT_MARKERS.test(m)) {
+    return m;
+  }
+
+  // First absolute API base (do not use \S+? — it collapses to a single "h").
+  const reach = m.match(/Can['’]t reach API at (https?:\/\/[^\s)]+)/i);
+  if (!reach) return m;
+
+  const base = reach[1].replace(/[),.;]+$/, "");
+  const path = m.match(/\((\/(?:team|ingest|career|api)[^)]*)\)/i)?.[1];
+  const pathHint = path ? ` (${path})` : "";
+
+  return `Can't reach API at ${base}${pathHint}. ${REACHABILITY_HINT}`;
 }
 
 function extractBodyMessage(body: unknown): string | null {
@@ -131,24 +180,25 @@ function isApiErrorLike(
 }
 
 function kindFromDescribedMessage(message: string): FailureKind {
-  if (/^Mixed content:/i.test(message) || /^Can't reach API at /i.test(message)) return "network";
-  if (/^Browser blocked/i.test(message)) return "cors";
-  if (/^Request timed out/i.test(message)) return "timeout";
-  if (/^Sign-in required|^Not allowed/i.test(message)) return "auth";
+  if (/Mixed content:/i.test(message) || /Can['’]t reach API at /i.test(message)) return "network";
+  if (/Browser blocked/i.test(message)) return "cors";
+  if (/Request timed out/i.test(message)) return "timeout";
+  if (/Sign-in required|Not allowed/i.test(message)) return "auth";
   if (/^Ollama /i.test(message)) return "ollama";
   if (/^Server \d{3}:/i.test(message)) return "server";
   return "unknown";
 }
 
-const REACHABILITY_HINT =
-  "If https://HOST:8443 is down (`tailscale serve status` → No serve config), run " +
-  "`HTTPS=1 ./scripts/vps-tailscale.sh --serve-only HOST`, or open http://HOST:3000 " +
-  "with API http://HOST:4000 (browse-only). Unlock the profile if health works but chat returns 401.";
+function errorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  if (typeof err === "string") return err;
+  return "";
+}
 
 /**
  * Map fetch / ApiError / stream failures to human-readable copy.
  * Network failures always include the API base URL the client tried to call.
- * Idempotent: already-humanized Error.message is returned once (no triple toast text).
+ * Idempotent: already-humanized / triple-wrapped messages collapse to one short line.
  */
 export function describeApiFailure(
   err: unknown,
@@ -156,12 +206,13 @@ export function describeApiFailure(
 ): DescribedFailure {
   const base = resolveApiBaseForErrors(options?.apiBaseUrl);
   const pathHint = options?.path ? ` (${options.path})` : "";
+  const incoming = errorMessage(err).trim();
 
-  if (err instanceof Error && alreadyDescribed(err.message)) {
+  if (incoming && alreadyDescribed(incoming)) {
     return {
-      kind: kindFromDescribedMessage(err.message),
+      kind: kindFromDescribedMessage(incoming),
       sticky: true,
-      message: err.message.trim(),
+      message: collapseApiFailureMessage(incoming),
     };
   }
 
@@ -179,7 +230,11 @@ export function describeApiFailure(
     const raw = (fromBody ?? err.message).trim() || `Request failed (${status})`;
 
     if (alreadyDescribed(raw)) {
-      return { kind: kindFromDescribedMessage(raw), sticky: true, message: raw };
+      return {
+        kind: kindFromDescribedMessage(raw),
+        sticky: true,
+        message: collapseApiFailureMessage(raw),
+      };
     }
 
     if (status === 401 || status === 403) {
@@ -194,7 +249,7 @@ export function describeApiFailure(
         return {
           kind: "auth",
           sticky: true,
-          message: `Sign-in required (HTTP ${status}) talking to ${base}${pathHint} — open Profiles, unlock with your password (Bearer session), then retry. (${raw})`,
+          message: `Sign-in required (HTTP ${status}) talking to ${base}${pathHint} — unlock your profile, then retry.`,
         };
       }
       return {
@@ -202,7 +257,7 @@ export function describeApiFailure(
         sticky: true,
         message:
           status === 401
-            ? `Sign-in required (401) at ${base}${pathHint} — unlock your profile, then retry. ${raw}`
+            ? `Sign-in required (401) at ${base}${pathHint} — unlock your profile, then retry.`
             : `Not allowed (403) at ${base}${pathHint} — ${raw}`,
       };
     }
@@ -244,14 +299,15 @@ export function describeApiFailure(
         sticky: true,
         message:
           `Mixed content: this page is HTTPS but Active API is ${base}${pathHint}. ` +
-          `Browsers block http:// APIs from https:// pages (${raw}). ` +
-          `Prefer https://HOST:8443 via Tailscale Serve, or open http://HOST:3000 with API http://HOST:4000.`,
+          `Use https://HOST:8443 via Tailscale Serve, or open http://HOST:3000 with API http://HOST:4000.`,
       };
     }
     return {
       kind: "network",
       sticky: true,
-      message: `Can't reach API at ${base}${pathHint} (${raw}). ${REACHABILITY_HINT}`,
+      message: collapseApiFailureMessage(
+        `Can't reach API at ${base}${pathHint}. ${REACHABILITY_HINT}`,
+      ),
     };
   }
 
@@ -293,13 +349,14 @@ export function describeStreamError(data: unknown): string {
   if (typeof data === "string" && data.trim()) {
     return describeApiFailure(new Error(data.trim())).message;
   }
-  if (typeof data === "object" && data !== null) {
-    const o = data as Record<string, unknown>;
-    const msg =
-      (typeof o.message === "string" && o.message) ||
-      (typeof o.error === "string" && o.error) ||
-      null;
-    if (msg) return describeApiFailure(new Error(msg)).message;
+  if (typeof data !== "object" || data === null) {
+    return "Chat stream error";
   }
+  const o = data as Record<string, unknown>;
+  const msg =
+    (typeof o.message === "string" && o.message) ||
+    (typeof o.error === "string" && o.error) ||
+    null;
+  if (msg) return describeApiFailure(new Error(msg)).message;
   return "Chat stream error";
 }

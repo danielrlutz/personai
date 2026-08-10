@@ -1,10 +1,14 @@
 /** Global toast/snackbar store — usable outside React (API client, outbox). */
 
-import { describeApiFailure, type DescribedFailure } from "./api-errors";
+import {
+  collapseApiFailureMessage,
+  describeApiFailure,
+  type DescribedFailure,
+} from "./api-errors";
 
 export type ToastType = "error" | "success" | "info" | "warning";
 export type { DescribedFailure };
-export { describeApiFailure };
+export { collapseApiFailureMessage, describeApiFailure };
 
 export interface ToastItem {
   id: string;
@@ -98,7 +102,8 @@ export function pushToast(input: ToastInput): string | null {
   if (typeof window === "undefined") return null;
 
   const type = input.type ?? "info";
-  const message = input.message.trim();
+  // Collapse persisted / multi-layer API reachability noise before paint.
+  const message = collapseApiFailureMessage(input.message.trim());
   if (!message) return null;
 
   const dedupeKey = input.dedupeKey ?? `${type}:${input.title ?? ""}:${message}`;

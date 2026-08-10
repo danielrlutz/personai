@@ -99,7 +99,7 @@ async function processTeamChat(op: OutboxOp<"team-chat">, emit: ProcessEmit): Pr
         }
       },
       onError: (err) => {
-        // streamSSE may already humanize; describeApiFailure is idempotent.
+        // Collapse only — do not re-wrap streamSSE / describeStreamError output.
         streamError = describeApiFailure(err, { path: "/team/chat/stream" }).message;
       },
       onDone: () => {
@@ -114,7 +114,7 @@ async function processTeamChat(op: OutboxOp<"team-chat">, emit: ProcessEmit): Pr
         finish();
       },
     }).catch((err) => {
-      // Prefer message already set by onError; otherwise describe once (idempotent if streamSSE did).
+      // Prefer onError message; else collapse once (streamSSE already humanizes fetch failures).
       if (streamError) {
         finish(new Error(streamError));
         return;

@@ -3,11 +3,13 @@
 import { useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
 import { getOutbox, useOutbox, type OutboxEvent, type OutboxOp } from "@/lib/outbox";
+import { collapseApiFailureMessage } from "@/lib/api-errors";
 import { toast } from "@/lib/toast";
 import { OutboxPendingStrip } from "./OutboxPendingStrip";
 
 function toastForFailedOp(op: OutboxOp): void {
-  const message = op.lastError?.trim() || "Operation failed";
+  // Last line of defense: IndexedDB may still hold triple-wrapped lastError from older builds.
+  const message = collapseApiFailureMessage(op.lastError?.trim() || "Operation failed");
   if (op.type === "ingest-upload") {
     const filename = "filename" in op.payload ? String(op.payload.filename) : "file";
     toast.error(message, {
