@@ -28,10 +28,12 @@ interface TeamChatProps {
   initialSpecialist?: string;
   /** Open in Pocket huddle mode (e.g. from triage). */
   initialHuddle?: boolean;
-  /** Prefill composer. */
+  /** Prefill composer (message= or QR deep-link q=). */
   initialMessage?: string;
   /** Prefill huddle guests (max 2). */
   initialGuests?: string[];
+  /** @deprecated Prefer initialMessage — kept for QR deep-links. */
+  initialPrompt?: string;
 }
 
 const MAX_STYLIST_IMAGE_BYTES = 8 * 1024 * 1024;
@@ -41,11 +43,13 @@ export function TeamChat({
   initialHuddle = false,
   initialMessage = "",
   initialGuests = [],
+  initialPrompt,
 }: TeamChatProps) {
   const [specialists, setSpecialists] = useState<SpecialistMeta[]>(SPECIALIST_FALLBACK);
   const [specialist, setSpecialist] = useState(initialSpecialist);
   const [huddleMode, setHuddleMode] = useState(initialHuddle);
-  const [input, setInput] = useState(initialMessage);
+  const [input, setInput] = useState(initialMessage || initialPrompt || "");
+  const appliedPromptRef = useRef<string | null>(null);
   const [photo, setPhoto] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -106,6 +110,14 @@ export function TeamChat({
   }, [initialMessage]);
 
   useEffect(() => {
+    if (!initialPrompt?.trim()) return;
+    if (appliedPromptRef.current === initialPrompt) return;
+    appliedPromptRef.current = initialPrompt;
+    setInput(initialPrompt);
+  }, [initialPrompt]);
+
+  useEffect(() => {
+    // Drop pending photo when leaving Stylist.
     if (specialist !== "stylist") {
       clearPhoto();
     }

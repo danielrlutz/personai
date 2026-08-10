@@ -184,6 +184,9 @@ async function createConfirmForExtraction(opts: {
         archiveName,
         archiveCategory,
         openAmount: amountNum == null,
+        /** Confirm cockpit toggles (user can flip before Confirm). */
+        fileArchive: true,
+        markPaid: false,
         ...namingMeta,
       },
     });
