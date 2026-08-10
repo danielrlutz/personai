@@ -10,6 +10,7 @@ import { ARCHIVE_TAXONOMY } from "../specialists/roster.js";
 import { createConfirmation, listPendingConfirmations } from "../confirm/confirm-service.js";
 import { resolveConfirmation } from "../confirm/apply-confirmation.js";
 import { CareerDocument } from "../export/career-document.js";
+import { getServerJob, serializeServerJob } from "../jobs/server-jobs.js";
 import { sendError, withPrisma } from "./helpers.js";
 
 function isPathInside(parent, child) {
@@ -44,7 +45,12 @@ export async function registerConfirmationRoutes(app) {
     app.post("/confirmations/:id/confirm", async (req, reply) => {
         try {
             const { prisma } = await withPrisma(req);
-            return await resolveConfirmation(prisma, req.params.id, "confirm");
+            const out = await resolveConfirmation(prisma, req.params.id, "confirm");
+            // Local confirm barrier is done; Drive upload (if any) continues as ServerJob.
+            if (out?.async && out?.driveJob) {
+                return reply.status(202).send(out);
+            }
+            return out;
         }
         catch (err) {
             return sendError(reply, err);
@@ -54,6 +60,18 @@ export async function registerConfirmationRoutes(app) {
         try {
             const { prisma } = await withPrisma(req);
             return await resolveConfirmation(prisma, req.params.id, "reject");
+        }
+        catch (err) {
+            return sendError(reply, err);
+        }
+    });
+    /** Poll durable ServerJob status (Drive upload / ensure) — keyed by profile, not browser tab. */
+    app.get("/jobs/:id", async (req, reply) => {
+        try {
+            const { prisma } = await withPrisma(req);
+            const job = await getServerJob(prisma, req.params.id);
+            if (!job) return reply.status(404).send({ error: "Job not found" });
+            return { job: serializeServerJob(job) };
         }
         catch (err) {
             return sendError(reply, err);

@@ -15,6 +15,11 @@ import { profileExportsDir } from "../config.js";
 import { getActiveProfile } from "../profiles/registry.js";
 import { MedicalReportDocument } from "../export/medical-report.js";
 import { safeDate, safeDateOrNow, safeFiniteNumberOr } from "../lib/safe-data.js";
+import {
+  enqueueServerJob,
+  serializeServerJob,
+  SERVER_JOB_DRIVE_UPLOAD,
+} from "../jobs/server-jobs.js";
 
 async function fileDocumentToArchive(prisma, documentId, payload) {
   const doc = await prisma.document.findUnique({ where: { id: documentId } });
@@ -22,13 +27,29 @@ async function fileDocumentToArchive(prisma, documentId, payload) {
   const archiveName = String(payload.archiveName ?? doc.archiveName ?? doc.filename);
   const archiveCategory = Number(payload.archiveCategory ?? doc.archiveCategory ?? 9);
   const profileId = getActiveProfileId();
+  // Local archive is the confirm barrier; Drive continues as a ServerJob.
   const archived = await commitDocumentToArchive({
     profileId,
     sourcePath: doc.storagePath,
     archiveName,
     archiveCategory,
     mimeType: doc.mimeType,
+    deferDrive: true,
   });
+  let driveJob = null;
+  if (archived.driveDeferred) {
+    driveJob = await enqueueServerJob(prisma, {
+      type: SERVER_JOB_DRIVE_UPLOAD,
+      documentId,
+      payload: {
+        localPath: archived.localPath,
+        name: path.basename(archived.localPath),
+        mimeType: doc.mimeType,
+        archiveCategory: archived.archiveCategory,
+        documentId,
+      },
+    });
+  }
   const deadline =
     safeDate(payload.dueDate) ?? safeDate(payload.deadline) ?? undefined;
   await prisma.document.update({
@@ -51,22 +72,32 @@ async function fileDocumentToArchive(prisma, documentId, payload) {
         driveFileId: archived.drive?.fileId ?? null,
         driveFolderId: archived.drive?.folderId ?? null,
         driveError: archived.driveError,
+        driveDeferred: archived.driveDeferred,
+        driveJobId: driveJob?.id ?? null,
       }),
     },
   });
-  return { doc, archived };
+  return {
+    doc,
+    archived,
+    driveJob: driveJob ? serializeServerJob(driveJob) : null,
+  };
 }
 
 async function applyLedgerWrite(prisma, payload) {
   const kind = String(payload.kind ?? "");
   const documentId = payload.documentId ? String(payload.documentId) : undefined;
+  let driveJob = null;
   if (kind === "qr_bill") {
     const existing = documentId
       ? await prisma.qRBill.findFirst({ where: { documentId } })
       : null;
     if (existing) {
-      if (documentId) await fileDocumentToArchive(prisma, documentId, payload);
-      return existing;
+      if (documentId) {
+        const filed = await fileDocumentToArchive(prisma, documentId, payload);
+        driveJob = filed.driveJob;
+      }
+      return { bill: existing, driveJob };
     }
     const bill = await prisma.qRBill.create({
       data: {
@@ -80,16 +111,22 @@ async function applyLedgerWrite(prisma, payload) {
         status: "PENDING",
       },
     });
-    if (documentId) await fileDocumentToArchive(prisma, documentId, payload);
-    return bill;
+    if (documentId) {
+      const filed = await fileDocumentToArchive(prisma, documentId, payload);
+      driveJob = filed.driveJob;
+    }
+    return { bill, driveJob };
   }
   if (kind === "transaction") {
     const existing = documentId
       ? await prisma.transaction.findFirst({ where: { documentId } })
       : null;
     if (existing) {
-      if (documentId) await fileDocumentToArchive(prisma, documentId, payload);
-      return existing;
+      if (documentId) {
+        const filed = await fileDocumentToArchive(prisma, documentId, payload);
+        driveJob = filed.driveJob;
+      }
+      return { transaction: existing, driveJob };
     }
     const tx = await prisma.transaction.create({
       data: {
@@ -101,8 +138,11 @@ async function applyLedgerWrite(prisma, payload) {
         documentId: documentId ?? null,
       },
     });
-    if (documentId) await fileDocumentToArchive(prisma, documentId, payload);
-    return tx;
+    if (documentId) {
+      const filed = await fileDocumentToArchive(prisma, documentId, payload);
+      driveJob = filed.driveJob;
+    }
+    return { transaction: tx, driveJob };
   }
   throw new Error(`Unknown ledger write kind: ${kind}`);
 }
@@ -111,7 +151,7 @@ async function applyArchiveCommit(prisma, payload) {
   const documentId = String(payload.documentId ?? "");
   if (!documentId) throw new Error("documentId required");
   const deadline = safeDate(payload.deadline);
-  const { doc, archived } = await fileDocumentToArchive(prisma, documentId, {
+  const { doc, archived, driveJob } = await fileDocumentToArchive(prisma, documentId, {
     ...payload,
     deadline: deadline ? deadline.toISOString() : null,
   });
@@ -127,7 +167,7 @@ async function applyArchiveCommit(prisma, payload) {
       },
     });
   }
-  return { document: doc, archived };
+  return { document: doc, archived, driveJob };
 }
 
 async function applyQrMarkPaid(prisma, payload) {
@@ -352,13 +392,23 @@ export async function resolveConfirmation(prisma, id, decision) {
       throw new Error(`Unsupported action: ${pending.action}`);
   }
   const updated = await markConfirmation(prisma, id, "confirmed");
+  const driveJob =
+    result && typeof result === "object" && result.driveJob ? result.driveJob : null;
   await prisma.auditLog.create({
     data: {
       action: "confirm.accept",
       entity: pending.entity,
       entityId: pending.entityId ?? pending.id,
-      metadata: JSON.stringify({ action: pending.action }),
+      metadata: JSON.stringify({
+        action: pending.action,
+        driveJobId: driveJob?.id ?? null,
+      }),
     },
   });
-  return { confirmation: updated, result };
+  return {
+    confirmation: updated,
+    result,
+    driveJob,
+    async: Boolean(driveJob),
+  };
 }

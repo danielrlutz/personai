@@ -24,6 +24,13 @@ enum IngestionStatus {
   FAILED
 }
 
+enum ServerJobStatus {
+  QUEUED
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
 enum TransactionType {
   INCOME
   EXPENSE
@@ -182,6 +189,24 @@ model IngestionJob {
   createdAt    DateTime        @default(now())
 
   @@index([status])
+}
+
+/// Profile-scoped durable jobs (Drive upload / folder ensure). Survive browser navigate/disconnect.
+model ServerJob {
+  id           String          @id @default(cuid())
+  type         String
+  status       ServerJobStatus @default(QUEUED)
+  documentId   String?
+  payload      String
+  result       String?
+  errorMessage String?
+  attempts     Int             @default(0)
+  startedAt    DateTime?
+  completedAt  DateTime?
+  createdAt    DateTime        @default(now())
+
+  @@index([status, createdAt])
+  @@index([type])
 }
 
 model DocumentExtraction {

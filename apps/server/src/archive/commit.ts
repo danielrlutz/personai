@@ -4,7 +4,7 @@ import path from "node:path";
 import { getActiveProfileId } from "../db/prisma-singleton.js";
 import { profileArchiveDir } from "../config.js";
 import { ARCHIVE_TAXONOMY } from "../specialists/roster.js";
-import { uploadFileToDrive, type DriveUploadResult } from "./drive.js";
+import { loadDriveConfig, uploadFileToDrive, type DriveUploadResult } from "./drive.js";
 
 export type ArchiveCommitResult = {
   localPath: string;
@@ -13,6 +13,8 @@ export type ArchiveCommitResult = {
   folderLabel: string;
   drive: DriveUploadResult | null;
   driveError: string | null;
+  /** True when Drive is enabled but upload was deferred to a ServerJob. */
+  driveDeferred: boolean;
 };
 
 export function taxonomyFolderName(archiveCategory: number): string {
@@ -61,6 +63,9 @@ export function reconcileArchiveExtension(
 /**
  * Copy document into local taxonomy archive with canonical name,
  * then optionally upload to Google Drive when configured.
+ *
+ * Prefer deferDrive=true from confirm/apply paths so Drive work continues
+ * as a ServerJob after the HTTP response (navigate-safe).
  */
 export async function commitDocumentToArchive(opts: {
   profileId?: string | null;
@@ -68,6 +73,8 @@ export async function commitDocumentToArchive(opts: {
   archiveName: string;
   archiveCategory: number;
   mimeType?: string | null;
+  /** Skip inline Drive upload; caller enqueues ServerJob. Default false. */
+  deferDrive?: boolean;
 }): Promise<ArchiveCommitResult> {
   const profileId = opts.profileId || getActiveProfileId();
   if (!profileId) throw new Error("No active profile for archive commit");
@@ -86,19 +93,35 @@ export async function commitDocumentToArchive(opts: {
   await fsp.copyFile(opts.sourcePath, destPath);
 
   const mimeType = guessMime(destPath, opts.mimeType);
+  const driveEnabled = loadDriveConfig(profileId).enabled;
+
+  if (opts.deferDrive && driveEnabled) {
+    return {
+      localPath: destPath,
+      archiveName: path.basename(destPath),
+      archiveCategory: opts.archiveCategory,
+      folderLabel,
+      drive: null,
+      driveError: null,
+      driveDeferred: true,
+    };
+  }
 
   let drive: DriveUploadResult | null = null;
   let driveError: string | null = null;
-  try {
-    drive = await uploadFileToDrive({
-      localPath: destPath,
-      name: path.basename(destPath),
-      mimeType,
-      archiveCategory: opts.archiveCategory,
-    });
-  } catch (err) {
-    // Local archive succeeded; Drive is best-effort when misconfigured.
-    driveError = err instanceof Error ? err.message : String(err);
+  if (driveEnabled) {
+    try {
+      drive = await uploadFileToDrive({
+        profileId,
+        localPath: destPath,
+        name: path.basename(destPath),
+        mimeType,
+        archiveCategory: opts.archiveCategory,
+      });
+    } catch (err) {
+      // Local archive succeeded; Drive is best-effort when misconfigured.
+      driveError = err instanceof Error ? err.message : String(err);
+    }
   }
 
   return {
@@ -108,5 +131,6 @@ export async function commitDocumentToArchive(opts: {
     folderLabel,
     drive,
     driveError,
+    driveDeferred: false,
   };
 }

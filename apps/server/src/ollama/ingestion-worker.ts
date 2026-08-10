@@ -33,11 +33,14 @@ import {
   isCancelRequested,
 } from "../ingest/cancel-job.js";
 import { safeDate, safeDateOrNow, safeFiniteNumber } from "../lib/safe-data.js";
+import { tickServerJobs, recoverStaleServerJobs } from "../jobs/server-jobs.js";
 
 export const ingestionEvents = new EventEmitter();
 
 let running = false;
 let timer: NodeJS.Timeout | null = null;
+let serverJobTimer: NodeJS.Timeout | null = null;
+let serverJobRunning = false;
 
 const DOC_TYPES = [
   "BILL",
@@ -609,6 +612,7 @@ async function tick(): Promise<void> {
   running = true;
   try {
     const prisma = await getPrisma(profileId);
+
     const jobs = await prisma.ingestionJob.findMany({
       where: { status: "QUEUED" },
       orderBy: { createdAt: "asc" },
@@ -633,17 +637,41 @@ async function tick(): Promise<void> {
   }
 }
 
+/** Drive ensure/upload — separate from OCR so confirm→Drive is not blocked by vision. */
+async function tickServerJobLane(): Promise<void> {
+  if (serverJobRunning) return;
+  serverJobRunning = true;
+  try {
+    const profileId = getActiveProfileId();
+    if (!profileId) return;
+    const prisma = await getPrisma(profileId);
+    await recoverStaleServerJobs(prisma).catch(() => 0);
+    await tickServerJobs();
+  } finally {
+    serverJobRunning = false;
+  }
+}
+
 export function startIngestionWorker(): void {
   if (timer) return;
   timer = setInterval(() => {
     void tick();
   }, 1500);
+  if (!serverJobTimer) {
+    serverJobTimer = setInterval(() => {
+      void tickServerJobLane();
+    }, 1500);
+  }
 }
 
 export function stopIngestionWorker(): void {
   if (timer) {
     clearInterval(timer);
     timer = null;
+  }
+  if (serverJobTimer) {
+    clearInterval(serverJobTimer);
+    serverJobTimer = null;
   }
 }
 
