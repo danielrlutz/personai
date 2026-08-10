@@ -24,15 +24,20 @@ function configuredCandidates(role: ModelRole): string[] {
       ? product.visionModel
       : role === "architect"
         ? product.architectModel ?? MODEL_DEFAULTS.architectModel
-        : role === "coder"
-          ? product.coderModel
-          : role === "coaching"
-            ? product.coachingModel ?? MODEL_DEFAULTS.coachingModel
-            : role === "stylist"
-              ? product.stylistModel ?? MODEL_DEFAULTS.stylistModel
-              : role === "qa"
-                ? product.qaModel ?? MODEL_DEFAULTS.qaModel
-                : product.reasoningModel;
+        : role === "reinspect"
+          ? // Closer inspection: vault reinspectModel (14b) before light reasoning.
+            product.reinspectModel ??
+            product.architectModel ??
+            MODEL_DEFAULTS.reinspectModel
+          : role === "coder"
+            ? product.coderModel
+            : role === "coaching"
+              ? product.coachingModel ?? MODEL_DEFAULTS.coachingModel
+              : role === "stylist"
+                ? product.stylistModel ?? MODEL_DEFAULTS.stylistModel
+                : role === "qa"
+                  ? product.qaModel ?? MODEL_DEFAULTS.qaModel
+                  : product.reasoningModel;
 
   const catalog = MODEL_ROLE_CANDIDATES[role];
   const ordered = [primary, ...catalog.filter((c) => c !== primary)];
@@ -68,9 +73,12 @@ export async function resolveSpecialistModel(
   };
 }
 
-/** Resolve vision OCR model from catalog. */
-export async function resolveVisionModel(host: string): Promise<ResolvedSpecialistModel> {
-  const candidates = configuredCandidates("vision");
+async function resolveRoleModel(
+  host: string,
+  role: ModelRole,
+  pref: ResolvedSpecialistModel["pref"] = "reasoning",
+): Promise<ResolvedSpecialistModel> {
+  const candidates = configuredCandidates(role);
   const preferredModel = candidates[0]!;
   let installed: string[] = [];
   try {
@@ -78,16 +86,29 @@ export async function resolveVisionModel(host: string): Promise<ResolvedSpeciali
   } catch {
     installed = [];
   }
-  const picked = pickInstalledModel(
-    installed,
-    candidates,
-    MODEL_DEFAULTS.reasoningModel,
-  );
+  const ultimate =
+    role === "reinspect" || role === "architect"
+      ? MODEL_DEFAULTS.reinspectModel
+      : MODEL_DEFAULTS.reasoningModel;
+  const picked = pickInstalledModel(installed, candidates, ultimate);
   return {
     model: picked.model,
-    role: "vision",
+    role,
     preferredModel,
     fallback: picked.fallback || picked.model !== preferredModel,
-    pref: "reasoning",
+    pref,
   };
+}
+
+/** Resolve vision OCR model from catalog. */
+export async function resolveVisionModel(host: string): Promise<ResolvedSpecialistModel> {
+  return resolveRoleModel(host, "vision", "reasoning");
+}
+
+/**
+ * Resolve closer-inspection refine model (Settings → Reinspect tier).
+ * Prefer deepseek-r1:14b over light 8b; OCR itself still uses resolveVisionModel.
+ */
+export async function resolveReinspectModel(host: string): Promise<ResolvedSpecialistModel> {
+  return resolveRoleModel(host, "reinspect", "architect");
 }

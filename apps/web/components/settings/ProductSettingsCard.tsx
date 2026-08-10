@@ -23,6 +23,7 @@ type ProductSettings = {
   visionModel: string | null;
   reasoningModel: string | null;
   architectModel: string | null;
+  reinspectModel: string | null;
   coderModel: string | null;
   coachingModel: string | null;
   stylistModel: string | null;
@@ -161,6 +162,7 @@ export function ProductSettingsCard() {
         visionModel: s.visionModel,
         reasoningModel: s.reasoningModel,
         architectModel: s.architectModel,
+        reinspectModel: s.reinspectModel,
         coderModel: s.coderModel,
         coachingModel: s.coachingModel,
         stylistModel: s.stylistModel,
@@ -301,10 +303,15 @@ export function ProductSettingsCard() {
           {modelField("Vision / OCR", "visionModel")}
           {modelField("Reasoning (Staff/CFO/Legal/Medical)", "reasoningModel")}
           {modelField("Architect", "architectModel")}
+          {modelField("Reinspect (closer inspection)", "reinspectModel")}
           {modelField("Forge coder", "coderModel")}
           {modelField("QA (deepseek-r1)", "qaModel")}
           {modelField("Coaching", "coachingModel")}
           {modelField("Stylist text", "stylistModel")}
+          <p className="text-xs text-muted-foreground sm:col-span-2">
+            Flag for closer inspection uses vault Vision plus the Reinspect tier (default{" "}
+            <span className="font-mono">deepseek-r1:14b</span>).
+          </p>
           <label className="space-y-1.5 text-sm text-muted-foreground">
             Public web URL
             <Input

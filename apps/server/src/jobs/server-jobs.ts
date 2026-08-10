@@ -1,6 +1,8 @@
 /**
- * Durable profile-scoped server jobs (Drive upload / folder ensure).
+ * Durable profile-scoped server jobs (Drive upload / folder ensure / confirm reinspect).
  * Processed by the same worker tick as ingestion — keyed by profile, not browser tab.
+ *
+ * Note: confirm.reinspect acquires the VRAM lock inside its processor (vision then reasoning).
  */
 import type { PrismaClient, ServerJob } from "@prisma/client";
 import { EventEmitter } from "node:events";
@@ -11,6 +13,13 @@ import {
   type DriveCombineJobPayload,
 } from "../archive/folder-combine.js";
 import { guessMime } from "../archive/commit.js";
+import {
+  markReinspectFailed,
+  processConfirmReinspect,
+  SERVER_JOB_CONFIRM_REINSPECT,
+} from "../confirm/reinspect.js";
+
+export { SERVER_JOB_CONFIRM_REINSPECT };
 
 export const serverJobEvents = new EventEmitter();
 
@@ -219,6 +228,9 @@ async function processOneJob(profileId: string, jobId: string): Promise<void> {
       case SERVER_JOB_DRIVE_COMBINE:
         result = await processDriveCombine(profileId, job);
         break;
+      case SERVER_JOB_CONFIRM_REINSPECT:
+        result = await processConfirmReinspect(prisma, job);
+        break;
       default:
         throw new Error(`Unknown server job type: ${job.type}`);
     }
@@ -231,11 +243,15 @@ async function processOneJob(profileId: string, jobId: string): Promise<void> {
       },
     });
   } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    if (job.type === SERVER_JOB_CONFIRM_REINSPECT) {
+      await markReinspectFailed(prisma, job, message).catch(() => undefined);
+    }
     await prisma.serverJob.update({
       where: { id: jobId },
       data: {
         status: "FAILED",
-        errorMessage: err instanceof Error ? err.message : String(err),
+        errorMessage: message,
         completedAt: new Date(),
       },
     });

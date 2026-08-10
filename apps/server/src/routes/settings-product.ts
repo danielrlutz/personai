@@ -40,6 +40,7 @@ export async function registerProductSettingsRoutes(app: FastifyInstance): Promi
       str("coachingModel");
       str("stylistModel");
       str("qaModel");
+      str("reinspectModel");
       str("publicWebUrl");
       str("publicApiUrl");
       str("googleOauthClientId");

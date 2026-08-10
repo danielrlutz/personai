@@ -24,6 +24,7 @@ export interface ConfirmCarouselProps {
   onOpenExisting?: (confirmationId: string, documentId: string, archiveName?: string) => void;
   onConfirm: (id: string) => void;
   onDecline: (id: string) => void;
+  onFlagReinspect?: (id: string) => void;
 }
 
 export function ConfirmCarousel({
@@ -41,6 +42,7 @@ export function ConfirmCarousel({
   onOpenExisting,
   onConfirm,
   onDecline,
+  onFlagReinspect,
 }: ConfirmCarouselProps) {
   const reduce = useReducedMotion();
   const safeIndex = Math.min(Math.max(index, 0), Math.max(items.length - 1, 0));
@@ -137,6 +139,9 @@ export function ConfirmCarousel({
               }
               onConfirm={() => onConfirm(current.id)}
               onDecline={() => onDecline(current.id)}
+              onFlagReinspect={
+                onFlagReinspect ? () => onFlagReinspect(current.id) : undefined
+              }
               stackActions
             />
             {items.length > 1 ? (
