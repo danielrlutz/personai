@@ -11,6 +11,7 @@ import {
   suggestArchiveCategory,
   suggestArchiveName,
 } from "../specialists/roster.js";
+import { lookupEntityArchiveCategory } from "../memory/filing-memory.js";
 import { prepareDocumentForOcr, prepareWarning } from "../ingest/pdf-prepare.js";
 import { imagesToPdf } from "../ingest/images-to-pdf.js";
 import { guessMime } from "../archive/commit.js";
@@ -258,7 +259,9 @@ async function persistExtraction(opts: {
     entity,
     extension,
   });
-  const archiveCategory = suggestArchiveCategory(docType);
+  // Prefer confirm-learned entity→category muscle memory over DocType default.
+  const learnedCategory = await lookupEntityArchiveCategory(prisma, entity);
+  const archiveCategory = learnedCategory ?? suggestArchiveCategory(docType);
   // Invalid OCR dueDate must become null — never Invalid Date into Prisma.
   const deadline = safeDate(structured.dueDate);
 

@@ -16,3 +16,5 @@ Use when the user drops mail, PDFs, or asks to file a document.
 4. Summarize proposed name, folder, Fristen, and duplicates — then wait for **Needs your confirmation** in the app.
    The user can **View file** before Confirm. Never claim the file was archived before confirm.
 5. After confirm, local archive always writes under the profile; Drive is optional/soft-gated and uses the same archive filename + MIME as the local copy.
+6. After a confirmed filing, PersonAI may propose a MemoryFact `entity.{name} → cat N Label` under **Needs your confirmation**
+   (naming muscle memory). Only after the user confirms that fact will OCR/Staff reuse the entity→folder mapping.
