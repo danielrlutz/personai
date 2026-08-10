@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
-import { Eye, ExternalLink, ShieldCheck, X } from "lucide-react";
+import { Eye, ExternalLink, Scale, ShieldCheck, X } from "lucide-react";
 import {
   apiGet,
   apiGetBlob,
@@ -20,7 +21,13 @@ import {
   type ArchiveDraft,
 } from "@/lib/archive-naming";
 import { ARCHIVE_TAXONOMY_CLIENT } from "@/lib/archive-taxonomy";
+import {
+  fristDeadlineFromConfirmation,
+  fristKitProposeBody,
+  teamHrefFromConfirmResult,
+} from "@/lib/frist-kit";
 import { toast } from "@/lib/toast";
+import { FristKitButton, FristKitHint } from "./FristKitActions";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -164,6 +171,7 @@ export function ConfirmGate({
   compact,
   showEmpty = false,
 }: ConfirmGateProps) {
+  const router = useRouter();
   const [items, setItems] = useState<PendingConfirmation[]>([]);
   const [drafts, setDrafts] = useState<Record<string, ArchiveDraft>>({});
   const [qrDrafts, setQrDrafts] = useState<Record<string, QrConfirmFields>>({});
@@ -296,6 +304,27 @@ export function ConfirmGate({
     });
   };
 
+  const queueFristKit = async (c: PendingConfirmation) => {
+    const draft = drafts[c.id];
+    const body = fristKitProposeBody(c, {
+      archiveName: draft ? buildArchiveName(draft) : undefined,
+    });
+    if (!body) {
+      toast.error("No Frist date on this confirm — add a deadline first.");
+      return;
+    }
+    setBusyId(c.id);
+    try {
+      await apiPost("/legal/frist-kit/propose", body, { silent: true });
+      await load();
+      toast.success("Frist kit queued — Confirm to create Legal task + stage calendar.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not queue Frist kit");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   const decide = async (id: string, decision: "confirm" | "reject") => {
     setBusyId(id);
     try {
@@ -321,6 +350,7 @@ export function ConfirmGate({
       const out = await apiPost<{
         driveJob?: ServerJobDto | null;
         async?: boolean;
+        result?: unknown;
       }>(
         `/confirmations/${id}/${decision === "confirm" ? "confirm" : "reject"}`,
         undefined,
@@ -330,12 +360,18 @@ export function ConfirmGate({
       onResolved?.(decision);
       if (decision === "reject") {
         toast.success("Declined — external systems unchanged; local staging kept.");
-      } else if (out?.driveJob?.id) {
-        trackDriveJobPulse(out.driveJob.id);
-        setDriveJobIds((prev) =>
-          prev.includes(out.driveJob!.id) ? prev : [out.driveJob!.id, ...prev],
-        );
-        toast.success("Filed locally — Drive upload continuing in the background.");
+      } else {
+        const teamHref = teamHrefFromConfirmResult(out) ?? teamHrefFromConfirmResult(out?.result);
+        if (teamHref) {
+          toast.success("Frist kit applied — opening Legal Aide with checklist…");
+          router.push(teamHref);
+        } else if (out?.driveJob?.id) {
+          trackDriveJobPulse(out.driveJob.id);
+          setDriveJobIds((prev) =>
+            prev.includes(out.driveJob!.id) ? prev : [out.driveJob!.id, ...prev],
+          );
+          toast.success("Filed locally — Drive upload continuing in the background.");
+        }
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Action failed";
@@ -522,6 +558,8 @@ export function ConfirmGate({
                     />
                   ) : null}
 
+                  <FristKitHint confirmation={c} />
+
                   <div className="flex flex-wrap shrink-0 gap-2">
                     {documentId ? (
                       <Button
@@ -534,6 +572,11 @@ export function ConfirmGate({
                         {previewBusyId === c.id ? "Opening…" : "View file"}
                       </Button>
                     ) : null}
+                    <FristKitButton
+                      confirmation={c}
+                      busy={busyId === c.id}
+                      onQueue={() => void queueFristKit(c)}
+                    />
                     <Button
                       size="sm"
                       disabled={busyId === c.id}

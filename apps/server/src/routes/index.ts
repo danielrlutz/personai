@@ -50,6 +50,7 @@ import { registerSkillStudioRoutes } from "./settings-skills.js";
 import { registerTriageRoutes } from "./triage.js";
 import { registerSoulNewsRoutes } from "./soul-news.js";
 import { createConfirmation } from "../confirm/confirm-service.js";
+import { buildFristKitPayload } from "../legal/frist-kit.js";
 import { driveStatus } from "../archive/drive.js";
 import { getRequestSession } from "../auth/middleware.js";
 import { assertPasswordStrength } from "../auth/password.js";
@@ -492,6 +493,66 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   app.patch<{
     Params: { id: string };
     Body: { status?: "TODO" | "IN_PROGRESS" | "DONE" | "BLOCKED"; title?: string };
+  app.post<{
+    Body: {
+      title?: string;
+      deadline?: string;
+      dueDate?: string;
+      documentId?: string;
+      archiveName?: string;
+      description?: string;
+      entity?: string;
+      confirmed?: boolean;
+    };
+  }>("/legal/frist-kit/propose", async (req, reply) => {
+    try {
+      const { prisma } = await withPrisma(req);
+      const body = req.body ?? {};
+      let payload;
+      try {
+        payload = buildFristKitPayload({
+          title: body.title,
+          deadline: body.deadline ?? body.dueDate,
+          dueDate: body.dueDate,
+          documentId: body.documentId,
+          archiveName: body.archiveName,
+          description: body.description,
+          entity: body.entity,
+        });
+      } catch (err) {
+        return reply.status(400).send({
+          error: err instanceof Error ? err.message : "Invalid Frist kit payload",
+        });
+      }
+
+      if (!body.confirmed) {
+        const confirmation = await createConfirmation(prisma, {
+          action: "legal.frist_kit",
+          summary: `Frist kit: ${payload.title} · ${payload.deadline}`,
+          entity: payload.documentId ? "Document" : "LegalTask",
+          entityId: payload.documentId ?? undefined,
+          dedupeKey: payload.documentId
+            ? `frist-kit:${payload.documentId}:${payload.deadline}`
+            : undefined,
+          payload,
+        });
+        return reply.status(202).send({
+          needsConfirm: true,
+          confirmation,
+          teamHref: payload.teamHref,
+          message: "Confirm to create the Legal task and stage the calendar event. Then open Legal Aide.",
+        });
+      }
+
+      return reply.status(400).send({
+        error: "Use Needs your confirmation to apply the Frist kit.",
+        code: "CONFIRM_REQUIRED",
+      });
+    } catch (err) {
+      return sendError(reply, err);
+    }
+  });
+
   }>("/legal/tasks/:id", async (req, reply) => {
     try {
       const { prisma } = await withPrisma(req);

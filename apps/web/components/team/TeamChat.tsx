@@ -32,7 +32,7 @@ interface TeamChatProps {
   initialMessage?: string;
   /** Prefill huddle guests (max 2). */
   initialGuests?: string[];
-  /** @deprecated Prefer initialMessage — kept for QR deep-links. */
+  /** Prefill composer (Frist kit / triage deep-link). Prefer initialMessage. */
   initialPrompt?: string;
 }
 
@@ -110,10 +110,11 @@ export function TeamChat({
   }, [initialMessage]);
 
   useEffect(() => {
-    if (!initialPrompt?.trim()) return;
-    if (appliedPromptRef.current === initialPrompt) return;
-    appliedPromptRef.current = initialPrompt;
-    setInput(initialPrompt);
+    const prompt = initialPrompt?.trim();
+    if (!prompt) return;
+    if (appliedPromptRef.current === prompt) return;
+    appliedPromptRef.current = prompt;
+    setInput(prompt);
   }, [initialPrompt]);
 
   useEffect(() => {

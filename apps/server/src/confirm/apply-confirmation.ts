@@ -25,6 +25,7 @@ import {
   resolveFilingEntity,
 } from "../memory/filing-memory.js";
 import { persistUserSkill } from "../skills/registry.js";
+import { buildFristKitPayload } from "../legal/frist-kit.js";
 
 async function fileDocumentToArchive(prisma, documentId, payload) {
   const doc = await prisma.document.findUnique({ where: { id: documentId } });
@@ -363,6 +364,71 @@ async function applyCalendarEvent(prisma, payload) {
   return stageCalendarEvent(prisma, payload);
 }
 
+async function applyLegalFristKit(prisma, payload) {
+  const built = buildFristKitPayload(payload);
+  const dueDate = safeDate(built.deadline);
+  if (!dueDate) throw new Error("Frist kit requires a valid deadline");
+
+  let task = built.documentId
+    ? await prisma.legalTask.findFirst({
+        where: {
+          documentId: built.documentId,
+          type: "DEADLINE",
+          status: { in: ["TODO", "IN_PROGRESS", "BLOCKED"] },
+          dueDate,
+        },
+      })
+    : null;
+
+  if (!task) {
+    task = await prisma.legalTask.create({
+      data: {
+        title: built.title,
+        description: built.description,
+        type: "DEADLINE",
+        status: "TODO",
+        dueDate,
+        documentId: built.documentId,
+      },
+    });
+  }
+
+  const calendar = await stageCalendarEvent(prisma, {
+    title: built.title,
+    start: dueDate.toISOString(),
+    end: null,
+    description: [
+      built.description,
+      built.documentId ? `document:${built.documentId}` : null,
+      "source:legal.frist_kit",
+      "google_write:not_wired",
+    ]
+      .filter(Boolean)
+      .join("\n"),
+  });
+
+  await prisma.auditLog.create({
+    data: {
+      action: "legal.frist_kit",
+      entity: "LegalTask",
+      entityId: task.id,
+      metadata: JSON.stringify({
+        documentId: built.documentId,
+        deadline: built.deadline,
+        teamHref: built.teamHref,
+        calendarStaged: Boolean(calendar?.staged),
+      }),
+    },
+  });
+
+  return {
+    task,
+    calendar,
+    teamHref: built.teamHref,
+    checklist: built.checklist,
+    deadline: built.deadline,
+  };
+}
 export async function resolveConfirmation(prisma, id, decision) {
   const pending = await getConfirmation(prisma, id);
   if (!pending) throw new Error("Confirmation not found");
@@ -409,6 +475,9 @@ export async function resolveConfirmation(prisma, id, decision) {
       break;
     case "calendar.event":
       result = await applyCalendarEvent(prisma, payload);
+      break;
+    case "legal.frist_kit":
+      result = await applyLegalFristKit(prisma, payload);
       break;
     case "memory.fact": {
       const key = String(payload.key ?? "").trim();

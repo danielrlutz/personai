@@ -17,6 +17,7 @@ const ACTION_LABELS: Record<string, string> = {
   "calendar.event": "Calendar (stage locally — Google write not wired)",
   "calendar.event_staged": "Calendar staged locally",
   "fristen.calendar_pack": "Fristen calendar pack (.ics)",
+  "legal.frist_kit": "Legal Frist kit",
   "confirm.accept": "Confirmed",
   "confirm.reject": "Rejected",
 };
