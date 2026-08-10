@@ -155,8 +155,18 @@ function prunePending(): void {
   }
 }
 
+export type DriveFolderMatchMeta = {
+  source: "cache" | "regex" | "synonym" | "exact" | "reconcile" | "llm" | "created";
+  matchedName?: string | null;
+  duplicates?: Array<{ id: string; name: string }>;
+  at: string;
+};
+
 export type DrivePrefsStore = {
   rootFolderId?: string | null;
+  /** Cached taxonomy → Drive folder id (avoids re-LLM / re-list every upload). */
+  folderIds?: Record<number, string>;
+  folderMatchMeta?: Record<number, DriveFolderMatchMeta>;
   updatedAt: string;
 };
 
@@ -174,12 +184,46 @@ export function readDrivePrefs(profileId: string): DrivePrefsStore | null {
   }
 }
 
-export function writeDrivePrefs(profileId: string, prefs: { rootFolderId?: string | null }): DrivePrefsStore {
+export function writeDrivePrefs(
+  profileId: string,
+  prefs: {
+    rootFolderId?: string | null;
+    folderIds?: Record<number, string>;
+    folderMatchMeta?: Record<number, DriveFolderMatchMeta>;
+  },
+): DrivePrefsStore {
+  const prev = readDrivePrefs(profileId);
   const next: DrivePrefsStore = {
-    rootFolderId: prefs.rootFolderId ?? null,
+    rootFolderId:
+      prefs.rootFolderId !== undefined ? prefs.rootFolderId : (prev?.rootFolderId ?? null),
+    folderIds: prefs.folderIds !== undefined ? prefs.folderIds : (prev?.folderIds ?? {}),
+    folderMatchMeta:
+      prefs.folderMatchMeta !== undefined
+        ? prefs.folderMatchMeta
+        : (prev?.folderMatchMeta ?? {}),
     updatedAt: new Date().toISOString(),
   };
   fs.mkdirSync(profileDir(profileId), { recursive: true });
   fs.writeFileSync(prefsPath(profileId), JSON.stringify(next, null, 2), "utf-8");
   return next;
+}
+
+/** Persist a single category → folder mapping (regex/LLM/created). */
+export function cacheDriveFolderMapping(
+  profileId: string,
+  category: number,
+  folderId: string,
+  meta: Omit<DriveFolderMatchMeta, "at">,
+): void {
+  const prev = readDrivePrefs(profileId) ?? { updatedAt: new Date().toISOString() };
+  const folderIds = { ...(prev.folderIds ?? {}), [category]: folderId };
+  const folderMatchMeta = {
+    ...(prev.folderMatchMeta ?? {}),
+    [category]: { ...meta, at: new Date().toISOString() },
+  };
+  writeDrivePrefs(profileId, {
+    rootFolderId: prev.rootFolderId ?? null,
+    folderIds,
+    folderMatchMeta,
+  });
 }

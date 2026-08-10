@@ -15,11 +15,27 @@ import { ARCHIVE_TAXONOMY } from "../specialists/roster.js";
 import { getActiveProfileId } from "../db/prisma-singleton.js";
 import { resolveProductConfig } from "../settings/host-vault.js";
 import {
+  chatCompletion,
+  listInstalledModels,
+  resolveOllamaHost,
+} from "../ollama/client.js";
+import { MODEL_ROLE_CANDIDATES, pickInstalledModel } from "../specialists/model-catalog.js";
+import {
+  cacheDriveFolderMapping,
   readDriveOauthStore,
   readDrivePrefs,
   writeDriveOauthStore,
+  writeDrivePrefs,
   type DriveOauthStore,
 } from "./drive-oauth-store.js";
+import {
+  buildFolderMatchLlmPrompt,
+  isArchiveRootName,
+  matchFolderForCategory,
+  parseFolderMatchLlmResponse,
+  personAiStyleFolderName,
+  type DriveFolderCandidate,
+} from "./folder-match.js";
 
 export type DriveConfig = {
   enabled: boolean;
@@ -107,6 +123,16 @@ export function loadDriveConfig(profileId?: string | null): DriveConfig {
     prefs?.rootFolderId?.trim() ||
     envRoot ||
     null;
+
+  // Per-profile cached taxonomy mappings win over env bootstrap folder IDs.
+  if (prefs?.folderIds) {
+    for (const [k, v] of Object.entries(prefs.folderIds)) {
+      const n = Number(k);
+      if (Number.isFinite(n) && typeof v === "string" && v.trim()) {
+        folderIds[n] = v.trim();
+      }
+    }
+  }
 
   const hasSa = Boolean(serviceAccountPath || serviceAccountJson);
   const hasOauth = Boolean(oauthClientId && oauthClientSecret && oauthRefreshToken);
@@ -386,20 +412,68 @@ export async function exchangeOauthCode(code: string): Promise<{
   };
 }
 
-async function ensurePersonAiRootFolder(cfg: DriveConfig): Promise<string> {
-  if (cfg.rootFolderId) return cfg.rootFolderId;
+async function listDriveFoldersInParent(
+  cfg: DriveConfig,
+  parentId: string | "root",
+): Promise<Array<{ id: string; name: string }>> {
+  const parentClause = parentId === "root" ? "'root' in parents" : `'${parentId}' in parents`;
   const q = encodeURIComponent(
-    "name='PersonAI_Archive' and 'root' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false",
+    `${parentClause} and mimeType='application/vnd.google-apps.folder' and trashed=false`,
   );
+  const out: Array<{ id: string; name: string }> = [];
+  let pageToken: string | undefined;
+  do {
+    const url =
+      `https://www.googleapis.com/drive/v3/files?q=${q}&fields=nextPageToken,files(id,name)` +
+      `&pageSize=100` +
+      (pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : "");
+    const list = await driveFetch(cfg, url);
+    if (!list.ok) {
+      throw new Error(`Drive folder list failed: ${list.status} ${await list.text()}`);
+    }
+    const listed = (await list.json()) as {
+      files?: Array<{ id: string; name: string }>;
+      nextPageToken?: string;
+    };
+    for (const f of listed.files ?? []) out.push(f);
+    pageToken = listed.nextPageToken;
+  } while (pageToken);
+  return out;
+}
+
+async function countNonTrashedChildren(cfg: DriveConfig, folderId: string): Promise<number> {
+  const q = encodeURIComponent(`'${folderId}' in parents and trashed=false`);
   const list = await driveFetch(
     cfg,
-    `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name)&pageSize=5`,
+    `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id)&pageSize=100`,
   );
-  if (!list.ok) {
-    throw new Error(`Drive root lookup failed: ${list.status} ${await list.text()}`);
-  }
+  if (!list.ok) return 0;
   const listed = (await list.json()) as { files?: Array<{ id: string }> };
-  if (listed.files?.[0]?.id) return listed.files[0].id;
+  return listed.files?.length ?? 0;
+}
+
+/**
+ * Prefer an existing archive root (Archived Files / PersonAI_Archive / Archiv)
+ * before creating PersonAI_Archive.
+ */
+async function ensurePersonAiRootFolder(cfg: DriveConfig): Promise<string> {
+  if (cfg.rootFolderId) return cfg.rootFolderId;
+
+  const roots = await listDriveFoldersInParent(cfg, "root");
+  const matches = roots.filter((f) => isArchiveRootName(f.name));
+  if (matches.length > 0) {
+    // Prefer "Archived Files" / fullest folder over empty PersonAI_Archive.
+    const ranked = await Promise.all(
+      matches.map(async (f) => ({ ...f, fileCount: await countNonTrashedChildren(cfg, f.id) })),
+    );
+    ranked.sort((a, b) => {
+      const aPa = /personai/i.test(a.name) ? 1 : 0;
+      const bPa = /personai/i.test(b.name) ? 1 : 0;
+      if (b.fileCount !== a.fileCount) return b.fileCount - a.fileCount;
+      return aPa - bPa;
+    });
+    return ranked[0]!.id;
+  }
 
   const create = await driveFetch(cfg, "https://www.googleapis.com/drive/v3/files?fields=id", {
     method: "POST",
@@ -414,6 +488,71 @@ async function ensurePersonAiRootFolder(cfg: DriveConfig): Promise<string> {
   }
   const created = (await create.json()) as { id: string };
   return created.id;
+}
+
+async function resolveLightFolderMatchModel(host: string): Promise<string> {
+  const candidates = [
+    ...MODEL_ROLE_CANDIDATES.coaching,
+    "llama3.2:3b",
+    "llama3.2:1b",
+    "phi3:mini",
+    "gemma2:2b",
+  ];
+  let installed: string[] = [];
+  try {
+    installed = await listInstalledModels(host);
+  } catch {
+    installed = [];
+  }
+  return pickInstalledModel(installed, candidates, "llama3.1:8b").model;
+}
+
+async function llmPickFolderId(opts: {
+  category: number;
+  label: string;
+  folders: Array<{ id: string; name: string }>;
+}): Promise<string | null> {
+  if (opts.folders.length === 0) return null;
+  try {
+    const host = await resolveOllamaHost();
+    const model = await resolveLightFolderMatchModel(host);
+    const raw = await chatCompletion({
+      host,
+      model,
+      messages: [
+        {
+          role: "system",
+          content: "You only output compact JSON for folder matching. No prose.",
+        },
+        {
+          role: "user",
+          content: buildFolderMatchLlmPrompt(opts),
+        },
+      ],
+      timeoutMs: 45_000,
+    });
+    return parseFolderMatchLlmResponse(
+      raw,
+      new Set(opts.folders.map((f) => f.id)),
+    );
+  } catch {
+    return null;
+  }
+}
+
+function persistFolderMapping(
+  cfg: DriveConfig,
+  category: number,
+  folderId: string,
+  meta: {
+    source: "cache" | "regex" | "synonym" | "exact" | "reconcile" | "llm" | "created";
+    matchedName?: string | null;
+    duplicates?: Array<{ id: string; name: string }>;
+  },
+): void {
+  if (!cfg.profileId) return;
+  cacheDriveFolderMapping(cfg.profileId, category, folderId, meta);
+  cfg.folderIds[category] = folderId;
 }
 
 export async function completeOauthLink(opts: {
@@ -436,19 +575,49 @@ export async function completeOauthLink(opts: {
   if (!cfg.rootFolderId) {
     const rootId = await ensurePersonAiRootFolder(cfg);
     writeDriveOauthStore(opts.profileId, { ...draft, rootFolderId: rootId });
+    writeDrivePrefs(opts.profileId, { rootFolderId: rootId });
   }
   return loadDriveConfig(opts.profileId);
 }
 
-/** Resolve taxonomy folder ID; optionally create under root when missing. */
-export async function resolveDriveFolderId(
+export type ResolveFolderOptions = {
+  /** When false, never create — return null if no match (listing / reconcile). Default true. */
+  createIfMissing?: boolean;
+  /** Reuse a pre-listed child folder set (avoids N Drive list calls). */
+  childFolders?: Array<{ id: string; name: string }>;
+};
+
+async function withFileCounts(
+  cfg: DriveConfig,
+  folders: Array<{ id: string; name: string }>,
+): Promise<DriveFolderCandidate[]> {
+  return Promise.all(
+    folders.map(async (f) => ({
+      id: f.id,
+      name: f.name,
+      fileCount: await countNonTrashedChildren(cfg, f.id),
+    })),
+  );
+}
+
+/**
+ * Resolve taxonomy folder under the archive root.
+ * Order: cached mapping → list children → regex/synonym → light LLM → create (optional).
+ * Never creates `01_Official` when `1. Official Documents` (or DE/FR equivalent) already matches.
+ * Duplicate PersonAI + legacy folders are mapped to the preferred one; Drive folders are never deleted.
+ */
+export async function resolveFolderForCategory(
   cfg: DriveConfig,
   archiveCategory: number,
-): Promise<string> {
+  opts?: ResolveFolderOptions,
+): Promise<string | null> {
+  const createIfMissing = opts?.createIfMissing !== false;
   const mapped = cfg.folderIds[archiveCategory];
   if (mapped) return mapped;
 
-  if (!cfg.rootFolderId) {
+  const rootId = cfg.rootFolderId;
+  if (!rootId) {
+    if (!createIfMissing) return null;
     throw new Error(
       `No Google Drive folder for taxonomy ${archiveCategory}. Set GOOGLE_DRIVE_FOLDER_${archiveCategory} or GOOGLE_DRIVE_ROOT_FOLDER_ID, or Link Google Drive in Settings.`,
     );
@@ -456,35 +625,87 @@ export async function resolveDriveFolderId(
 
   const label =
     ARCHIVE_TAXONOMY[archiveCategory as keyof typeof ARCHIVE_TAXONOMY] ?? "Misc";
-  const folderName = `${String(archiveCategory).padStart(2, "0")}_${label}`;
+  const children =
+    opts?.childFolders ?? (await listDriveFoldersInParent(cfg, rootId));
 
-  const q = encodeURIComponent(
-    `name='${folderName.replace(/'/g, "\\'")}' and '${cfg.rootFolderId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+  // First pass without counts; enrich only when duplicates need ranking.
+  let regexMatch = matchFolderForCategory(
+    archiveCategory,
+    children.map((f) => ({ id: f.id, name: f.name })),
   );
-  const list = await driveFetch(
-    cfg,
-    `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name)&pageSize=5`,
-  );
-  if (!list.ok) {
-    throw new Error(`Drive folder lookup failed: ${list.status} ${await list.text()}`);
+  if (regexMatch?.duplicates.length) {
+    const relatedIds = new Set([
+      regexMatch.folderId,
+      ...regexMatch.duplicates.map((d) => d.id),
+    ]);
+    const enriched = await withFileCounts(
+      cfg,
+      children.filter((c) => relatedIds.has(c.id)),
+    );
+    regexMatch = matchFolderForCategory(archiveCategory, [
+      ...enriched,
+      ...children
+        .filter((c) => !relatedIds.has(c.id))
+        .map((f) => ({ id: f.id, name: f.name })),
+    ]);
   }
-  const listed = (await list.json()) as { files?: Array<{ id: string }> };
-  if (listed.files?.[0]?.id) return listed.files[0].id;
 
-  const create = await driveFetch(cfg, "https://www.googleapis.com/drive/v3/files?fields=id", {
+  if (regexMatch) {
+    persistFolderMapping(cfg, archiveCategory, regexMatch.folderId, {
+      source: regexMatch.source,
+      matchedName: regexMatch.folderName,
+      duplicates: regexMatch.duplicates.map((d) => ({ id: d.id, name: d.name })),
+    });
+    return regexMatch.folderId;
+  }
+
+  const llmId = await llmPickFolderId({
+    category: archiveCategory,
+    label,
+    folders: children.map((c) => ({ id: c.id, name: c.name })),
+  });
+  if (llmId) {
+    const named = children.find((c) => c.id === llmId);
+    persistFolderMapping(cfg, archiveCategory, llmId, {
+      source: "llm",
+      matchedName: named?.name ?? null,
+    });
+    return llmId;
+  }
+
+  if (!createIfMissing) return null;
+
+  const folderName = personAiStyleFolderName(archiveCategory);
+  const create = await driveFetch(cfg, "https://www.googleapis.com/drive/v3/files?fields=id,name", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       name: folderName,
       mimeType: "application/vnd.google-apps.folder",
-      parents: [cfg.rootFolderId],
+      parents: [rootId],
     }),
   });
   if (!create.ok) {
     throw new Error(`Drive folder create failed: ${create.status} ${await create.text()}`);
   }
-  const created = (await create.json()) as { id: string };
+  const created = (await create.json()) as { id: string; name?: string };
+  persistFolderMapping(cfg, archiveCategory, created.id, {
+    source: "created",
+    matchedName: created.name ?? folderName,
+  });
   return created.id;
+}
+
+/** @deprecated Prefer resolveFolderForCategory — kept for callers that require a folder. */
+export async function resolveDriveFolderId(
+  cfg: DriveConfig,
+  archiveCategory: number,
+): Promise<string> {
+  const id = await resolveFolderForCategory(cfg, archiveCategory, { createIfMissing: true });
+  if (!id) {
+    throw new Error(`No Google Drive folder for taxonomy ${archiveCategory}`);
+  }
+  return id;
 }
 
 export async function listDriveArchiveFiles(opts?: {
@@ -508,14 +729,23 @@ export async function listDriveArchiveFiles(opts?: {
   }> = [];
   const files: DriveFileIndexEntry[] = [];
 
+  const childFolders = cfg.rootFolderId
+    ? await listDriveFoldersInParent(cfg, cfg.rootFolderId)
+    : [];
+
   for (let cat = 1; cat <= 10; cat++) {
     const label = ARCHIVE_TAXONOMY[cat as keyof typeof ARCHIVE_TAXONOMY] ?? "Misc";
-    let folderId: string;
+    // Listing must never create parallel taxonomy folders.
+    let folderId: string | null;
     try {
-      folderId = await resolveDriveFolderId(cfg, cat);
+      folderId = await resolveFolderForCategory(cfg, cat, {
+        createIfMissing: false,
+        childFolders,
+      });
     } catch {
       continue;
     }
+    if (!folderId) continue;
     const q = encodeURIComponent(`'${folderId}' in parents and trashed=false`);
     const list = await driveFetch(
       cfg,
@@ -528,9 +758,12 @@ export async function listDriveArchiveFiles(opts?: {
       files?: Array<{ id: string; name: string; modifiedTime?: string; webViewLink?: string }>;
     };
     const rows = listed.files ?? [];
+    const matchedName =
+      (cfg.profileId && readDrivePrefs(cfg.profileId)?.folderMatchMeta?.[cat]?.matchedName) ||
+      `${String(cat).padStart(2, "0")}_${label}`;
     folders.push({
       archiveCategory: cat,
-      label: `${String(cat).padStart(2, "0")}_${label}`,
+      label: matchedName,
       folderId,
       fileCount: rows.length,
     });
@@ -538,7 +771,7 @@ export async function listDriveArchiveFiles(opts?: {
       files.push({
         id: f.id,
         name: f.name,
-        folderLabel: `${String(cat).padStart(2, "0")}_${label}`,
+        folderLabel: matchedName,
         archiveCategory: cat,
         modifiedTime: f.modifiedTime ?? null,
         webViewLink: f.webViewLink ?? null,
@@ -554,8 +787,9 @@ export async function uploadFileToDrive(opts: {
   name: string;
   mimeType: string;
   archiveCategory: number;
+  profileId?: string | null;
 }): Promise<DriveUploadResult | null> {
-  const cfg = loadDriveConfig();
+  const cfg = loadDriveConfig(opts.profileId);
   if (!cfg.enabled) return null;
 
   const folderId = await resolveDriveFolderId(cfg, opts.archiveCategory);
