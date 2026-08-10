@@ -377,7 +377,7 @@ export function TeamChat({
                     error={chatMsg?.error}
                     formatted={formatted}
                     speakerLabel={
-                      huddleMode && msg.role === "assistant"
+                      huddleMode && msg.role === "assistant" && "speakerLabel" in msg
                         ? msg.speakerLabel
                         : undefined
                     }
