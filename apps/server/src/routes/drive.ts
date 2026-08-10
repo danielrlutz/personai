@@ -5,6 +5,8 @@ import {
   driveStatus,
   exchangeOauthCode,
   getWebAppBaseUrl,
+  preferTaxonomyFolderForever,
+  scanTaxonomyHealth,
   verifyDriveConnection,
 } from "../archive/drive.js";
 import {
@@ -166,4 +168,46 @@ export async function registerDriveRoutes(app: FastifyInstance): Promise<void> {
       return sendError(reply, err);
     }
   });
+
+
+  /** Scan archive root for duplicate taxonomy folders (never deletes). */
+  app.get("/archive/drive/taxonomy-health", async (req, reply) => {
+    try {
+      const profileId = getProfileId(req);
+      const status = driveStatus(profileId);
+      if (!status.enabled && !status.linked) {
+        return reply.status(400).send({
+          error: status.message,
+          code: "DRIVE_NOT_LINKED",
+          status,
+        });
+      }
+      return await scanTaxonomyHealth(profileId);
+    } catch (err) {
+      return sendError(reply, err);
+    }
+  });
+
+  /** Cache a preferred folder for a category forever (never deletes Drive folders). */
+  app.post<{ Body: { category?: number; folderId?: string } }>(
+    "/archive/drive/taxonomy-health/prefer",
+    async (req, reply) => {
+      try {
+        const profileId = getProfileId(req);
+        const status = driveStatus(profileId);
+        if (!status.enabled && !status.linked) {
+          return reply.status(400).send({
+            error: status.message,
+            code: "DRIVE_NOT_LINKED",
+            status,
+          });
+        }
+        const category = Number(req.body?.category);
+        const folderId = typeof req.body?.folderId === "string" ? req.body.folderId : "";
+        return await preferTaxonomyFolderForever({ profileId, category, folderId });
+      } catch (err) {
+        return sendError(reply, err);
+      }
+    },
+  );
 }

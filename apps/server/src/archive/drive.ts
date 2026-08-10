@@ -36,6 +36,10 @@ import {
   personAiStyleFolderName,
   type DriveFolderCandidate,
 } from "./folder-match.js";
+import {
+  buildTaxonomyHealthReport,
+  type TaxonomyHealthReport,
+} from "./taxonomy-health.js";
 
 export type DriveConfig = {
   enabled: boolean;
@@ -545,7 +549,15 @@ function persistFolderMapping(
   category: number,
   folderId: string,
   meta: {
-    source: "cache" | "regex" | "synonym" | "exact" | "reconcile" | "llm" | "created";
+    source:
+      | "cache"
+      | "regex"
+      | "synonym"
+      | "exact"
+      | "reconcile"
+      | "llm"
+      | "created"
+      | "prefer";
     matchedName?: string | null;
     duplicates?: Array<{ id: string; name: string }>;
   },
@@ -826,6 +838,97 @@ export async function uploadFileToDrive(opts: {
     folderId,
     name: file.name,
   };
+}
+
+
+/**
+ * Scan archive-root children for duplicate taxonomy folders.
+ * Read-only on Drive — never creates or deletes folders.
+ */
+export async function scanTaxonomyHealth(
+  profileId?: string | null,
+): Promise<TaxonomyHealthReport> {
+  const cfg = loadDriveConfig(profileId);
+  if (!cfg.enabled || cfg.mode === "none" || !cfg.rootFolderId) {
+    return buildTaxonomyHealthReport({
+      rootFolderId: cfg.rootFolderId,
+      children: [],
+      cachedFolderIds: cfg.folderIds,
+      folderMatchMeta: cfg.profileId
+        ? (readDrivePrefs(cfg.profileId)?.folderMatchMeta ?? {})
+        : {},
+    });
+  }
+
+  const children = await listDriveFoldersInParent(cfg, cfg.rootFolderId);
+  const enriched = await withFileCounts(cfg, children);
+  const prefs = cfg.profileId ? readDrivePrefs(cfg.profileId) : null;
+
+  return buildTaxonomyHealthReport({
+    rootFolderId: cfg.rootFolderId,
+    children: enriched,
+    cachedFolderIds: cfg.folderIds,
+    folderMatchMeta: prefs?.folderMatchMeta ?? {},
+  });
+}
+
+/**
+ * One-click “prefer forever”: cache category → folderId. Never deletes Drive folders.
+ */
+export async function preferTaxonomyFolderForever(opts: {
+  profileId: string;
+  category: number;
+  folderId: string;
+}): Promise<{
+  ok: true;
+  category: number;
+  folderId: string;
+  folderName: string | null;
+  report: TaxonomyHealthReport;
+}> {
+  const category = opts.category;
+  if (!Number.isInteger(category) || category < 1 || category > 10) {
+    throw new Error("category must be an integer 1–10");
+  }
+  const folderId = String(opts.folderId ?? "").trim();
+  if (!folderId) throw new Error("folderId is required");
+
+  const cfg = loadDriveConfig(opts.profileId);
+  if (!cfg.enabled || cfg.mode === "none") {
+    throw new Error("Google Drive is not linked.");
+  }
+
+  let folderName: string | null = null;
+  let duplicates: Array<{ id: string; name: string }> = [];
+  if (cfg.rootFolderId) {
+    const children = await listDriveFoldersInParent(cfg, cfg.rootFolderId);
+    const named = children.find((c) => c.id === folderId);
+    if (!named) {
+      throw new Error(
+        "Folder is not a direct child of the archive root. Pick a taxonomy folder from the health scan.",
+      );
+    }
+    folderName = named.name;
+    const match = matchFolderForCategory(
+      category,
+      children.map((c) => ({ id: c.id, name: c.name })),
+    );
+    if (match) {
+      duplicates = [
+        { id: match.folderId, name: match.folderName },
+        ...match.duplicates.map((d) => ({ id: d.id, name: d.name })),
+      ].filter((d) => d.id !== folderId);
+    }
+  }
+
+  persistFolderMapping(cfg, category, folderId, {
+    source: "prefer",
+    matchedName: folderName,
+    duplicates,
+  });
+
+  const report = await scanTaxonomyHealth(opts.profileId);
+  return { ok: true, category, folderId, folderName, report };
 }
 
 export async function verifyDriveConnection(profileId?: string | null): Promise<{

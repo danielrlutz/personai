@@ -1,4 +1,4 @@
-import {
+﻿import {
   clearStoredProfileId,
   clearStoredSessionToken,
   getStoredApiBaseUrl,
@@ -725,6 +725,29 @@ export interface MemoryFact {
   createdAt?: string;
 }
 
+/** OpenClaw-style personality staging doc under profile memory/. */
+export interface StagingDoc {
+  id: string;
+  filename: string;
+  title: string;
+  description: string;
+  content: string;
+  exists: boolean;
+  charCount: number;
+  injectBudget: number;
+  maxChars: number;
+  hasSubstance: boolean;
+  updatedAt: string | null;
+}
+
+export interface MemorySnippet {
+  source: "fact" | "staging";
+  ref: string;
+  label: string;
+  text: string;
+  score: number;
+}
+
 export interface DriveStatus {
   configured: boolean;
   enabled: boolean;
@@ -759,6 +782,51 @@ export interface ArchiveRefreshResult {
   status?: DriveStatus;
 }
 
+
+export interface TaxonomyHealthFolder {
+  id: string;
+  name: string;
+  fileCount: number;
+  isPersonAiStyle: boolean;
+}
+
+export interface TaxonomyHealthIssue {
+  category: number;
+  label: string;
+  suggested: TaxonomyHealthFolder;
+  duplicates: TaxonomyHealthFolder[];
+  reason: string;
+  cachedFolderId: string | null;
+  cachedMatchesSuggested: boolean;
+}
+
+export interface TaxonomyHealthMapping {
+  category: number;
+  label: string;
+  folderId: string | null;
+  folderName: string | null;
+  source: string | null;
+  hasDuplicates: boolean;
+}
+
+export interface TaxonomyHealthReport {
+  rootFolderId: string | null;
+  scannedAt: string;
+  childFolderCount: number;
+  issues: TaxonomyHealthIssue[];
+  mappings: TaxonomyHealthMapping[];
+  neverDeletesFolders: true;
+  note: string;
+}
+
+export interface TaxonomyHealthPreferResult {
+  ok: true;
+  category: number;
+  folderId: string;
+  folderName: string | null;
+  report: TaxonomyHealthReport;
+}
+
 export interface DailyBriefing {
   id: string;
   briefingDate: string;
@@ -768,19 +836,58 @@ export interface DailyBriefing {
   tier?: string;
 }
 
+export type IngestLanePhase =
+  | "queued"
+  | "waiting_vision"
+  | "rasterize"
+  | "ocr"
+  | "split"
+  | "await_confirm"
+  | "cancelling"
+  | "failed"
+  | "done";
+
+export interface IngestLaneSummary {
+  visionHolder: string | null;
+  visionWaiting: number;
+  activeCount: number;
+  awaitConfirmCount: number;
+  failedCount: number;
+}
+
 export interface IngestionJob {
   id: string;
   status: "QUEUED" | "PROCESSING" | "COMPLETED" | "FAILED";
   documentId: string;
   errorMessage?: string | null;
   pausedReason?: string | null;
+  progressPhase?: string | null;
+  progressDetail?: string | null;
+  /** Derived lane phase from /ingest/queue */
+  phase?: IngestLanePhase;
+  phaseDetail?: string | null;
+  awaitingConfirm?: boolean;
+  queuePosition?: number | null;
+  startedAt?: string | null;
+  completedAt?: string | null;
   createdAt: string;
   document: {
     id: string;
     filename: string;
     mimeType: string;
     fileSize: number;
+    confirmedAt?: string | null;
   };
+}
+
+export interface IngestQueueResponse {
+  jobs: IngestionJob[];
+  vram?: {
+    holder: string | null;
+    waiting: number;
+    pausedReason: string | null;
+  };
+  lane?: IngestLaneSummary;
 }
 
 export interface BudgetCategoryOverview {
