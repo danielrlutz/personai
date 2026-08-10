@@ -23,6 +23,7 @@ import {
 } from "../ollama/client.js";
 import { vramLock } from "../ollama/vram-lock.js";
 import { ingestionEvents } from "../ollama/ingestion-worker.js";
+import { loadPendingConfirmDocIds, withDerivedPhase } from "../ingest/progress.js";
 import {
   getOrCreateTodayBriefing,
   regenerateBriefing,
@@ -188,6 +189,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
           status: "QUEUED",
           ollamaModel: config.visionModel,
           ollamaHost: host,
+          progressPhase: "queued",
         },
       });
 
@@ -207,15 +209,39 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     }
   });
 
+  async function ingestQueueSnapshot(prisma: Awaited<ReturnType<typeof getPrisma>>) {
+    const jobs = await prisma.ingestionJob.findMany({
+      orderBy: { createdAt: "desc" },
+      take: 50,
+      include: { document: true },
+    });
+    const pendingIds = await loadPendingConfirmDocIds(
+      prisma,
+      jobs.map((j) => j.documentId),
+    );
+    const enriched = jobs.map((j) => withDerivedPhase(j, pendingIds));
+    const vram = vramLock.getState();
+    return {
+      jobs: enriched,
+      vram,
+      lane: {
+        visionHolder: vram.holder,
+        visionWaiting: vram.waiting,
+        activeCount: enriched.filter((j) =>
+          ["queued", "waiting_vision", "rasterize", "ocr", "split", "cancelling"].includes(
+            j.phase,
+          ),
+        ).length,
+        awaitConfirmCount: enriched.filter((j) => j.phase === "await_confirm").length,
+        failedCount: enriched.filter((j) => j.phase === "failed").length,
+      },
+    };
+  }
+
   app.get("/ingest/queue", async (req, reply) => {
     try {
       const { prisma } = await withPrisma(req);
-      const jobs = await prisma.ingestionJob.findMany({
-        orderBy: { createdAt: "desc" },
-        take: 50,
-        include: { document: true },
-      });
-      return { jobs, vram: vramLock.getState() };
+      return await ingestQueueSnapshot(prisma);
     } catch (err) {
       return sendError(reply, err);
     }
@@ -229,12 +255,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       const send = async () => {
         try {
           const { prisma } = await withPrisma(req);
-          const jobs = await prisma.ingestionJob.findMany({
-            orderBy: { createdAt: "desc" },
-            take: 50,
-            include: { document: true },
-          });
-          sseWrite(reply, "queue", { jobs, vram: vramLock.getState() });
+          sseWrite(reply, "queue", await ingestQueueSnapshot(prisma));
         } catch {
           // ignore
         }
