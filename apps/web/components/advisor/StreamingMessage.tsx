@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { messageVariants } from "@/lib/motion";
 import type { ChatMessageStatus } from "./useChatStream";
+import { ChatMarkdown } from "./ChatMarkdown";
 
 interface StreamingMessageProps {
   role: "user" | "assistant";
@@ -14,6 +15,8 @@ interface StreamingMessageProps {
   status?: ChatMessageStatus;
   error?: string;
   onRetry?: () => void;
+  /** When false, show plain text (markdown source). Default true. */
+  formatted?: boolean;
 }
 
 export function StreamingMessage({
@@ -23,6 +26,7 @@ export function StreamingMessage({
   status,
   error,
   onRetry,
+  formatted = true,
 }: StreamingMessageProps) {
   const reduce = useReducedMotion();
   const failed = role === "user" && status === "failed";
@@ -44,15 +48,27 @@ export function StreamingMessage({
         {pending ? <span className="ml-2 text-foreground/45">Sending…</span> : null}
         {failed ? <span className="ml-2 text-destructive">Not sent</span> : null}
       </p>
-      <div className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
-        {content}
-        {streaming && (
-          <span
-            className="ml-0.5 inline-block h-[1.05em] w-[2px] translate-y-[2px] bg-primary align-baseline motion-safe:animate-pulse"
-            aria-hidden
-          />
-        )}
-      </div>
+      {formatted && content.trim() ? (
+        <div>
+          <ChatMarkdown content={content} />
+          {streaming ? (
+            <span
+              className="ml-0.5 inline-block h-[1.05em] w-[2px] translate-y-[2px] bg-primary align-baseline motion-safe:animate-pulse"
+              aria-hidden
+            />
+          ) : null}
+        </div>
+      ) : (
+        <div className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
+          {content}
+          {streaming ? (
+            <span
+              className="ml-0.5 inline-block h-[1.05em] w-[2px] translate-y-[2px] bg-primary align-baseline motion-safe:animate-pulse"
+              aria-hidden
+            />
+          ) : null}
+        </div>
+      )}
       {failed ? (
         <div className="mt-3 flex min-w-0 flex-wrap items-center gap-2">
           {error ? (

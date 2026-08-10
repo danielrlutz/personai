@@ -13,6 +13,11 @@ import { SpecialistPicker } from "./SpecialistPicker";
 import { CareerPdfPanel } from "./CareerPdfPanel";
 import { ForgeQaPanel } from "./ForgeQaPanel";
 import { apiGet, apiPost, type DriveStatus, type MemoryFact } from "@/lib/api-client";
+import {
+  readChatMarkdownPref,
+  writeChatMarkdownPref,
+  type ChatMarkdownMode,
+} from "@/lib/chat-markdown-pref";
 import { SPECIALIST_FALLBACK, type SpecialistMeta } from "@/lib/specialists";
 import { toast } from "@/lib/toast";
 import Link from "next/link";
@@ -36,6 +41,7 @@ export function TeamChat({ initialSpecialist = "secretary" }: TeamChatProps) {
   const [rememberNote, setRememberNote] = useState<string | null>(null);
   const [rememberSaving, setRememberSaving] = useState(false);
   const [drive, setDrive] = useState<DriveStatus | null>(null);
+  const [markdownMode, setMarkdownMode] = useState<ChatMarkdownMode>("formatted");
   const { messages, streaming, error, sendMessage, retryMessage, clear } = useChatStream({
     specialist,
   });
@@ -43,6 +49,11 @@ export function TeamChat({ initialSpecialist = "secretary" }: TeamChatProps) {
   const showForgeQa = specialist === "forge" || specialist === "qa_auditor";
   const showStylistPhoto = specialist === "stylist";
   const showSidePanel = showCareerPdf || showForgeQa;
+  const formatted = markdownMode === "formatted";
+
+  useEffect(() => {
+    setMarkdownMode(readChatMarkdownPref());
+  }, []);
 
   useEffect(() => {
     void apiGet<{ specialists: SpecialistMeta[] }>("/specialists", { silent: true })
@@ -54,6 +65,14 @@ export function TeamChat({ initialSpecialist = "secretary" }: TeamChatProps) {
       .then(setDrive)
       .catch(() => undefined);
   }, []);
+
+  const toggleMarkdownMode = () => {
+    setMarkdownMode((prev) => {
+      const next: ChatMarkdownMode = prev === "formatted" ? "raw" : "formatted";
+      writeChatMarkdownPref(next);
+      return next;
+    });
+  };
 
   useEffect(() => {
     if (initialSpecialist) setSpecialist(initialSpecialist);
@@ -176,6 +195,16 @@ export function TeamChat({ initialSpecialist = "secretary" }: TeamChatProps) {
               </span>
             </CardTitle>
             <div className="flex shrink-0 items-center gap-0.5 sm:gap-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={toggleMarkdownMode}
+                title={formatted ? "Show markdown source" : "Show formatted markdown"}
+                aria-pressed={!formatted}
+              >
+                <span className="sm:hidden">{formatted ? "Raw" : "Fmt"}</span>
+                <span className="hidden sm:inline">{formatted ? "View Raw" : "Formatted"}</span>
+              </Button>
               <Button variant="ghost" size="sm" onClick={openRemember} disabled={streaming}>
                 <BookmarkPlus className="h-4 w-4" />
                 <span className="hidden sm:inline">Remember</span>
@@ -243,6 +272,7 @@ export function TeamChat({ initialSpecialist = "secretary" }: TeamChatProps) {
                     streaming={isStreamingAssistant}
                     status={msg.status}
                     error={msg.error}
+                    formatted={formatted}
                     onRetry={
                       msg.role === "user" && msg.status === "failed"
                         ? () => void retryMessage(msg.outboxOpId ?? msg.id)
