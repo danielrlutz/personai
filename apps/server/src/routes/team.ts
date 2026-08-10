@@ -32,6 +32,13 @@ import {
   ARCHIVE_REFRESHED_KEY,
   ARCHIVE_TAXONOMY_KEY,
 } from "../archive/init-context.js";
+import {
+  citationModeInstructions,
+  collectReplyCitations,
+  formatCitableDocsBlock,
+  listCitableDocuments,
+  type CitableDoc,
+} from "../memory/citable-docs.js";
 import { formatSkillsForPrompt, listSkillCatalog } from "../skills/registry.js";
 import { sendError, sseStart, sseWrite, withPrisma } from "./helpers.js";
 
@@ -43,6 +50,8 @@ type ChatBody = {
   /** Raw base64 (optionally data-URL) for Stylist photo analysis. */
   imageBase64?: string;
   imageMimeType?: string;
+  /** Strict grounding: cite only from local archive list (Legal / CFO / Medical). */
+  citeFromArchive?: boolean;
 };
 
 type ForgeQaBody = {
@@ -80,8 +89,9 @@ export async function registerTeamRoutes(app: FastifyInstance): Promise<void> {
     prisma: Awaited<ReturnType<typeof withPrisma>>["prisma"],
     specialistId: string,
     sessionSummary: string | null | undefined,
+    opts?: { citeFromArchive?: boolean },
   ) {
-    const [ceo, facts, liveOps, archiveFacts] = await Promise.all([
+    const [ceo, facts, liveOps, archiveFacts, citables] = await Promise.all([
       getCeoProfileCard(prisma),
       listRecentMemoryFacts(prisma),
       buildSlimLiveOps(prisma, specialistId),
@@ -90,6 +100,7 @@ export async function registerTeamRoutes(app: FastifyInstance): Promise<void> {
           key: { in: [ARCHIVE_INDEX_KEY, ARCHIVE_TAXONOMY_KEY, ARCHIVE_REFRESHED_KEY] },
         },
       }),
+      listCitableDocuments(prisma),
     ]);
     const drive = driveStatus();
     const archiveMap = new Map(archiveFacts.map((f) => [f.key, f.value]));
@@ -100,6 +111,7 @@ export async function registerTeamRoutes(app: FastifyInstance): Promise<void> {
       index: archiveMap.get(ARCHIVE_INDEX_KEY) ?? null,
       taxonomy: archiveMap.get(ARCHIVE_TAXONOMY_KEY) ?? null,
       refreshedAt: archiveMap.get(ARCHIVE_REFRESHED_KEY) ?? null,
+      citablesBlock: formatCitableDocsBlock(citables),
     };
     return {
       userCare: formatUserCareContext({
@@ -108,9 +120,11 @@ export async function registerTeamRoutes(app: FastifyInstance): Promise<void> {
         liveOps,
         sessionSummary,
         archive,
+        extraInstructions: citationModeInstructions(Boolean(opts?.citeFromArchive)),
       }),
       liveOps,
       archive,
+      citables,
     };
   }
 
@@ -144,11 +158,14 @@ export async function registerTeamRoutes(app: FastifyInstance): Promise<void> {
       });
     }
 
-    const { userCare, liveOps, archive } = await loadUserCare(
+    const citeFromArchive = Boolean(body.citeFromArchive);
+    const { userCare, liveOps, archive, citables } = await loadUserCare(
       prisma,
       specialistId,
       session.sessionSummary,
+      { citeFromArchive },
     );
+    const citableDocs: CitableDoc[] = citables;
 
     const userText =
       body.message?.trim() ||
@@ -159,7 +176,7 @@ export async function registerTeamRoutes(app: FastifyInstance): Promise<void> {
         sessionId: session.id,
         role: "USER",
         content: hasImage ? `${userText}\n\n[photo attached]` : userText,
-        context: JSON.stringify({ ...liveOps, hasImage }),
+        context: JSON.stringify({ ...liveOps, hasImage, citeFromArchive }),
       },
     });
 
@@ -170,6 +187,8 @@ export async function registerTeamRoutes(app: FastifyInstance): Promise<void> {
       vram: vramLock.getState(),
       archiveLinked: archive.linked,
       archiveReady: archive.ready,
+      citeFromArchive,
+      citableCount: citables.length,
     });
 
     let full = "";
@@ -267,12 +286,15 @@ export async function registerTeamRoutes(app: FastifyInstance): Promise<void> {
         data: { updatedAt: new Date(), persona: specialistId },
       });
       await refreshSessionSummaryIfNeeded(prisma, session.id);
+      const citations = collectReplyCitations(full, citableDocs);
       sseWrite(reply, "done", {
         sessionId: session.id,
         content: full,
         specialist: specialistId,
         model: usedModel,
         hadVision: Boolean(visionNotes),
+        citeFromArchive,
+        citations,
       });
     } catch (err) {
       const message = humanizeOllamaError(err, ollamaHost || undefined, usedModel);

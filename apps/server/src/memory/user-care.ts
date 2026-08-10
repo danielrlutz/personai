@@ -198,20 +198,31 @@ export type ArchiveCareContext = {
   index: string | null;
   taxonomy: string | null;
   refreshedAt: string | null;
+  /** Preformatted local citable docs (+ citation rules). */
+  citablesBlock?: string | null;
 };
 
 export function formatArchiveCareBlock(archive: ArchiveCareContext): string {
   if (!archive.linked) {
-    return `Archive context: NOT AVAILABLE. Google Drive is not linked. Tell the user plainly that you do not have their document archive context yet. Still help with general personal advice in your role. Suggest Settings → Link Google Drive when archive/filing is needed.`;
+    const bits = [
+      `Archive context: NOT AVAILABLE. Google Drive is not linked. Tell the user plainly that you do not have their document archive context yet. Still help with general personal advice in your role. Suggest Settings → Link Google Drive when archive/filing is needed.`,
+      archive.citablesBlock?.trim() || null,
+    ].filter(Boolean);
+    return bits.join("\n\n");
   }
   if (!archive.ready || !archive.index?.trim()) {
-    return `Archive context: Drive is linked, but the archive index has not been built yet (or is empty). Say so if the user asks about filed documents. Suggest Settings → Refresh archive context.`;
+    const bits = [
+      `Archive context: Drive is linked, but the archive index has not been built yet (or is empty). Say so if the user asks about filed documents. Suggest Settings → Refresh archive context.`,
+      archive.citablesBlock?.trim() || null,
+    ].filter(Boolean);
+    return bits.join("\n\n");
   }
   const bits = [
     `Archive context: READY (Drive linked).`,
     archive.refreshedAt ? `Refreshed: ${archive.refreshedAt}` : null,
     archive.taxonomy ? `Taxonomy folders:\n${archive.taxonomy.slice(0, 800)}` : null,
     `Index:\n${archive.index.slice(0, 1200)}`,
+    archive.citablesBlock?.trim() || null,
   ].filter(Boolean);
   return bits.join("\n");
 }
@@ -223,6 +234,8 @@ export function formatUserCareContext(opts: {
   liveOps: SlimLiveOps;
   sessionSummary?: string | null;
   archive?: ArchiveCareContext | null;
+  /** Extra system instructions (e.g. cite-from-archive mode). */
+  extraInstructions?: string | null;
 }): string {
   const blocks = [
     `Profile card: ${compactCeoLine(opts.ceo)}`,
@@ -234,6 +247,9 @@ export function formatUserCareContext(opts: {
   ];
   if (opts.sessionSummary?.trim()) {
     blocks.push(`Session summary:\n${opts.sessionSummary.trim().slice(0, 800)}`);
+  }
+  if (opts.extraInstructions?.trim()) {
+    blocks.push(opts.extraInstructions.trim());
   }
   return blocks.join("\n\n");
 }

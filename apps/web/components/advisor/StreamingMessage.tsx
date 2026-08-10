@@ -7,6 +7,13 @@ import { cn } from "@/lib/utils";
 import { messageVariants } from "@/lib/motion";
 import type { ChatMessageStatus } from "./useChatStream";
 import { ChatMarkdown } from "./ChatMarkdown";
+import { CitationChips } from "@/components/team/CitationChips";
+import {
+  collectDisplayCitations,
+  stripDocCitations,
+  type CitableCatalogEntry,
+  type DocCitation,
+} from "@/lib/chat-citations";
 
 interface StreamingMessageProps {
   role: "user" | "assistant";
@@ -17,6 +24,10 @@ interface StreamingMessageProps {
   onRetry?: () => void;
   /** When false, show plain text (markdown source). Default true. */
   formatted?: boolean;
+  /** Local archive catalog for filename-mention chips. */
+  citableCatalog?: CitableCatalogEntry[];
+  previewBusyId?: string | null;
+  onOpenCitation?: (citation: DocCitation) => void;
 }
 
 export function StreamingMessage({
@@ -27,10 +38,18 @@ export function StreamingMessage({
   error,
   onRetry,
   formatted = true,
+  citableCatalog,
+  previewBusyId,
+  onOpenCitation,
 }: StreamingMessageProps) {
   const reduce = useReducedMotion();
   const failed = role === "user" && status === "failed";
   const pending = role === "user" && status === "pending";
+  const citations =
+    role === "assistant" ? collectDisplayCitations(content, citableCatalog) : [];
+  // Formatted: strip markers so markdown stays clean. Raw: keep markers (true source).
+  const displayContent =
+    role === "assistant" && formatted ? stripDocCitations(content) : content;
 
   return (
     <motion.div
@@ -48,9 +67,9 @@ export function StreamingMessage({
         {pending ? <span className="ml-2 text-foreground/45">Sending…</span> : null}
         {failed ? <span className="ml-2 text-destructive">Not sent</span> : null}
       </p>
-      {formatted && content.trim() ? (
+      {formatted && displayContent.trim() ? (
         <div>
-          <ChatMarkdown content={content} />
+          <ChatMarkdown content={displayContent} />
           {streaming ? (
             <span
               className="ml-0.5 inline-block h-[1.05em] w-[2px] translate-y-[2px] bg-primary align-baseline motion-safe:animate-pulse"
@@ -60,7 +79,7 @@ export function StreamingMessage({
         </div>
       ) : (
         <div className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
-          {content}
+          {displayContent}
           {streaming ? (
             <span
               className="ml-0.5 inline-block h-[1.05em] w-[2px] translate-y-[2px] bg-primary align-baseline motion-safe:animate-pulse"
@@ -69,6 +88,13 @@ export function StreamingMessage({
           ) : null}
         </div>
       )}
+      {role === "assistant" && onOpenCitation ? (
+        <CitationChips
+          citations={citations}
+          busyId={previewBusyId}
+          onOpen={onOpenCitation}
+        />
+      ) : null}
       {failed ? (
         <div className="mt-3 flex min-w-0 flex-wrap items-center gap-2">
           {error ? (

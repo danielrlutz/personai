@@ -1,8 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { createPortal } from "react-dom";
-import { Eye, ExternalLink, ShieldCheck, X } from "lucide-react";
+import { Eye, ShieldCheck, X } from "lucide-react";
 import {
   apiGet,
   apiGetBlob,
@@ -28,8 +27,11 @@ import { Input } from "@/components/ui/input";
 import {
   DriveJobPulseStrip,
   trackDriveJobPulse,
-  type ServerJobDto,
 } from "@/components/confirm/DriveJobPulse";
+import {
+  DocumentPreviewModal,
+  type DocumentPreviewState,
+} from "@/components/shared/DocumentPreviewModal";
 
 interface ConfirmGateProps {
   refreshKey?: number;
@@ -57,95 +59,6 @@ function documentIdFromConfirmation(c: PendingConfirmation): string | null {
   return null;
 }
 
-type PreviewState = {
-  url: string;
-  contentType: string;
-  filename: string;
-  documentId: string;
-};
-
-function DocumentPreviewModal({
-  preview,
-  onClose,
-}: {
-  preview: PreviewState;
-  onClose: () => void;
-}) {
-  const isImage = preview.contentType.startsWith("image/");
-  const isPdf =
-    preview.contentType.includes("pdf") || preview.filename.toLowerCase().endsWith(".pdf");
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
-  if (typeof document === "undefined") return null;
-
-  return createPortal(
-    <div
-      className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 p-3 sm:p-6"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Document preview"
-      onClick={onClose}
-    >
-      <div
-        className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-border bg-background shadow-xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
-          <p className="min-w-0 truncate font-mono text-xs text-muted-foreground">
-            {preview.filename}
-          </p>
-          <div className="flex shrink-0 gap-1">
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => window.open(preview.url, "_blank", "noopener,noreferrer")}
-            >
-              <ExternalLink className="mr-1 h-3.5 w-3.5" />
-              Open tab
-            </Button>
-            <Button size="sm" variant="ghost" onClick={onClose} aria-label="Close preview">
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-        <div className="min-h-0 flex-1 overflow-auto bg-muted/30">
-          {isImage ? (
-            <img
-              src={preview.url}
-              alt={preview.filename}
-              className="mx-auto max-h-[80vh] w-auto max-w-full object-contain"
-            />
-          ) : isPdf ? (
-            <iframe
-              title={preview.filename}
-              src={preview.url}
-              className="h-[80vh] w-full border-0 bg-white"
-            />
-          ) : (
-            <div className="space-y-3 p-6 text-sm">
-              <p>No in-app preview for this file type ({preview.contentType || "unknown"}).</p>
-              <Button
-                size="sm"
-                onClick={() => window.open(preview.url, "_blank", "noopener,noreferrer")}
-              >
-                Open in new tab
-              </Button>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>,
-    document.body,
-  );
-}
-
 export function ConfirmGate({
   refreshKey = 0,
   onResolved,
@@ -156,7 +69,7 @@ export function ConfirmGate({
   const [drafts, setDrafts] = useState<Record<string, ArchiveDraft>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
   const [previewBusyId, setPreviewBusyId] = useState<string | null>(null);
-  const [preview, setPreview] = useState<PreviewState | null>(null);
+  const [preview, setPreview] = useState<DocumentPreviewState | null>(null);
   const [error, setError] = useState<string | null>(null);
   /** Drive upload ServerJob ids returned by confirm (pulse strip). */
   const [driveJobIds, setDriveJobIds] = useState<string[]>([]);

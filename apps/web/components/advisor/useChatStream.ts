@@ -230,7 +230,14 @@ export function useChatStream({ specialist, onSessionId }: UseChatStreamOptions)
   }, []);
 
   const sendMessage = useCallback(
-    async (text: string, options?: { image?: File | Blob; imageFilename?: string }) => {
+    async (
+      text: string,
+      options?: {
+        image?: File | Blob;
+        imageFilename?: string;
+        citeFromArchive?: boolean;
+      },
+    ) => {
       const trimmed = text.trim();
       if (!trimmed && !options?.image) return;
       // Allow queueing even if another chat op is inflight — they stack in outbox.
@@ -241,6 +248,7 @@ export function useChatStream({ specialist, onSessionId }: UseChatStreamOptions)
         sessionId: sessionIdRef.current,
         image: options?.image,
         imageFilename: options?.imageFilename,
+        citeFromArchive: options?.citeFromArchive,
       });
     },
     [specialist],
