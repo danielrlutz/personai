@@ -411,7 +411,9 @@ cd /etc/personaios
 ```bash
 # Containers up (api + web; NO ollama in compose project)
 COMPOSE_PROFILES= docker compose ps
-# Expect: api Up, web Up, ports 0.0.0.0:4000 and 0.0.0.0:3000
+# Expect: api Up, web Up, ports 0.0.0.0:4000->4000 and 0.0.0.0:3000->80
+# If api shows only "4000/tcp" (no host mapping), Serve :8443 cannot reach the API.
+# Fix: git pull + recreate api (docker-compose.prod.yml always publishes 4000:4000).
 
 # API health
 curl -sS http://127.0.0.1:4000/health
@@ -453,9 +455,31 @@ curl -sS -o /dev/null -w 'web-ts %{http_code}\n' http://debi9.tail8175e6.ts.net:
 | Stale phone cache / Service Worker | Delete site data; reinstall PWA |
 | Profile not unlocked (401) | `/profiles/` → enter password |
 | API down or loopback-only bind | `docker compose ps`; API must publish `0.0.0.0:4000` |
+| API crash-loop (`curl` → connection reset; container “Up Less than a second”) | See below — usually missing `--experimental-sqlite` in API image |
 | Settings override wrong | Settings → API URL without trailing slash |
 
 Run: `./scripts/vps-verify.sh debi9.tail8175e6.ts.net`
+
+### API `:4000` connection reset / crash-loop
+
+Symptom: port published (`0.0.0.0:4000->4000`) but `curl http://127.0.0.1:4000/health` → **Recv failure: Connection reset by peer**. Container restarts every second.
+
+Cause (post drive-knowledge): `node:sqlite` needs `--experimental-sqlite`. If `Dockerfile.api` CMD is bare `node dist/index.js`, the process dies before listen.
+
+```bash
+cd /etc/personaios
+docker compose logs api --tail 100
+# Expect: ERR_UNKNOWN_BUILTIN_MODULE / node:sqlite  OR exit before "Server listening"
+
+git pull
+# rebuild api with NODE_OPTIONS / --experimental-sqlite CMD
+docker compose build --no-cache api && docker compose up -d --force-recreate api
+# wait for: Server listening on http://0.0.0.0:4000
+sleep 3; curl -v http://127.0.0.1:4000/health
+docker inspect personaios-api-1 --format '{{.State.Status}} {{.State.ExitCode}} {{.RestartCount}}'
+```
+
+Profile `21deba4b-…` / `profiles.json` are untouched by this rebuild (data volume / `DATA_DIR` bind).
 
 ### Install stops silently at "Scanning for Ollama"
 

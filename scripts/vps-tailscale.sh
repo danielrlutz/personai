@@ -424,6 +424,24 @@ if echo "$SERVICES" | grep -qi '^ollama$'; then
   exit 1
 fi
 
+# API must publish host :4000 (Tailscale Serve → 127.0.0.1:4000). Fail before rebuild if missing.
+API_PUBLISH="$(COMPOSE_FILE= COMPOSE_PROFILES= docker compose "${COMPOSE_BASE[@]}" config 2>/dev/null \
+  | awk '
+      /^  api:/ { in_api=1; next }
+      in_api && /^  [a-z]/ { in_api=0 }
+      in_api && /published:/ { pub=$2; gsub(/["]/,"",pub); print pub }
+      in_api && /[0-9.]+:[0-9]+:4000/ { print }
+    ' || true)"
+if ! echo "$API_PUBLISH" | grep -qE '4000'; then
+  echo "x Resolved compose does NOT publish API host port 4000" >&2
+  echo "  Ensure docker-compose.yml / docker-compose.prod.yml / override map 0.0.0.0:4000:4000" >&2
+  echo "  Files: ${COMPOSE_BASE[*]}" >&2
+  COMPOSE_FILE= COMPOSE_PROFILES= docker compose "${COMPOSE_BASE[@]}" config 2>/dev/null \
+    | sed -n '/^  api:/,/^  [a-z]/p' | head -n 40 >&2 || true
+  exit 1
+fi
+echo "› API host publish includes :4000 ✓"
+
 # ---------------------------------------------------------------------------
 # Build + up
 # ---------------------------------------------------------------------------
@@ -493,10 +511,20 @@ echo "  body snip: ${body_snip:-(empty/404)}"
 
 if [[ "$ok_api" -ne 1 ]]; then
   echo "x API health failed on :4000" >&2
+  echo "  docker ps --format '{{.Names}} {{.Ports}}' | grep -E 'api|4000' || true" >&2
+  docker ps --format '{{.Names}} {{.Ports}}' 2>/dev/null | grep -E 'api|4000' || true
   exit 1
 fi
 if [[ "$ok_web" -ne 1 ]]; then
   echo "x Web failed on :3000" >&2
+  exit 1
+fi
+# Confirm Docker actually published (not just container-internal 4000/tcp).
+API_PORTS="$(docker ps --format '{{.Names}} {{.Ports}}' 2>/dev/null | grep -E 'api' || true)"
+if ! echo "$API_PORTS" | grep -qE '0\.0\.0\.0:4000|->4000'; then
+  echo "x API container is up but host :4000 is NOT published:" >&2
+  echo "  $API_PORTS" >&2
+  echo "  Recreate: docker compose ${COMPOSE_BASE[*]} up -d --force-recreate api" >&2
   exit 1
 fi
 

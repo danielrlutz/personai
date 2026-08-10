@@ -3,6 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.api
+    # Dockerfile.api CMD includes --experimental-sqlite (drive-knowledge / node:sqlite).
     ports:
       # Explicit 0.0.0.0 so Tailscale/phone can reach API (not 127.0.0.1-only).
       - "0.0.0.0:4000:4000"

@@ -3,8 +3,14 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.api
+    # Always publish for Tailscale Serve → 127.0.0.1:4000 and MagicDNS :4000.
+    # Do not rely on override alone — missing publish breaks Serve :8443.
+    ports:
+      - "0.0.0.0:${PORT:-4000}:4000"
     volumes:
-      - personai_data:/app/data
+      # Bind DATA_DIR (not a named volume) so host ./data and container stay aligned.
+      # Named personai_data volumes can shadow real profiles on the host path.
+      - ${DATA_DIR:-./data}:/app/data
     environment:
       PORT: "4000"
       DATA_DIR: /app/data
@@ -30,6 +36,9 @@ services:
       args:
         # Build-time bake-in. Tailscale/phone: http://<host>.<tailnet>.ts.net:4000
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://api.localhost}
+    # Tailscale Serve / phone HTTP path (Caddy still owns 80/443 for public domain TLS).
+    ports:
+      - "${APP_PORT:-3000}:80"
     restart: unless-stopped
     depends_on:
       - api
@@ -49,6 +58,5 @@ services:
     restart: unless-stopped
 
 volumes:
-  personai_data:
   caddy_data:
   caddy_config:

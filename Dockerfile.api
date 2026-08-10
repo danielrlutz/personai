@@ -33,7 +33,10 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=4000
 ENV DATA_DIR=/app/data
+# node:sqlite (drive-knowledge) requires the flag — package.json "start" has it;
+# Docker CMD must match or the API crash-loops before listen (curl → connection reset).
+ENV NODE_OPTIONS=--experimental-sqlite
 COPY --from=build /deploy ./
 RUN mkdir -p /app/data
 EXPOSE 4000
-CMD ["node", "dist/index.js"]
+CMD ["node", "--experimental-sqlite", "dist/index.js"]
