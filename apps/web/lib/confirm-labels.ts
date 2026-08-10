@@ -6,6 +6,7 @@ const ACTION_LABELS: Record<string, string> = {
   "qr.mark_paid": "Mark bill paid",
   "qr.bill": "QR-Rechnung",
   "career.pdf": "Career PDF",
+  "jahresakte.export": "Jahresakte year pack",
   "export.generate": "Generate export",
   "document.upload": "Document upload",
   "forge.ship": "Ship code",
