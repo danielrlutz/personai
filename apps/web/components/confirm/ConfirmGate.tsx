@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { ShieldCheck } from "lucide-react";
 import {
   apiGet,
@@ -10,7 +11,12 @@ import {
   type PendingConfirmation,
 } from "@/lib/api-client";
 import { buildArchiveName, type ArchiveDraft } from "@/lib/archive-naming";
+import {
+  fristKitProposeBody,
+  teamHrefFromConfirmResult,
+} from "@/lib/frist-kit";
 import { toast } from "@/lib/toast";
+import { FristKitButton, FristKitHint } from "./FristKitActions";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ConfirmCarousel } from "./ConfirmCarousel";
@@ -37,6 +43,7 @@ export function ConfirmGate({
   compact,
   showEmpty = false,
 }: ConfirmGateProps) {
+  const router = useRouter();
   const narrow = useNarrowViewport();
   const [items, setItems] = useState<PendingConfirmation[]>([]);
   const [drafts, setDrafts] = useState<Record<string, ArchiveDraft>>({});
@@ -109,24 +116,21 @@ export function ConfirmGate({
     }
   };
 
-  const viewDocument = async (c: PendingConfirmation) => {
-    const documentId = documentIdFromConfirmation(c);
-    if (!documentId) {
-      toast.error("No document linked to this confirmation.");
-      return;
-    }
-    setPreviewBusyId(c.id);
+  const openDocumentPreview = async (
+    documentId: string,
+    opts?: { busyKey?: string; fallbackName?: string },
+  ) => {
+    const busyKey = opts?.busyKey ?? documentId;
+    setPreviewBusyId(busyKey);
     try {
       const result = await apiGetBlob(`/documents/${documentId}/file`, { silent: true });
       const url = URL.createObjectURL(result.blob);
-      const draft = drafts[c.id];
-      const fallbackName = draft ? buildArchiveName(draft) : documentId;
       setPreview((prev) => {
         if (prev?.url) URL.revokeObjectURL(prev.url);
         return {
           url,
           contentType: result.contentType,
-          filename: result.filename || fallbackName,
+          filename: result.filename || opts?.fallbackName || documentId,
           documentId,
         };
       });
@@ -139,6 +143,30 @@ export function ConfirmGate({
     } finally {
       setPreviewBusyId(null);
     }
+  };
+
+  const viewDocument = async (c: PendingConfirmation) => {
+    const documentId = documentIdFromConfirmation(c);
+    if (!documentId) {
+      toast.error("No document linked to this confirmation.");
+      return;
+    }
+    const draft = drafts[c.id];
+    await openDocumentPreview(documentId, {
+      busyKey: c.id,
+      fallbackName: draft ? buildArchiveName(draft) : documentId,
+    });
+  };
+
+  const viewExistingDocument = async (
+    confirmationId: string,
+    documentId: string,
+    archiveName?: string,
+  ) => {
+    await openDocumentPreview(documentId, {
+      busyKey: confirmationId,
+      fallbackName: archiveName || documentId,
+    });
   };
 
   const applyEntityAcrossRemaining = async (
@@ -177,6 +205,27 @@ export function ConfirmGate({
     );
 
     toast.success(`Entity “${trimmed}” applied to ${remaining.length} remaining.`);
+  };
+
+  const queueFristKit = async (c: PendingConfirmation) => {
+    const draft = drafts[c.id];
+    const body = fristKitProposeBody(c, {
+      archiveName: draft ? buildArchiveName(draft) : undefined,
+    });
+    if (!body) {
+      toast.error("No Frist date on this confirm — add a deadline first.");
+      return;
+    }
+    setBusyId(c.id);
+    try {
+      await apiPost("/legal/frist-kit/propose", body, { silent: true });
+      await load();
+      toast.success("Frist kit queued — Confirm to create Legal task + stage calendar.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not queue Frist kit");
+    } finally {
+      setBusyId(null);
+    }
   };
 
   const decide = async (id: string, decision: "confirm" | "reject") => {
@@ -260,8 +309,8 @@ export function ConfirmGate({
           </CardTitle>
           <CardDescription className="text-xs">
             {useCarousel
-              ? "Swipe the stack: View file, edit naming, then Confirm or Decline. Optional same Entity for a Genius Scan batch."
-              : "View the file, edit archive naming, then Confirm. Confirm writes Drive/ledger; Decline leaves external systems unchanged. Calendar proposes stage locally until Google Calendar write is wired."}
+              ? "Swipe the stack: View file, edit naming, then Confirm or Decline. Likely duplicates offer Open existing / File anyway — never auto-skipped."
+              : "View the file, edit archive naming, then Confirm. Likely already-filed matches offer Open existing or File anyway — never auto-skipped."}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -285,6 +334,9 @@ export function ConfirmGate({
               }
               onSaveDraft={(id) => void saveDraft(id)}
               onView={(c) => void viewDocument(c)}
+              onOpenExisting={(confirmationId, documentId, archiveName) =>
+                void viewExistingDocument(confirmationId, documentId, archiveName)
+              }
               onConfirm={(id) => void decide(id, "confirm")}
               onDecline={(id) => void decide(id, "reject")}
             />
@@ -313,6 +365,9 @@ export function ConfirmGate({
                       }
                       onSaveDraft={() => void saveDraft(c.id)}
                       onView={() => void viewDocument(c)}
+                      onOpenExisting={(documentId, archiveName) =>
+                        void viewExistingDocument(c.id, documentId, archiveName)
+                      }
                       onConfirm={() => void decide(c.id, "confirm")}
                       onDecline={() => void decide(c.id, "reject")}
                     />
