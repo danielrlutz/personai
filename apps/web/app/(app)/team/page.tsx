@@ -9,6 +9,7 @@ import { PageEnter } from "@/components/motion/PageEnter";
 function TeamPageInner() {
   const params = useSearchParams();
   const specialist = params.get("specialist") ?? "secretary";
+  const initialPrompt = params.get("q") ?? undefined;
 
   return (
     <PageEnter
@@ -29,7 +30,7 @@ function TeamPageInner() {
         <ConfirmGate compact />
       </div>
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <TeamChat initialSpecialist={specialist} />
+        <TeamChat initialSpecialist={specialist} initialPrompt={initialPrompt} />
       </div>
     </PageEnter>
   );

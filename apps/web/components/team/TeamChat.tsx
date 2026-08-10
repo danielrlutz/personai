@@ -24,14 +24,20 @@ import Link from "next/link";
 
 interface TeamChatProps {
   initialSpecialist?: string;
+  /** Prefill composer (e.g. QR-Rechnung CFO deep-link `?q=`). */
+  initialPrompt?: string;
 }
 
 const MAX_STYLIST_IMAGE_BYTES = 8 * 1024 * 1024;
 
-export function TeamChat({ initialSpecialist = "secretary" }: TeamChatProps) {
+export function TeamChat({
+  initialSpecialist = "secretary",
+  initialPrompt,
+}: TeamChatProps) {
   const [specialists, setSpecialists] = useState<SpecialistMeta[]>(SPECIALIST_FALLBACK);
   const [specialist, setSpecialist] = useState(initialSpecialist);
-  const [input, setInput] = useState("");
+  const [input, setInput] = useState(initialPrompt ?? "");
+  const appliedPromptRef = useRef<string | null>(null);
   const [photo, setPhoto] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -77,6 +83,13 @@ export function TeamChat({ initialSpecialist = "secretary" }: TeamChatProps) {
   useEffect(() => {
     if (initialSpecialist) setSpecialist(initialSpecialist);
   }, [initialSpecialist]);
+
+  useEffect(() => {
+    if (!initialPrompt?.trim()) return;
+    if (appliedPromptRef.current === initialPrompt) return;
+    appliedPromptRef.current = initialPrompt;
+    setInput(initialPrompt);
+  }, [initialPrompt]);
 
   useEffect(() => {
     // Drop pending photo when leaving Stylist.

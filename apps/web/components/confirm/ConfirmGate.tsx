@@ -30,6 +30,12 @@ import {
   trackDriveJobPulse,
   type ServerJobDto,
 } from "@/components/confirm/DriveJobPulse";
+import {
+  isQrConfirm,
+  qrFieldsFromPayload,
+  type QrConfirmFields,
+} from "@/lib/qr-confirm";
+import { QrConfirmCockpit } from "./QrConfirmCockpit";
 
 interface ConfirmGateProps {
   refreshKey?: number;
@@ -46,6 +52,11 @@ function payloadRecord(payload: unknown): Record<string, unknown> {
 function draftFromConfirmation(c: PendingConfirmation): ArchiveDraft | null {
   if (c.action !== "archive.commit" && c.action !== "ledger.write") return null;
   return draftFromArchivePayload(c.payload);
+}
+
+function qrDraftFromConfirmation(c: PendingConfirmation): QrConfirmFields | null {
+  if (!isQrConfirm(c.action, c.payload)) return null;
+  return qrFieldsFromPayload(c.action, c.payload);
 }
 
 function documentIdFromConfirmation(c: PendingConfirmation): string | null {
@@ -154,6 +165,7 @@ export function ConfirmGate({
 }: ConfirmGateProps) {
   const [items, setItems] = useState<PendingConfirmation[]>([]);
   const [drafts, setDrafts] = useState<Record<string, ArchiveDraft>>({});
+  const [qrDrafts, setQrDrafts] = useState<Record<string, QrConfirmFields>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
   const [previewBusyId, setPreviewBusyId] = useState<string | null>(null);
   const [preview, setPreview] = useState<PreviewState | null>(null);
@@ -181,11 +193,15 @@ export function ConfirmGate({
       });
       setItems(data.confirmations);
       const next: Record<string, ArchiveDraft> = {};
+      const nextQr: Record<string, QrConfirmFields> = {};
       for (const c of data.confirmations) {
         const d = draftFromConfirmation(c);
         if (d) next[c.id] = d;
+        const qr = qrDraftFromConfirmation(c);
+        if (qr) nextQr[c.id] = qr;
       }
       setDrafts(next);
+      setQrDrafts(nextQr);
       setError(null);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to load confirmations";
@@ -257,11 +273,24 @@ export function ConfirmGate({
   const decide = async (id: string, decision: "confirm" | "reject") => {
     setBusyId(id);
     try {
-      if (decision === "confirm" && drafts[id]) {
-        await apiPatch(`/confirmations/${id}`, {
-          archiveName: buildArchiveName(drafts[id]!),
-          archiveCategory: drafts[id]!.archiveCategory,
-        });
+      if (decision === "confirm") {
+        const patch: Record<string, unknown> = {};
+        if (drafts[id]) {
+          patch.archiveName = buildArchiveName(drafts[id]!);
+          patch.archiveCategory = drafts[id]!.archiveCategory;
+        }
+        const qr = qrDrafts[id];
+        if (qr) {
+          patch.fileArchive = qr.fileArchive;
+          if (items.find((c) => c.id === id)?.action === "qr.mark_paid") {
+            patch.writeLedger = qr.writeLedger;
+          } else {
+            patch.markPaid = qr.markPaid;
+          }
+        }
+        if (Object.keys(patch).length) {
+          await apiPatch(`/confirmations/${id}`, patch);
+        }
       }
       const out = await apiPost<{
         driveJob?: ServerJobDto | null;
@@ -334,9 +363,9 @@ export function ConfirmGate({
             <Badge variant="outline">{items.length}</Badge>
           </CardTitle>
           <CardDescription className="text-xs">
-            View the file, edit archive naming, then Confirm. Confirm writes Drive/ledger; Decline
-            leaves external systems unchanged. Calendar proposes stage locally until Google Calendar
-            write is wired.
+            View the file, edit archive naming, then Confirm. QR-Rechnung cards show Zahlteil fields
+            and archive / paid→ledger toggles. Confirm writes Drive/ledger; Decline leaves external
+            systems unchanged.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -344,8 +373,11 @@ export function ConfirmGate({
           <ul className="space-y-3">
             {items.map((c) => {
               const draft = drafts[c.id];
+              const qr = qrDrafts[c.id];
               const documentId = documentIdFromConfirmation(c);
               const archivePreview = draft ? buildArchiveName(draft) : null;
+              const showArchiveNaming = Boolean(draft) && (!qr || qr.fileArchive);
+              const isMarkPaidAction = c.action === "qr.mark_paid";
               return (
                 <li
                   key={c.id}
@@ -353,14 +385,28 @@ export function ConfirmGate({
                 >
                   <div className="min-w-0">
                     <p className="text-xs font-medium tracking-wide text-muted-foreground">
-                      {labelForConfirmAction(c.action)}
+                      {labelForConfirmAction(c.action, c.payload)}
                     </p>
                     <p className="md-label-large break-words [overflow-wrap:anywhere]">
                       {humanizeConfirmationSummary(c.summary)}
                     </p>
                   </div>
 
-                  {draft ? (
+                  {qr ? (
+                    <QrConfirmCockpit
+                      fields={qr}
+                      isMarkPaidAction={isMarkPaidAction}
+                      busy={busyId === c.id}
+                      onChange={(next) =>
+                        setQrDrafts((prev) => ({
+                          ...prev,
+                          [c.id]: next,
+                        }))
+                      }
+                    />
+                  ) : null}
+
+                  {showArchiveNaming && draft ? (
                     <div className="grid gap-2 sm:grid-cols-2">
                       <label className="space-y-1 text-xs text-muted-foreground">
                         Date

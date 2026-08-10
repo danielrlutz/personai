@@ -84,20 +84,52 @@ async function fileDocumentToArchive(prisma, documentId, payload) {
   };
 }
 
+async function maybeFileArchive(prisma, documentId, payload, fileArchive) {
+  if (!fileArchive || !documentId) return null;
+  const filed = await fileDocumentToArchive(prisma, documentId, payload);
+  return filed.driveJob;
+}
+
+async function ensureQrPaidLedger(prisma, bill) {
+  const existing = bill.documentId
+    ? await prisma.transaction.findFirst({ where: { documentId: bill.documentId } })
+    : null;
+  if (existing) return existing;
+  return prisma.transaction.create({
+    data: {
+      type: "EXPENSE",
+      amount: bill.amount,
+      currency: bill.currency,
+      description: `QR paid: ${bill.creditorName}`,
+      date: new Date(),
+      documentId: bill.documentId,
+    },
+  });
+}
+
 async function applyLedgerWrite(prisma, payload) {
   const kind = String(payload.kind ?? "");
   const documentId = payload.documentId ? String(payload.documentId) : undefined;
+  /** Explicit cockpit toggle — default on so existing confirms keep prior behavior. */
+  const fileArchive = payload.fileArchive !== false;
+  /** QR cockpit: mark paid and write expense on the same confirm. */
+  const markPaid = payload.markPaid === true;
   let driveJob = null;
   if (kind === "qr_bill") {
     const existing = documentId
       ? await prisma.qRBill.findFirst({ where: { documentId } })
       : null;
     if (existing) {
-      if (documentId) {
-        const filed = await fileDocumentToArchive(prisma, documentId, payload);
-        driveJob = filed.driveJob;
+      let bill = existing;
+      if (markPaid && existing.status !== "PAID") {
+        bill = await prisma.qRBill.update({
+          where: { id: existing.id },
+          data: { status: "PAID", paidAt: new Date() },
+        });
+        await ensureQrPaidLedger(prisma, bill);
       }
-      return { bill: existing, driveJob };
+      driveJob = await maybeFileArchive(prisma, documentId, payload, fileArchive);
+      return { bill, driveJob };
     }
     const bill = await prisma.qRBill.create({
       data: {
@@ -108,13 +140,14 @@ async function applyLedgerWrite(prisma, payload) {
         reference: payload.reference ? String(payload.reference) : null,
         dueDate: safeDate(payload.dueDate),
         documentId: documentId ?? null,
-        status: "PENDING",
+        status: markPaid ? "PAID" : "PENDING",
+        paidAt: markPaid ? new Date() : null,
       },
     });
-    if (documentId) {
-      const filed = await fileDocumentToArchive(prisma, documentId, payload);
-      driveJob = filed.driveJob;
+    if (markPaid) {
+      await ensureQrPaidLedger(prisma, bill);
     }
+    driveJob = await maybeFileArchive(prisma, documentId, payload, fileArchive);
     return { bill, driveJob };
   }
   if (kind === "transaction") {
@@ -122,10 +155,7 @@ async function applyLedgerWrite(prisma, payload) {
       ? await prisma.transaction.findFirst({ where: { documentId } })
       : null;
     if (existing) {
-      if (documentId) {
-        const filed = await fileDocumentToArchive(prisma, documentId, payload);
-        driveJob = filed.driveJob;
-      }
+      driveJob = await maybeFileArchive(prisma, documentId, payload, fileArchive);
       return { transaction: existing, driveJob };
     }
     const tx = await prisma.transaction.create({
@@ -138,10 +168,7 @@ async function applyLedgerWrite(prisma, payload) {
         documentId: documentId ?? null,
       },
     });
-    if (documentId) {
-      const filed = await fileDocumentToArchive(prisma, documentId, payload);
-      driveJob = filed.driveJob;
-    }
+    driveJob = await maybeFileArchive(prisma, documentId, payload, fileArchive);
     return { transaction: tx, driveJob };
   }
   throw new Error(`Unknown ledger write kind: ${kind}`);
@@ -178,23 +205,12 @@ async function applyQrMarkPaid(prisma, payload) {
     data: { status: "PAID", paidAt: new Date() },
   });
   if (payload.writeLedger !== false) {
-    const existing = bill.documentId
-      ? await prisma.transaction.findFirst({ where: { documentId: bill.documentId } })
-      : null;
-    if (!existing) {
-      await prisma.transaction.create({
-        data: {
-          type: "EXPENSE",
-          amount: bill.amount,
-          currency: bill.currency,
-          description: `QR paid: ${bill.creditorName}`,
-          date: new Date(),
-          documentId: bill.documentId,
-        },
-      });
-    }
+    await ensureQrPaidLedger(prisma, bill);
   }
-  return bill;
+  const fileArchive = payload.fileArchive === true;
+  const documentId = bill.documentId ?? (payload.documentId ? String(payload.documentId) : null);
+  const driveJob = await maybeFileArchive(prisma, documentId, payload, fileArchive);
+  return { bill, driveJob };
 }
 
 async function applyMedicalExport(prisma, payload) {

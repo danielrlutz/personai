@@ -337,7 +337,18 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
           summary: `Mark paid and record payment: ${bill.creditorName} · ${bill.amount} ${bill.currency}`,
           entity: "QRBill",
           entityId: bill.id,
-          payload: { billId: bill.id, writeLedger: true },
+          payload: {
+            billId: bill.id,
+            writeLedger: true,
+            fileArchive: false,
+            creditorName: bill.creditorName,
+            iban: bill.iban,
+            amount: bill.amount,
+            currency: bill.currency,
+            reference: bill.reference,
+            dueDate: bill.dueDate ? bill.dueDate.toISOString().slice(0, 10) : null,
+            documentId: bill.documentId,
+          },
         });
         return reply.status(202).send({
           needsConfirm: true,

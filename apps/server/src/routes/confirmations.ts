@@ -120,17 +120,42 @@ export async function registerConfirmationRoutes(app) {
             if (body.archiveCategory != null && !Number.isNaN(Number(body.archiveCategory))) {
                 payload.archiveCategory = Number(body.archiveCategory);
             }
+            if (typeof body.fileArchive === "boolean") {
+                payload.fileArchive = body.fileArchive;
+            }
+            if (typeof body.markPaid === "boolean") {
+                payload.markPaid = body.markPaid;
+            }
+            if (typeof body.writeLedger === "boolean") {
+                payload.writeLedger = body.writeLedger;
+            }
             if (typeof body.summary === "string" && body.summary.trim()) {
                 // allow explicit summary override
             }
             const archiveName = payload.archiveName ?? "document";
             const archiveCategory = payload.archiveCategory ?? 9;
-            const summary =
-                typeof body.summary === "string" && body.summary.trim()
-                    ? body.summary.trim()
-                    : pending.action === "archive.commit" || pending.action === "ledger.write"
-                        ? `File as ${archiveName} (folder ${archiveCategory})`
-                        : pending.summary;
+            const isQrLedger =
+                pending.action === "ledger.write" && payload.kind === "qr_bill";
+            const isQrMarkPaid = pending.action === "qr.mark_paid";
+            let summary;
+            if (typeof body.summary === "string" && body.summary.trim()) {
+                summary = body.summary.trim();
+            } else if (isQrLedger || isQrMarkPaid) {
+                const creditor = String(payload.creditorName ?? "QR bill");
+                const amount = `${payload.amount ?? "?"} ${payload.currency ?? "CHF"}`;
+                const bits = [`${creditor} · ${amount}`];
+                const fileOn = isQrLedger
+                    ? payload.fileArchive !== false
+                    : payload.fileArchive === true;
+                if (fileOn) bits.push("file archive");
+                if (isQrLedger && payload.markPaid === true) bits.push("mark paid → ledger");
+                if (isQrMarkPaid && payload.writeLedger !== false) bits.push("mark paid → ledger");
+                summary = bits.join(" · ");
+            } else if (pending.action === "archive.commit" || pending.action === "ledger.write") {
+                summary = `File as ${archiveName} (folder ${archiveCategory})`;
+            } else {
+                summary = pending.summary;
+            }
             const updated = await prisma.pendingConfirmation.update({
                 where: { id: pending.id },
                 data: {

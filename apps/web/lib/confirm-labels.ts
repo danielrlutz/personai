@@ -4,6 +4,7 @@ const ACTION_LABELS: Record<string, string> = {
   "ledger.write": "Save to ledger",
   "archive.commit": "File in archive",
   "qr.mark_paid": "Mark bill paid",
+  "qr.bill": "QR-Rechnung",
   "career.pdf": "Career PDF",
   "export.generate": "Generate export",
   "document.upload": "Document upload",
@@ -22,8 +23,16 @@ export function countLabel(count: number, singular: string, plural: string): str
   return `${count} ${count === 1 ? singular : plural}`;
 }
 
-export function labelForConfirmAction(action: string): string {
+export function labelForConfirmAction(action: string, payload?: unknown): string {
   const key = action.trim().toLowerCase();
+  if (
+    key === "ledger.write" &&
+    payload &&
+    typeof payload === "object" &&
+    (payload as { kind?: string }).kind === "qr_bill"
+  ) {
+    return ACTION_LABELS["qr.bill"];
+  }
   if (ACTION_LABELS[key]) return ACTION_LABELS[key];
   // Fallback: medical.export → Medical export
   return action
