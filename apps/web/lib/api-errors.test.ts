@@ -15,7 +15,7 @@ const LEGACY_HINT =
   "`HTTPS=1 ./scripts/vps-tailscale.sh --serve-only HOST`, or open http://HOST:3000 " +
   "with API http://HOST:4000 (browse-only). Unlock the profile if health works but chat returns 401.";
 
-const base = "http://debi9.tail8175e6.ts.net:4000";
+const base = "http://your-host.tailXXXX.ts.net:4000";
 const path = "/team/chat/stream";
 
 // —— collapse: triple-wrapped legacy toast ——

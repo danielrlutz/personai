@@ -1,59 +1,73 @@
 import { config } from "../config.js";
 
+let cachedStaticContext: string | null = null;
+
+/** Pre-built PersonAI / repo context — reused for skip-compose and minimal Ollama calls. */
+export function getStaticComposeContext(): string {
+  if (!cachedStaticContext) {
+    cachedStaticContext = buildStaticComposeContext();
+  }
+  return cachedStaticContext;
+}
+
+function buildStaticComposeContext(): string {
+  const repo = config.repoPath || "(PersonAI OS repo — set AGENT_DEBUG_REPO_PATH)";
+  const vps = config.vpsHost || "(unset — set AGENT_DEBUG_VPS_HOST)";
+  const profile = config.profileHint || "PersonAI operator";
+
+  const lines = [
+    "PersonAI OS agent-debug inbox (balcony / phone → Cursor).",
+    `Operator: ${profile}`,
+    `Repo cwd: ${repo}`,
+    `VPS / Tailscale: ${vps}`,
+    "Channel: burst messages + images from phone.",
+  ];
+  if (config.contextHint) lines.push(`Hint: ${config.contextHint}`);
+  lines.push("Act with local tools, MCP, and this monorepo when relevant.");
+  return lines.join("\n");
+}
+
 /**
- * High-fidelity system prompt for Ollama compose.
- * Produces one Cursor-ready agent prompt from a balcony/phone batch.
+ * Full system prompt (legacy / COMPOSE_MINIMAL_MODE=false).
  */
 export function buildComposeSystemPrompt(): string {
-  const repo = config.repoPath || "(PersonAI OS repo — use AGENT_DEBUG_REPO_PATH if unset)";
-  const vps = config.vpsHost || "(unset — set AGENT_DEBUG_VPS_HOST)";
-  const profile = config.profileHint || "Daniel / PersonAI operator";
+  const staticCtx = getStaticComposeContext();
 
   return [
     "You are the PersonAI OS agent-debug composer.",
-    "Rewrite a short phone/balcony chat dump into ONE clear prompt for a Cursor coding agent working in the PersonAI OS monorepo.",
+    "Rewrite a short phone/balcony chat dump into ONE clear prompt for a Cursor coding agent.",
     "",
-    "## Context (inject into the composed prompt)",
-    `- Product: PersonAI OS — private desk for triage, specialists, archive, money, Fristen.`,
-    `- Operator profile: ${profile}`,
-    `- Repo path (local agent cwd): ${repo}`,
-    `- VPS / Tailscale host: ${vps}`,
-    `- Channel: balcony / phone inbox — messages may arrive in bursts with images.`,
-    config.contextHint ? `- Extra hint: ${config.contextHint}` : "",
+    "## Static context (include briefly in output — do not expand)",
+    staticCtx,
     "",
     "## Intent rules",
     "- Preserve all concrete facts, paths, filenames, URLs, IDs, and user intent.",
     "- Do not invent requirements, files, or APIs the user did not mention.",
     "- Prefer imperative instructions the Cursor agent can execute immediately.",
     "- If images are attached: keep absolute paths and captions; tell the agent to open/read them.",
-    "- If the batch spans multiple messages (e.g. “wait for pictures”), merge into one coherent turn.",
+    "- If the batch spans multiple messages, merge into one coherent turn.",
     "- Urgent batches: put a clear URGENT line near the top.",
     "- Keep German/English as the user wrote; do not translate unless asked.",
     "",
     "## Output format (strict)",
-    "Output ONLY the prompt text for the Cursor agent — no preamble, no markdown fences, no commentary about yourself.",
-    "Structure the prompt roughly as:",
-    "1) Short context block (PersonAI / balcony / repo / VPS lines above).",
-    "2) Goal / requested change in 1–3 sentences.",
-    "3) Constraints and facts from the user messages.",
-    "4) Attached image paths (absolute) when present.",
-    "5) Closing instruction: act in this Cursor session using local tools/MCP as needed.",
-  ]
-    .filter(Boolean)
-    .join("\n");
+    "Output ONLY the prompt text — no preamble, no markdown fences, no commentary.",
+    "Structure: short context → goal → constraints/facts → image paths → closing action line.",
+  ].join("\n");
 }
 
-/** Lightweight preamble still used by fallbackCompose when Ollama is down. */
+/** Trimmed system prompt when COMPOSE_MINIMAL_MODE=true (static context lives in user prompt). */
+export function buildComposeSystemPromptMinimal(): string {
+  return [
+    "Rewrite inbox messages into ONE Cursor agent prompt.",
+    "Preserve facts, paths, URLs, IDs. Do not invent requirements.",
+    "If images: keep absolute paths and captions; tell the agent to open them.",
+    "Urgent: lead with URGENT. Keep user's language.",
+    "Output ONLY the prompt — no fences, no meta commentary.",
+    "Structure: brief context → goal → facts → image paths → act in this session.",
+  ].join("\n");
+}
+
+/** Lightweight preamble for fallbackCompose when Ollama is down. */
 export function buildContextPreamble(): string {
-  const lines: string[] = [
-    "You are assisting via PersonAI OS agent-debug inbox (balcony / phone → Cursor).",
-  ];
-  if (config.profileHint) lines.push(`Profile hint: ${config.profileHint}`);
-  if (config.repoPath) lines.push(`Repo path: ${config.repoPath}`);
-  if (config.vpsHost) lines.push(`VPS / Tailscale host: ${config.vpsHost}`);
-  if (config.contextHint) lines.push(config.contextHint);
-  lines.push(
-    "Act on the user request below. Prefer local tools, MCP, and the PersonAI repo when relevant.",
-  );
-  return lines.join("\n");
+  return getStaticComposeContext();
 }

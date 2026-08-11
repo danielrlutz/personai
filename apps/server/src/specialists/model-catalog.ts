@@ -1,6 +1,6 @@
 /**
  * Canonical Ollama model map for PersonAI.
- * Only tags Daniel already runs — never require unknown pulls (no qwen2.5-coder:7b, no flux).
+ * Only tags your host already runs — never require unknown pulls (no qwen2.5-coder:7b, no flux).
  *
  * Failover walks each role's candidates against /api/tags, then deepseek-r1:8b.
  *

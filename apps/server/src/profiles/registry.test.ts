@@ -42,7 +42,7 @@ const named = {
   profiles: [
     {
       id: profileId,
-      name: "Daniel Robin Lutz",
+      name: "Example User",
       createdAt: "2026-01-01T00:00:00.000Z",
       passwordHash: "keep-me",
       dbEncrypted: true,
@@ -52,7 +52,7 @@ const named = {
 fs.writeFileSync(path.join(tmp, "profiles.json"), JSON.stringify(named, null, 2));
 const kept = rehydrateRegistryFromDisk(named);
 assert.equal(kept.profiles.length, 1);
-assert.equal(kept.profiles[0].name, "Daniel Robin Lutz");
+assert.equal(kept.profiles[0].name, "Example User");
 assert.equal(kept.profiles[0].passwordHash, "keep-me");
 
 // Sealed stub without unlock material → public needsCryptoRestore; setup refused.
@@ -61,7 +61,7 @@ const sealedOnly = {
   profiles: [
     {
       id: profileId,
-      name: "Daniel Robin Lutz",
+      name: "Example User",
       createdAt: "2026-01-01T00:00:00.000Z",
       dbEncrypted: true,
     },

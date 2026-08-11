@@ -9,9 +9,11 @@ services:
       - "0.0.0.0:4000:4000"
     volumes:
       - ./data:/app/data
+      - ./logs:/app/logs
     environment:
       PORT: "4000"
       DATA_DIR: /app/data
+      LOG_DIR: /app/logs
       # Default: reach Ollama on the Docker host (native install).
       # Bundled Docker Ollama: use -f docker-compose.ollama.yml and OLLAMA_HOST=http://ollama:11434
       OLLAMA_HOST: ${OLLAMA_HOST:-http://host.docker.internal:11434}
@@ -45,8 +47,8 @@ services:
       args:
         # Baked into the static export at build time. For Tailscale/phone use the
         # MagicDNS FQDN the phone can reach, e.g.:
-        #   NEXT_PUBLIC_API_URL=http://debi9.tail8175e6.ts.net:4000
-        # Short hostname (http://debi9:4000) often fails on Android; prefer FQDN.
+        #   NEXT_PUBLIC_API_URL=http://your-host.tailXXXX.ts.net:4000
+        # Short hostname (http://your-host:4000) often fails on Android; prefer FQDN.
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000}
     ports:
       - "3000:80"

@@ -7,6 +7,8 @@ out
 .env
 .env.local
 data/
+logs/
+.vps-log-loop.state
 *.db
 *.db-journal
 apps/web/public/workbox-*.js
@@ -25,3 +27,14 @@ secrets/
 # Local Cursor MCP config (may contain tokens)
 .cursor/mcp.json
 
+# Agent-debug local secrets and runtime data (explicit; root .env / data/ also apply)
+apps/agent-debug/.env
+apps/agent-debug/data/
+
+# Local deploy runbooks with real hostnames, SSH users, Tailscale names (never commit)
+docs/*.local.md
+docs/DEPLOY*.local.md
+
+# Local VPS deploy targets (hostnames, keys); never commit
+.env.deploy.local
+docs/DEPLOY.local.md

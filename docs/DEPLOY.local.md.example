@@ -1,0 +1,31 @@
+# Local deploy targets (example — placeholders only)
+
+**Do not commit real values.** Copy this file for notes, or use gitignored `.env.deploy.local` at the repo root (preferred for `scripts/deploy-vps.sh`).
+
+```bash
+cp docs/DEPLOY.local.md.example docs/DEPLOY.local.md   # optional notes
+# create .env.deploy.local manually (gitignored) with your real values
+```
+
+## `.env.deploy.local` (gitignored)
+
+```bash
+DEPLOY_USER=your-deploy-user
+DEPLOY_HOST=your-host.tailXXXX.ts.net
+DEPLOY_PORT=45022
+SSH_PRIV_KEY=~/.ssh/your-deploy-key
+# Windows + PuTTY (optional; used when plink is on PATH):
+SSH_PPK=~/.ssh/your-key.ppk
+```
+
+## One-shot from shell (same variable names)
+
+```bash
+export DEPLOY_USER=your-deploy-user
+export DEPLOY_HOST=your-host.tailXXXX.ts.net
+export DEPLOY_PORT=45022
+export SSH_PRIV_KEY=~/.ssh/your-deploy-key
+./scripts/deploy-vps.sh
+```
+
+Public runbook: [DEPLOY-WAVE.md](./DEPLOY-WAVE.md) uses generic placeholders only.

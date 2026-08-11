@@ -222,7 +222,7 @@ export function PersonalityVaultCard() {
                 {data.inject.slices.length === 1 ? "" : "s"}
                 {data.inject.slices.length
                   ? `: ${data.inject.slices.map((s) => s.filename).join(", ")}`
-                  : ". Add prefs (hotel budget, Cham/Zug, …) to make triage feel Jarvis-smart."}
+                  : ". Add prefs (hotel budget, your area, …) to make triage feel Jarvis-smart."}
               </p>
             </div>
 

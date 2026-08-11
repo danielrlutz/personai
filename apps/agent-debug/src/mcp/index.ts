@@ -63,7 +63,7 @@ server.registerTool(
   {
     title: "Poll agent-debug inbox",
     description:
-      "Return pending composed Cursor prompts and raw pending messages from the phone/balcony agent-debug inbox. Call at the start of turns when the user is on the balcony / using agent-debug.",
+      "Return pending composed Cursor prompts and open batches. Read-only — items stay pending until agent_debug_ack. Call at the start of turns when the user is on the balcony / using agent-debug.",
     inputSchema: z.object({}),
   },
   async () => {
@@ -73,17 +73,20 @@ server.registerTool(
   },
 );
 
+const ackReasonSchema = z.enum(["implemented", "discarded", "already_done"]);
+
 server.registerTool(
   "agent_debug_ack",
   {
     title: "Ack agent-debug items",
     description:
-      "Mark composed prompt batches and/or messages as consumed after you have acted on them.",
+      "Remove batches/messages from the active pending queue after acting on them. Reasons: implemented (work done), discarded (skip), already_done (was handled elsewhere). Poll does not consume — only this tool (or SDK dispatch success) clears pending items.",
     inputSchema: z.object({
       batchIds: z.array(z.string()).optional(),
       messageIds: z.array(z.string()).optional(),
       batchId: z.string().optional(),
       messageId: z.string().optional(),
+      reason: ackReasonSchema.optional().default("implemented"),
     }),
   },
   async (args) => {

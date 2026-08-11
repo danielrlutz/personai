@@ -10,7 +10,11 @@
   setStoredSessionToken,
 } from "./platform";
 import { describeApiFailure, describeStreamError } from "./api-errors";
+import { reportClientError } from "./client-logger";
 import { notifyApiFailure } from "./toast";
+import type { ProfileNameLimits } from "./profile-name-limits";
+
+export type { ProfileNameLimits };
 
 const DEFAULT_API_BASE = "http://localhost:4000";
 
@@ -53,6 +57,7 @@ async function runNotified<T>(
   } catch (err) {
     const described = describeApiFailure(err, { path, apiBaseUrl: getApiBaseUrl() });
     if (!silent) notifyApiFailure(err, { path, apiBaseUrl: getApiBaseUrl() });
+    reportClientError(err, path ? `api:${path}` : "api");
     if (err instanceof ApiError) {
       throw new ApiError(described.message, err.status, err.body);
     }
@@ -602,6 +607,7 @@ export interface Profile {
 export interface ProfileRegistry {
   activeProfileId: string | null;
   profiles: Profile[];
+  nameLimits?: ProfileNameLimits;
 }
 
 export interface AuthResponse {

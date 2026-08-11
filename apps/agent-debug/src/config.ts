@@ -12,6 +12,15 @@ function envStr(name: string, fallback = ""): string {
   return (process.env[name] ?? fallback).trim();
 }
 
+function envBool(name: string, fallback: boolean): boolean {
+  const raw = process.env[name];
+  if (raw === undefined || raw === "") return fallback;
+  const v = raw.trim().toLowerCase();
+  if (["1", "true", "yes", "on"].includes(v)) return true;
+  if (["0", "false", "no", "off"].includes(v)) return false;
+  return fallback;
+}
+
 const dataDir = path.resolve(envStr("DATA_DIR", "./data/agent-debug"));
 
 /** Prefer AGENT_DEBUG_REPO_PATH; else walk up from this package toward monorepo root. */
@@ -30,9 +39,10 @@ export const config = {
   uploadsDir: path.join(dataDir, "uploads"),
   thumbsDir: path.join(dataDir, "thumbs"),
   storePath: path.join(dataDir, "store.json"),
+  archivePath: path.join(dataDir, "archive.json"),
   token: envStr("AGENT_DEBUG_TOKEN"),
   ollamaHost: envStr("OLLAMA_HOST", "http://127.0.0.1:11434").replace(/\/$/, ""),
-  composeModel: envStr("AGENT_DEBUG_COMPOSE_MODEL", "llama3.1:8b"),
+  composeModel: envStr("AGENT_DEBUG_COMPOSE_MODEL", "llama3:latest"),
   visionModel:
     envStr("AGENT_DEBUG_VISION_MODEL") ||
     envStr("OLLAMA_VISION_MODEL", "maternion/LightOnOCR-2"),
@@ -46,4 +56,8 @@ export const config = {
   /** Optional — server runs without this; SDK dispatch becomes a no-op. */
   cursorApiKey: envStr("CURSOR_API_KEY"),
   cursorModel: envStr("CURSOR_MODEL", "composer-2.5"),
+  /** Text-only batches at or below this length skip Ollama compose (0 = never skip). */
+  composeSkipThresholdChars: envInt("COMPOSE_SKIP_THRESHOLD_CHARS", 120),
+  /** Trim compose system prompt; static PersonAI context moves to user prompt block. */
+  composeMinimalMode: envBool("COMPOSE_MINIMAL_MODE", true),
 };

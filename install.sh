@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # PersonAI OS — install OR update (same command)
 #
-#   curl -fsSL https://raw.githubusercontent.com/danielrlutz/personai/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/YOUR_ORG/personai-os/main/install.sh | bash
 #
 # Non-interactive:
 #   curl -fsSL .../install.sh | bash -s -- --yes --ollama=new-docker --tier=pro
@@ -9,7 +9,7 @@
 #
 set -euo pipefail
 
-REPO_URL="${PERSONAI_REPO_URL:-https://github.com/danielrlutz/personai.git}"
+REPO_URL="${PERSONAI_REPO_URL:-https://github.com/YOUR_ORG/personai-os.git}"
 BRANCH="${PERSONAI_BRANCH:-main}"
 DEFAULT_DIR="${PERSONAI_HOME:-$HOME/personai}"
 STATE_FILE_NAME=".personai-install"
@@ -61,7 +61,7 @@ PersonAI OS installer / updater
 
 Same command installs fresh OR upgrades an existing install:
 
-  curl -fsSL https://raw.githubusercontent.com/danielrlutz/personai/main/install.sh | bash
+  curl -fsSL https://raw.githubusercontent.com/YOUR_ORG/personai-os/main/install.sh | bash
 
 Options:
   --dir PATH              Install directory (default: ~/personai or detected)
@@ -934,7 +934,7 @@ ${BOLD}${GRN}PersonAI OS ${action} complete${RST}
   Tier        : ${LICENSE_TIER}
 
 Update anytime with the same command:
-  curl -fsSL https://raw.githubusercontent.com/danielrlutz/personai/main/install.sh | bash
+  curl -fsSL https://raw.githubusercontent.com/YOUR_ORG/personai-os/main/install.sh | bash
 
 EOF
 }
@@ -978,7 +978,7 @@ run_update() {
   else
     info "Skipping restart. Run compose up --build when ready."
     info "Or: cd $INSTALL_DIR && ./scripts/vps-up.sh"
-    info "Phone/Tailscale: ./scripts/vps-tailscale.sh debi9.tail8175e6.ts.net"
+    info "Phone/Tailscale: ./scripts/vps-tailscale.sh your-host.tailXXXX.ts.net"
   fi
 
   log ""

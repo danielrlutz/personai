@@ -2,11 +2,11 @@
 # Rebuild PersonAI on a VPS for phone access via Tailscale MagicDNS.
 #
 # Usage (from install dir, e.g. /etc/personaios):
-#   ./scripts/vps-tailscale.sh debi9.tail8175e6.ts.net
+#   ./scripts/vps-tailscale.sh your-host.tailXXXX.ts.net
 #   ./scripts/vps-tailscale.sh                 # auto-detect MagicDNS name
-#   HTTPS=1 ./scripts/vps-tailscale.sh debi9.tail8175e6.ts.net
-#   ./scripts/vps-tailscale.sh --https debi9.tail8175e6.ts.net
-#   HTTPS=1 ./scripts/vps-tailscale.sh --serve-only debi9.tail8175e6.ts.net
+#   HTTPS=1 ./scripts/vps-tailscale.sh your-host.tailXXXX.ts.net
+#   ./scripts/vps-tailscale.sh --https your-host.tailXXXX.ts.net
+#   HTTPS=1 ./scripts/vps-tailscale.sh --serve-only your-host.tailXXXX.ts.net
 #   NO_CACHE=1 ./scripts/vps-tailscale.sh …   # force --no-cache rebuild
 #
 # Default (HTTP): sets NEXT_PUBLIC_API_URL=http://HOST:4000 — fine for browsing
@@ -88,7 +88,7 @@ set_env_kv() {
 detect_magicdns() {
   local name=""
   if command -v tailscale >/dev/null 2>&1; then
-    # Prefer Self.DNSName from status JSON (e.g. debi9.tail8175e6.ts.net.)
+    # Prefer Self.DNSName from status JSON (e.g. your-host.tailXXXX.ts.net.)
     if command -v jq >/dev/null 2>&1; then
       name="$(tailscale status --json 2>/dev/null | jq -r '.Self.DNSName // empty' | sed 's/\.$//')" || true
     elif command -v python3 >/dev/null 2>&1; then
@@ -265,15 +265,15 @@ echo "dir=$ROOT"
 HOST="$(normalize_host "${MAGICDNS_ARG:-$(detect_magicdns)}")"
 if [[ -z "$HOST" ]]; then
   echo "x Could not detect MagicDNS hostname. Pass it explicitly:" >&2
-  echo "  ./scripts/vps-tailscale.sh debi9.tail8175e6.ts.net" >&2
-  echo "  HTTPS=1 ./scripts/vps-tailscale.sh debi9.tail8175e6.ts.net" >&2
+  echo "  ./scripts/vps-tailscale.sh your-host.tailXXXX.ts.net" >&2
+  echo "  HTTPS=1 ./scripts/vps-tailscale.sh your-host.tailXXXX.ts.net" >&2
   exit 1
 fi
 
 if [[ "$HOST" != *.ts.net ]] && [[ -z "${MAGICDNS_ARG:-}" ]]; then
   echo "! Detected host '$HOST' is not a *.ts.net MagicDNS name."
   echo "  Prefer the full FQDN (Android often fails on short names)."
-  echo "  Re-run: ./scripts/vps-tailscale.sh debi9.tail8175e6.ts.net"
+  echo "  Re-run: ./scripts/vps-tailscale.sh your-host.tailXXXX.ts.net"
 fi
 
 if [[ "$HTTPS" == "1" || "$HTTPS" == "yes" || "$HTTPS" == "true" ]]; then
@@ -441,6 +441,12 @@ if ! echo "$API_PUBLISH" | grep -qE '4000'; then
   exit 1
 fi
 echo "› API host publish includes :4000 ✓"
+
+# ---------------------------------------------------------------------------
+# Log dirs (host bind mount → ./logs/{info,warning,error})
+# ---------------------------------------------------------------------------
+mkdir -p logs/info logs/warning logs/error
+echo "› Log dirs: $(pwd)/logs/{info,warning,error}"
 
 # ---------------------------------------------------------------------------
 # Build + up

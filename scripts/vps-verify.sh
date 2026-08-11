@@ -3,7 +3,7 @@
 #
 # Usage (from install dir, e.g. /etc/personaios):
 #   ./scripts/vps-verify.sh
-#   ./scripts/vps-verify.sh debi9.tail8175e6.ts.net
+#   ./scripts/vps-verify.sh your-host.tailXXXX.ts.net
 #
 # Prints: git SHA, compose ps, curl :4000/health, curl :3000/, ollama tags,
 # whether Drive OAuth env is set, and paste-ready phone checks.
@@ -13,7 +13,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 HOST_ARG="${1:-}"
-MAGICDNS="${HOST_ARG:-debi9.tail8175e6.ts.net}"
+MAGICDNS="${HOST_ARG:-your-host.tailXXXX.ts.net}"
 MAGICDNS="${MAGICDNS#http://}"
 MAGICDNS="${MAGICDNS#https://}"
 MAGICDNS="${MAGICDNS%%/*}"
@@ -227,6 +227,41 @@ if command -v tailscale >/dev/null 2>&1; then
   fi
 else
   note "tailscale CLI not installed on this host"
+fi
+
+section "Structured logs (logs/{info,warning,error})"
+LOG_ROOT="$ROOT/logs"
+if [[ -d "$LOG_ROOT" ]]; then
+  ok "Log root exists: $LOG_ROOT"
+  for level in info warning error; do
+    dir="$LOG_ROOT/$level"
+    if [[ -d "$dir" ]]; then
+      latest="$(ls -1t "$dir"/*.log 2>/dev/null | head -1 || true)"
+      if [[ -n "$latest" ]]; then
+        mtime="$(stat -c '%y' "$latest" 2>/dev/null || stat -f '%Sm' "$latest" 2>/dev/null || echo unknown)"
+        lines="$(wc -l < "$latest" 2>/dev/null | tr -d ' ' || echo 0)"
+        ok "$level: $latest ($lines lines, mtime $mtime)"
+      else
+        note "$level: dir exists, no .log files yet"
+      fi
+    else
+      note "$level: missing $dir (API creates on bootstrap)"
+    fi
+  done
+  # Confirm compose mounts logs when api container is up
+  if command -v docker >/dev/null 2>&1; then
+    API_CTR="$(COMPOSE_FILE= COMPOSE_PROFILES= docker compose "${COMPOSE_BASE[@]}" ps -q api 2>/dev/null | head -1 || true)"
+    if [[ -n "$API_CTR" ]]; then
+      if docker exec "$API_CTR" test -d /app/logs/error 2>/dev/null; then
+        ok "API container sees /app/logs/error"
+      else
+        bad "API container missing /app/logs — add ./logs:/app/logs + LOG_DIR in compose"
+        FAIL=1
+      fi
+    fi
+  fi
+else
+  note "No $LOG_ROOT — run: mkdir -p logs/{info,warning,error} && docker compose up -d api"
 fi
 
 section "Auth / Failed-to-fetch checklist"

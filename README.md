@@ -38,6 +38,8 @@ Product config (Ollama host, Google OAuth, models, premium keys) lives in **Sett
 
 Smoke API: `node scripts/integration-test.mjs` (API on `:4000`).
 
+Structured logs: see [docs/LOG-MANAGEMENT.md](docs/LOG-MANAGEMENT.md) (`logs/{info,warning,error}/`, VPS check via `scripts/vps-check-logs.sh`).
+
 ## Archive naming, split, and Google Drive
 
 | Piece | Behaviour |
@@ -150,17 +152,17 @@ Check-only detects the toolchain and **installs nothing**, then offers a next-st
 
 ```bash
 # Linux VPS (recommended — Docker Compose stack)
-curl -fsSL https://raw.githubusercontent.com/danielrlutz/personai/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/YOUR_ORG/personai-os/main/install.sh | bash
 ```
 
 ```bash
 # macOS / Linux desktop (or interactive wizard that also offers VPS)
-curl -fsSL https://raw.githubusercontent.com/danielrlutz/personai/main/setup.sh | bash
+curl -fsSL https://raw.githubusercontent.com/YOUR_ORG/personai-os/main/setup.sh | bash
 ```
 
 ```powershell
 # Windows desktop (PowerShell)
-irm https://raw.githubusercontent.com/danielrlutz/personai/main/setup.ps1 | iex
+irm https://raw.githubusercontent.com/YOUR_ORG/personai-os/main/setup.ps1 | iex
 ```
 
 ### From a local checkout
@@ -189,7 +191,7 @@ Non-interactive: pass `--yes` / `-Yes`. When piped (`curl | bash`), prompts stil
 On a Debian/Ubuntu VPS you only need Docker. Prefer the installer directly (or the wizard’s **VPS** mode):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/danielrlutz/personai/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/YOUR_ORG/personai-os/main/install.sh | bash
 ```
 
 Re-run the **same** command anytime. If `~/personai` (or another detected install) already exists, the script enters **update mode**: backs up `.env` / overrides, `git fetch` + upgrade, merges config, rebuilds containers, and **never wipes** your `data/` directory.
@@ -205,15 +207,15 @@ Also configurable: install/data dirs, ports, license tier, domain + Caddy TLS, m
 
 ```bash
 # Non-interactive — host Ollama already installed (typical VPS)
-curl -fsSL https://raw.githubusercontent.com/danielrlutz/personai/main/install.sh | bash -s -- \
+curl -fsSL https://raw.githubusercontent.com/YOUR_ORG/personai-os/main/install.sh | bash -s -- \
   --yes --ollama=existing-native --tier=pro --domain=app.example.com --tls=yes --pull-models=yes --start=yes
 
 # Non-interactive — bundled Docker Ollama (opt-in; binds :11434)
-curl -fsSL https://raw.githubusercontent.com/danielrlutz/personai/main/install.sh | bash -s -- \
+curl -fsSL https://raw.githubusercontent.com/YOUR_ORG/personai-os/main/install.sh | bash -s -- \
   --yes --ollama=new-docker --tier=pro --domain=app.example.com --tls=yes --pull-models=yes --start=yes
 
 # Force update of an existing install
-curl -fsSL https://raw.githubusercontent.com/danielrlutz/personai/main/install.sh | bash -s -- --yes --update --dir ~/personai
+curl -fsSL https://raw.githubusercontent.com/YOUR_ORG/personai-os/main/install.sh | bash -s -- --yes --update --dir ~/personai
 ```
 
 ## Quick start (local dev)
@@ -268,7 +270,7 @@ Prefer `./install.sh` (detects native Ollama and wires `host.docker.internal`).
 ```bash
 cd /etc/personaios   # or ~/personai — your install dir
 # One-shot (resets to origin/main if needed, strips ollama, up api):
-curl -fsSL https://raw.githubusercontent.com/danielrlutz/personai/main/scripts/vps-recover-api.sh | bash
+curl -fsSL https://raw.githubusercontent.com/YOUR_ORG/personai-os/main/scripts/vps-recover-api.sh | bash
 # Or after git pull:  ./scripts/vps-recover-api.sh
 # Ongoing helper:     ./scripts/vps-up.sh api
 ```
@@ -305,24 +307,24 @@ Edit `Caddyfile` hostnames before production TLS.
 # Once: https://login.tailscale.com/admin/dns → Enable HTTPS
 cd /etc/personaios && git fetch && git reset --hard origin/main
 ./scripts/vps-verify.sh
-HTTPS=1 ./scripts/vps-tailscale.sh debi9.tail8175e6.ts.net
-# Phone: https://debi9.tail8175e6.ts.net  → Chrome → Install app
-# API:   https://debi9.tail8175e6.ts.net:8443
+HTTPS=1 ./scripts/vps-tailscale.sh your-host.tailXXXX.ts.net
+# Phone: https://your-host.tailXXXX.ts.net  → Chrome → Install app
+# API:   https://your-host.tailXXXX.ts.net:8443
 ```
 
 Browse-only HTTP (not installable):
 
 ```bash
-./scripts/vps-tailscale.sh debi9.tail8175e6.ts.net
+./scripts/vps-tailscale.sh your-host.tailXXXX.ts.net
 # force clean rebuild if needed:
-# NO_CACHE=1 ./scripts/vps-tailscale.sh debi9.tail8175e6.ts.net
+# NO_CACHE=1 ./scripts/vps-tailscale.sh your-host.tailXXXX.ts.net
 ```
 
 ### VPS verify (“Failed to fetch” checklist)
 
 ```bash
 cd /etc/personaios
-./scripts/vps-verify.sh debi9.tail8175e6.ts.net
+./scripts/vps-verify.sh your-host.tailXXXX.ts.net
 ```
 
 Paste-ready from the VPS:
@@ -330,29 +332,29 @@ Paste-ready from the VPS:
 ```bash
 curl -sS http://127.0.0.1:4000/health
 curl -sS -o /dev/null -w 'web %{http_code}\n' http://127.0.0.1:3000/
-curl -sS http://debi9.tail8175e6.ts.net:4000/health
-curl -sS -o /dev/null -w 'web-ts %{http_code}\n' http://debi9.tail8175e6.ts.net:3000/
+curl -sS http://your-host.tailXXXX.ts.net:4000/health
+curl -sS -o /dev/null -w 'web-ts %{http_code}\n' http://your-host.tailXXXX.ts.net:3000/
 ```
 
 Paste-ready on the phone (browser address bar):
 
-- UI: `http://debi9.tail8175e6.ts.net:3000`
-- API health: `http://debi9.tail8175e6.ts.net:4000/health`
+- UI: `http://your-host.tailXXXX.ts.net:3000`
+- API health: `http://your-host.tailXXXX.ts.net:4000/health`
 
-If health works but Messages/team chat fails: unlock the profile on `/profiles/` (Bearer session), then Settings → API URL = `http://debi9.tail8175e6.ts.net:4000` (no trailing slash).
+If health works but Messages/team chat fails: unlock the profile on `/profiles/` (Bearer session), then Settings → API URL = `http://your-host.tailXXXX.ts.net:4000` (no trailing slash).
 
 What the script does: sets `NEXT_PUBLIC_API_URL` / `PUBLIC_API_URL` / `PUBLIC_WEB_URL` (HTTP `:4000`/`:3000` or HTTPS `:8443` + origin), `OLLAMA_HOST=http://host.docker.internal:11434`, clears `COMPOSE_FILE` / `COMPOSE_PROFILES`, rebuilds **api + web**, health-checks loopback, and with `HTTPS=1` configures **Tailscale Serve**.
 
 | Surface | HTTP (browse) | HTTPS (Install app) |
 |---------|---------------|---------------------|
-| Phone | `http://debi9.tail8175e6.ts.net:3000` | `https://debi9.tail8175e6.ts.net` |
-| API | `http://debi9.tail8175e6.ts.net:4000` | `https://debi9.tail8175e6.ts.net:8443` |
+| Phone | `http://your-host.tailXXXX.ts.net:3000` | `https://your-host.tailXXXX.ts.net` |
+| API | `http://your-host.tailXXXX.ts.net:4000` | `https://your-host.tailXXXX.ts.net:8443` |
 
 **On the phone after HTTPS rebuild:**
 
 1. Chrome → delete site data for old `http://…:3000` origins; remove fake shortcuts.
-2. Open `https://debi9.tail8175e6.ts.net` → unlock → Chrome → **Install app**.
-3. If API fails: **Settings → API Server** → `https://debi9.tail8175e6.ts.net:8443` (**no trailing slash**) → Save & test.
+2. Open `https://your-host.tailXXXX.ts.net` → unlock → Chrome → **Install app**.
+3. If API fails: **Settings → API Server** → `https://your-host.tailXXXX.ts.net:8443` (**no trailing slash**) → Save & test.
 
 The web image is a **static Next.js export** — `NEXT_PUBLIC_API_URL` is baked at **image build** time; `.env` alone is not enough without rebuild (hostname fallback and Settings override still work without a bake-in).
 
@@ -389,9 +391,9 @@ curl -s http://127.0.0.1:3000/_app/version.json | head -c 200; echo
 
 ### Windows download (v0.5.1)
 
-- [MSI installer](https://github.com/danielrlutz/personai/releases/download/v0.5.1/PersonAI.OS_0.5.1_x64_en-US.msi)
-- [NSIS setup EXE](https://github.com/danielrlutz/personai/releases/download/v0.5.1/PersonAI.OS_0.5.1_x64-setup.exe)
-- [Release notes](https://github.com/danielrlutz/personai/releases/tag/v0.5.1)
+- [MSI installer](https://github.com/YOUR_ORG/personai-os/releases/download/v0.5.1/PersonAI.OS_0.5.1_x64_en-US.msi)
+- [NSIS setup EXE](https://github.com/YOUR_ORG/personai-os/releases/download/v0.5.1/PersonAI.OS_0.5.1_x64-setup.exe)
+- [Release notes](https://github.com/YOUR_ORG/personai-os/releases/tag/v0.5.1)
 
 ```bash
 # Install toolchain first (recommended)

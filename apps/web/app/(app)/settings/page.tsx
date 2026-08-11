@@ -350,7 +350,7 @@ export default function SettingsPage() {
     const normalized = normalizeApiBaseUrl(urlOverride ?? apiUrl);
     if (!normalized) {
       setApiNote(
-        "Enter a URL like https://debi9.tail8175e6.ts.net:8443 or http://…:4000 (no trailing slash).",
+        "Enter a URL like https://your-host.tailXXXX.ts.net:8443 or http://…:4000 (no trailing slash).",
       );
       return;
     }
@@ -558,7 +558,7 @@ export default function SettingsPage() {
           <Input
             value={apiUrl}
             onChange={(e) => setApiUrl(e.target.value)}
-            placeholder={suggestedApiUrl ?? "https://debi9.tail8175e6.ts.net:8443"}
+            placeholder={suggestedApiUrl ?? "https://your-host.tailXXXX.ts.net:8443"}
             inputMode="url"
             autoCapitalize="none"
             autoCorrect="off"

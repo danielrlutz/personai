@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useState, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import { Search } from "lucide-react";
 import { Sidebar } from "./Sidebar";
@@ -8,9 +8,11 @@ import { ProfileSwitcher } from "./ProfileSwitcher";
 import { MobileNav } from "./MobileNav";
 import { OutboxBootstrap } from "@/components/outbox/OutboxBootstrap";
 import { DriveLinkBanner } from "@/components/drive/DriveLinkBanner";
+import { installGlobalClientErrorHandlers } from "@/lib/client-logger";
 import { setProfileId, setSessionToken, getSessionToken } from "@/lib/api-client";
 import { logoutToProfiles, requireProfile } from "@/lib/session";
 import { getStoredSessionToken } from "@/lib/platform";
+import { profileNameSlotWidthStyle, useProfileNameLimits } from "@/lib/use-profile-name-limits";
 import { cn } from "@/lib/utils";
 
 const commandItems = [
@@ -47,6 +49,9 @@ export function AppShell({ children }: AppShellProps) {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [gate, setGate] = useState<Gate>(readInitialGate);
+  const nameLimits = useProfileNameLimits();
+  const profileSlotWidth = profileNameSlotWidthStyle(nameLimits.maxLength);
+  const profileSlotWidthSm = profileNameSlotWidthStyle(nameLimits.visibleChars.sm);
 
   useLayoutEffect(() => {
     const profileId = requireProfile();
@@ -70,6 +75,10 @@ export function AppShell({ children }: AppShellProps) {
     window.addEventListener("personai:profile-changed", onProfileChanged);
     return () => window.removeEventListener("personai:profile-changed", onProfileChanged);
   }, [router]);
+
+  useEffect(() => {
+    installGlobalClientErrorHandlers();
+  }, []);
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -133,8 +142,18 @@ export function AppShell({ children }: AppShellProps) {
               </kbd>
             </button>
           </div>
-          <div className="w-32 min-w-0 shrink-0 sm:w-52">
-            {gate === "allowed" ? <ProfileSwitcher /> : null}
+          <div
+            className="min-w-0 shrink-0 sm:[width:var(--profile-slot-sm)]"
+            style={
+              {
+                width: profileSlotWidth,
+                "--profile-slot-sm": profileSlotWidthSm,
+              } as CSSProperties
+            }
+          >
+            {gate === "allowed" ? (
+              <ProfileSwitcher maxVisibleChars={nameLimits.maxLength} />
+            ) : null}
           </div>
         </header>
 

@@ -95,7 +95,7 @@ export async function registerTriageRoutes(app: FastifyInstance): Promise<void> 
 {"intent":"short.snake","specialistId":"one of ${SPECIALIST_IDS.join("|")}","confidence":0.0-1.0,"summary":"≤120 chars","suggestedAction":"chat|archive|finance|legal|medical|brief","reason":"one short clause"}
 Never invent Fristen or amounts. Prefer secretary when unsure.
 Never use raw enum BILL in summary/reason — say Invoice (or the user's word).
-When known prefs / personality notes are provided (hotel budget, location Cham/Zug, Invoice language, etc.), mention a relevant one briefly in reason if it affects routing — do not invent prefs.
+When known prefs / personality notes are provided (hotel budget, location, Invoice language, etc.), mention a relevant one briefly in reason if it affects routing — do not invent prefs.
 Use Drive knowledge only as hints about existing docs/naming — confirm-before-write still applies.
 ${memoryContext ? `\n${memoryContext}` : ""}
 ${knowledgeBlock ? `\n${knowledgeBlock}` : ""}`;

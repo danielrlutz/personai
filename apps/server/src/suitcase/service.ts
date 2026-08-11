@@ -11,6 +11,7 @@ import {
   registryPath,
 } from "../config.js";
 import { assertPasswordStrength, hashPassword } from "../auth/password.js";
+import { clampProfileName, resolveProfileNameMaxLength, validateProfileName } from "../profiles/name-limits.js";
 import {
   clearUnlockedDek,
   enableEncryptionForProfile,
@@ -294,15 +295,17 @@ export async function discardSuitcaseStaging(stagingId: string): Promise<void> {
 }
 
 function uniqueProfileName(desired: string): string {
-  const base = desired.trim() || "Imported profile";
+  const max = resolveProfileNameMaxLength();
+  const base = clampProfileName(desired) || clampProfileName("Imported");
   const registry = listProfiles();
   const names = new Set(registry.profiles.map((p) => p.name.toLowerCase()));
   if (!names.has(base.toLowerCase())) return base;
   for (let i = 2; i < 1000; i++) {
-    const candidate = `${base} (${i})`;
+    const suffix = ` (${i})`;
+    const candidate = `${base.slice(0, Math.max(1, max - suffix.length))}${suffix}`;
     if (!names.has(candidate.toLowerCase())) return candidate;
   }
-  return `${base} (${randomUUID().slice(0, 8)})`;
+  return `${base.slice(0, Math.max(1, max - 9))}-${randomUUID().slice(0, 8)}`;
 }
 
 /**

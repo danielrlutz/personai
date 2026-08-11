@@ -10,6 +10,12 @@ export type ImageMeta = {
 
 export type MessageStatus = "pending" | "batched" | "composed" | "acked";
 
+/** Why a prompt/batch left the active pending queue. */
+export type AckReason = "implemented" | "discarded" | "already_done";
+
+/** Deploy / live status for a batch (optional — manual or deploy script). */
+export type DeployStatus = "none" | "pending" | "live" | "failed";
+
 export type InboxMessage = {
   id: string;
   sessionId: string;
@@ -41,7 +47,44 @@ export type Batch = {
   composeError: string | null;
   createdAt: string;
   readyAt: string | null;
+  /** When Ollama compose finished (usually same as readyAt). */
+  composedAt: string | null;
+  /** Set when Cursor SDK dispatch completes successfully (before ack). */
+  dispatchedAt: string | null;
+  /** Cursor SDK agent id from Agent.create (agent-* / bc-*). */
+  cursorAgentId: string | null;
+  /** Cursor SDK run id from agent.send(). */
+  cursorRunId: string | null;
   ackedAt: string | null;
+  ackReason: AckReason | null;
+  deployStatus: DeployStatus;
+  deployNote: string | null;
+  deployedAt: string | null;
+};
+
+/** Cursor run correlation surfaced on ready/archived batches. */
+export type CursorDispatchInfo = {
+  cursorAgentId: string | null;
+  cursorRunId: string | null;
+  dispatchedAt: string | null;
+  /** Hint path under ~/.cursor/projects/.../agent-transcripts/ */
+  cursorTranscriptHint: string | null;
+};
+
+export type ArchivedBatch = Batch & {
+  ackedAt: string;
+  ackReason: AckReason;
+};
+
+export type ArchivedMessage = InboxMessage & {
+  ackedAt: string;
+  ackReason: AckReason;
+};
+
+export type ArchiveData = {
+  version: 1;
+  batches: ArchivedBatch[];
+  messages: ArchivedMessage[];
 };
 
 export type Session = {
@@ -52,7 +95,7 @@ export type Session = {
 };
 
 export type StoreData = {
-  version: 1;
+  version: 2;
   sessions: Session[];
   messages: InboxMessage[];
   batches: Batch[];
@@ -78,4 +121,8 @@ export type StatusSnapshot = {
   dispatchedPrompts: number;
   dispatchQueuePending: number;
   dispatchLastError: string | null;
+  /** Ready batches with Cursor SDK correlation ids (when dispatched). */
+  readyDispatches: Array<
+    CursorDispatchInfo & { batchId: string; urgent: boolean; readyAt: string | null }
+  >;
 };

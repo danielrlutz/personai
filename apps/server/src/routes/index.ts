@@ -12,6 +12,7 @@ import {
   getActiveProfile,
   toPublicProfile,
 } from "../profiles/registry.js";
+import { validateProfileName } from "../profiles/name-limits.js";
 import { config, profileExportsDir, profileUploadsDir } from "../config.js";
 import {
   ollamaHealth,
@@ -122,9 +123,14 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     "/profiles",
     async (req, reply) => {
       try {
-        const name = req.body?.name?.trim();
         const password = req.body?.password;
-        if (!name) return reply.status(400).send({ error: "name is required" });
+        const nameRaw = req.body?.name ?? "";
+        if (typeof nameRaw !== "string" || !nameRaw.trim()) {
+          return reply.status(400).send({ error: "name is required" });
+        }
+        const nameCheck = validateProfileName(nameRaw);
+        if (!nameCheck.ok) return reply.status(400).send({ error: nameCheck.error });
+        const name = nameCheck.trimmed;
         if (typeof password !== "string") {
           return reply.status(400).send({ error: "password is required for new profiles" });
         }

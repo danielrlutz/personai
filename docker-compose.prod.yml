@@ -11,9 +11,11 @@ services:
       # Bind DATA_DIR (not a named volume) so host ./data and container stay aligned.
       # Named personai_data volumes can shadow real profiles on the host path.
       - ${DATA_DIR:-./data}:/app/data
+      - ./logs:/app/logs
     environment:
       PORT: "4000"
       DATA_DIR: /app/data
+      LOG_DIR: /app/logs
       # Default: host/native Ollama via Docker gateway
       # Bundled Docker Ollama: -f docker-compose.ollama.yml and OLLAMA_HOST=http://ollama:11434
       OLLAMA_HOST: ${OLLAMA_HOST:-http://host.docker.internal:11434}

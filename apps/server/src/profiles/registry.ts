@@ -18,6 +18,7 @@ import {
   profileEncDbPath,
 } from "../auth/crypto-db.js";
 import { countSessionsForProfile } from "../auth/session.js";
+import { assertProfileName, getProfileNameLimits, type ProfileNameLimits } from "./name-limits.js";
 
 export interface Profile {
   id: string;
@@ -54,6 +55,7 @@ export interface ProfileRegistry {
 export interface PublicProfileRegistry {
   activeProfileId: string | null;
   profiles: PublicProfile[];
+  nameLimits: ProfileNameLimits;
 }
 
 export interface OrphanProfileDir {
@@ -260,6 +262,7 @@ export function listPublicProfiles(): PublicProfileRegistry {
   return {
     activeProfileId: registry.activeProfileId,
     profiles: registry.profiles.map(toPublicProfile),
+    nameLimits: getProfileNameLimits(),
   };
 }
 
@@ -280,10 +283,11 @@ export async function createProfile(
   name: string,
   options?: { avatar?: string; password?: string },
 ): Promise<Profile> {
+  const trimmedName = assertProfileName(name);
   const registry = ensureRegistry();
   const profile: Profile = {
     id: randomUUID(),
-    name,
+    name: trimmedName,
     avatar: options?.avatar,
     createdAt: new Date().toISOString(),
   };

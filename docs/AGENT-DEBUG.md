@@ -67,7 +67,7 @@ Optional env (see `apps/agent-debug/.env.example`):
 export AGENT_DEBUG_TOKEN='long-random'
 export AGENT_DEBUG_COMPOSE_MODEL=llama3.1:8b
 export OLLAMA_HOST=http://127.0.0.1:11434
-export AGENT_DEBUG_VPS_HOST=debi9.tail8175e6.ts.net
+export AGENT_DEBUG_VPS_HOST=your-host.tailXXXX.ts.net
 export AGENT_DEBUG_REPO_PATH='/path/to/personai-os'
 # Phase 2 — omit to keep MCP-only delivery:
 # export CURSOR_API_KEY='…'
@@ -90,13 +90,13 @@ Without the key, the server logs a no-op and leaves the prompt for **MCP poll**.
 pnpm --filter @personai/agent-debug add @cursor/sdk   # if optional install skipped
 ```
 
-## Run on debi9 (phone via Tailscale)
+## Run on VPS (phone via Tailscale)
 
 ```bash
 cd /etc/personaios   # or your clone
 # set in .env (no secrets committed):
 #   AGENT_DEBUG_TOKEN=...
-#   AGENT_DEBUG_VPS_HOST=debi9.tail8175e6.ts.net
+#   AGENT_DEBUG_VPS_HOST=your-host.tailXXXX.ts.net
 #   AGENT_DEBUG_COMPOSE_MODEL=llama3.1:8b
 
 docker compose --profile agent-debug up -d --build agent-debug
@@ -106,7 +106,7 @@ curl -sS http://127.0.0.1:8790/health
 Phone (Tailscale MagicDNS FQDN preferred — use the machine that runs agent-debug):
 
 ```text
-http://yogaproi7.tail8175e6.ts.net:8790
+http://your-laptop.tailXXXX.ts.net:8790
 ```
 
 Paste `AGENT_DEBUG_TOKEN` into the UI Token field (Send stays disabled until set). Attach/paste images; say “wait for pictures in my second message” to hold the batch, or tap **Send now**.
@@ -125,7 +125,7 @@ Project snippet — `.cursor/mcp.json` (or Cursor Settings → MCP):
     "agent-debug": {
       "command": "node",
       "args": [
-        "C:/Users/danie/OneDrive/source/personai-os/apps/agent-debug/dist/mcp/index.js"
+        "/path/to/personai-os/apps/agent-debug/dist/mcp/index.js"
       ],
       "env": {
         "AGENT_DEBUG_URL": "http://127.0.0.1:8790",
@@ -136,7 +136,7 @@ Project snippet — `.cursor/mcp.json` (or Cursor Settings → MCP):
 }
 ```
 
-On Linux / debi9 host MCP (if Cursor runs there):
+On Linux / VPS host MCP (if Cursor runs there):
 
 ```json
 {

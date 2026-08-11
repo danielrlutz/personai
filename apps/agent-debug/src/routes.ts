@@ -4,11 +4,15 @@ import path from "node:path";
 import type { FastifyInstance } from "fastify";
 import { requireToken } from "./auth.js";
 import { config } from "./config.js";
+import { replayUndispatchedReadyBatches } from "./dispatch/cursor-sdk-bridge.js";
 import {
   ack,
   composeNow,
+  enrichMessages,
   getStatus,
+  listArchive,
   listPending,
+  markDeployed,
   postMessage,
 } from "./inbox.js";
 import { ollamaTags } from "./ollama.js";
@@ -46,12 +50,17 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
   app.get("/v1/status", async () => getStatus());
   app.get("/v1/pending", async () => listPending());
+  app.get("/v1/archive", async (req) => {
+    const q = req.query as { limit?: string };
+    const limit = q.limit ? Number.parseInt(q.limit, 10) : 20;
+    return listArchive(Number.isFinite(limit) ? limit : 20);
+  });
 
   app.get("/v1/sessions", async () => ({ sessions: store.listSessions() }));
 
   app.get("/v1/messages", async (req) => {
     const q = req.query as { sessionId?: string };
-    const messages = store.listMessages(q.sessionId).map((m) => ({
+    const messages = enrichMessages(q.sessionId).map((m) => ({
       ...m,
       images: m.images.map((img) => ({
         ...img,
@@ -68,6 +77,9 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       text?: string;
       urgent?: boolean;
       sendNow?: boolean;
+      deployBatchId?: string;
+      deployStatus?: "none" | "pending" | "live" | "failed";
+      deployNote?: string;
       images?: Array<{
         filename: string;
         mimeType: string;
@@ -139,12 +151,36 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     return { batches };
   });
 
+  app.post("/v1/dispatch", async (req) => {
+    const body = (req.body ?? {}) as { batchId?: string };
+    const enqueued = replayUndispatchedReadyBatches(body.batchId);
+    return { enqueued, batchId: body.batchId ?? null };
+  });
+
+  app.post("/v1/mark-deployed", async (req, reply) => {
+    const body = (req.body ?? {}) as {
+      batchId?: string;
+      deployNote?: string;
+      deployStatus?: "none" | "pending" | "live" | "failed";
+    };
+    if (!body.batchId) {
+      return reply.code(400).send({ error: "batchId required" });
+    }
+    const result = await markDeployed(
+      body.batchId,
+      body.deployNote,
+      body.deployStatus ?? "live",
+    );
+    return result;
+  });
+
   app.post("/v1/ack", async (req) => {
     const body = (req.body ?? {}) as {
       batchIds?: string[];
       messageIds?: string[];
       batchId?: string;
       messageId?: string;
+      reason?: "implemented" | "discarded" | "already_done";
     };
     const batchIds = [
       ...(body.batchIds ?? []),
@@ -154,7 +190,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       ...(body.messageIds ?? []),
       ...(body.messageId ? [body.messageId] : []),
     ];
-    return ack({ batchIds, messageIds });
+    return ack({ batchIds, messageIds, reason: body.reason });
   });
 
   app.get("/media/uploads/*", async (req, reply) => {

@@ -1,6 +1,6 @@
 # PersonAI OS — Complete VPS Setup Guide
 
-Exhaustive guide for a **Debian/Ubuntu VPS** (e.g. `debi9`) with **Docker**, **native Ollama on the host** (`:11434`), and **phone access via Tailscale MagicDNS**.
+Exhaustive guide for a **Debian/Ubuntu VPS** (e.g. `your-host`) with **Docker**, **native Ollama on the host** (`:11434`), and **phone access via Tailscale MagicDNS**.
 
 Recommended install directory: **`/etc/personaios`** (any path works; scripts assume you `cd` there).
 
@@ -44,7 +44,7 @@ ollama pull qwen2.5-coder:7b   # optional — Forge; falls back to reasoning mod
 ```bash
 sudo mkdir -p /etc/personaios
 sudo chown "$USER:$USER" /etc/personaios
-git clone --depth 1 https://github.com/danielrlutz/personai.git /etc/personaios
+git clone --depth 1 https://github.com/YOUR_ORG/personai-os.git /etc/personaios
 cd /etc/personaios
 ```
 
@@ -71,9 +71,9 @@ DATA_DIR=/etc/personaios/data
 PORT=4000
 OLLAMA_HOST=http://host.docker.internal:11434
 OLLAMA_PUBLIC_HOST=http://127.0.0.1:11434
-NEXT_PUBLIC_API_URL=http://debi9.tail8175e6.ts.net:4000
-PUBLIC_API_URL=http://debi9.tail8175e6.ts.net:4000
-PUBLIC_WEB_URL=http://debi9.tail8175e6.ts.net:3000
+NEXT_PUBLIC_API_URL=http://your-host.tailXXXX.ts.net:4000
+PUBLIC_API_URL=http://your-host.tailXXXX.ts.net:4000
+PUBLIC_WEB_URL=http://your-host.tailXXXX.ts.net:3000
 LICENSE_TIER=pro
 COMPOSE_PROFILES=
 PERSONAI_OLLAMA_MODE=existing-native
@@ -89,7 +89,7 @@ EOF
 ### Option A — One-liner (recommended)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/danielrlutz/personai/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/YOUR_ORG/personai-os/main/install.sh | bash
 ```
 
 When prompted:
@@ -106,7 +106,7 @@ When prompted:
 Non-interactive (typical VPS with host Ollama):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/danielrlutz/personai/main/install.sh | bash -s -- \
+curl -fsSL https://raw.githubusercontent.com/YOUR_ORG/personai-os/main/install.sh | bash -s -- \
   --yes \
   --dir /etc/personaios \
   --ollama=existing-native \
@@ -119,14 +119,14 @@ Then configure Tailscale phone access:
 
 ```bash
 cd /etc/personaios
-./scripts/vps-tailscale.sh debi9.tail8175e6.ts.net
+./scripts/vps-tailscale.sh your-host.tailXXXX.ts.net
 ```
 
 ### Option B — Git clone + install.sh
 
 ```bash
 sudo mkdir -p /etc/personaios && sudo chown "$USER:$USER" /etc/personaios
-git clone https://github.com/danielrlutz/personai.git /etc/personaios
+git clone https://github.com/YOUR_ORG/personai-os.git /etc/personaios
 cd /etc/personaios
 ./install.sh
 ```
@@ -159,7 +159,7 @@ Re-run the **same** install command — it detects existing install and enters *
 
 ```bash
 cd /etc/personaios
-curl -fsSL https://raw.githubusercontent.com/danielrlutz/personai/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/YOUR_ORG/personai-os/main/install.sh | bash
 ```
 
 Or:
@@ -175,9 +175,9 @@ git merge --ff-only origin/main   # or: git reset --hard origin/main
 
 ```bash
 cd /etc/personaios
-./scripts/vps-tailscale.sh debi9.tail8175e6.ts.net
+./scripts/vps-tailscale.sh your-host.tailXXXX.ts.net
 # force clean rebuild if UI still wrong:
-# NO_CACHE=1 ./scripts/vps-tailscale.sh debi9.tail8175e6.ts.net
+# NO_CACHE=1 ./scripts/vps-tailscale.sh your-host.tailXXXX.ts.net
 ```
 
 Manual rebuild (without Tailscale bake-in):
@@ -236,14 +236,14 @@ COMPOSE_PROFILES=
 # --- Web → API URL (baked into web image at BUILD time) ---
 # No trailing slash. Use full MagicDNS FQDN for Android.
 # HTTP (browse-only; Chrome will NOT Install app / PWA):
-NEXT_PUBLIC_API_URL=http://debi9.tail8175e6.ts.net:4000
-PUBLIC_API_URL=http://debi9.tail8175e6.ts.net:4000
-PUBLIC_WEB_URL=http://debi9.tail8175e6.ts.net:3000
+NEXT_PUBLIC_API_URL=http://your-host.tailXXXX.ts.net:4000
+PUBLIC_API_URL=http://your-host.tailXXXX.ts.net:4000
+PUBLIC_WEB_URL=http://your-host.tailXXXX.ts.net:3000
 # HTTPS via Tailscale Serve (PWA-installable) — set by:
-#   HTTPS=1 ./scripts/vps-tailscale.sh debi9.tail8175e6.ts.net
-# NEXT_PUBLIC_API_URL=https://debi9.tail8175e6.ts.net:8443
-# PUBLIC_API_URL=https://debi9.tail8175e6.ts.net:8443
-# PUBLIC_WEB_URL=https://debi9.tail8175e6.ts.net
+#   HTTPS=1 ./scripts/vps-tailscale.sh your-host.tailXXXX.ts.net
+# NEXT_PUBLIC_API_URL=https://your-host.tailXXXX.ts.net:8443
+# PUBLIC_API_URL=https://your-host.tailXXXX.ts.net:8443
+# PUBLIC_WEB_URL=https://your-host.tailXXXX.ts.net
 # PERSONAI_TAILSCALE_HTTPS=1
 
 LICENSE_TIER=pro
@@ -261,9 +261,9 @@ PERSONAI_TLS=no
 # GOOGLE_OAUTH_CLIENT_ID=
 # GOOGLE_OAUTH_CLIENT_SECRET=
 # HTTP redirect:
-# GOOGLE_OAUTH_REDIRECT_URI=http://debi9.tail8175e6.ts.net:4000/archive/drive/oauth/callback
+# GOOGLE_OAUTH_REDIRECT_URI=http://your-host.tailXXXX.ts.net:4000/archive/drive/oauth/callback
 # HTTPS / Tailscale Serve redirect (must match Google Cloud authorized URI):
-# GOOGLE_OAUTH_REDIRECT_URI=https://debi9.tail8175e6.ts.net:8443/archive/drive/oauth/callback
+# GOOGLE_OAUTH_REDIRECT_URI=https://your-host.tailXXXX.ts.net:8443/archive/drive/oauth/callback
 # PUBLIC_WEB_URL must match the web UI (post-link redirect).
 # Service account (headless) — Docker only mounts ./data → /app/data:
 #   put JSON under data/ and set path inside the container, or use INLINE:
@@ -293,7 +293,7 @@ PERSONAI_TLS=no
 
 ## 6. Phone access (Tailscale MagicDNS)
 
-Your VPS hostname example: **`debi9.tail8175e6.ts.net`**
+Your VPS hostname example: **`your-host.tailXXXX.ts.net`**
 
 ### Chrome PWA installability (secure context)
 
@@ -303,7 +303,7 @@ Chrome treats a site as **installable** only in a [**secure context**](https://d
 |--------|-------------------------|
 | `https://…` (valid TLS) | Yes — if manifest + service worker criteria are met |
 | `http://localhost` / `http://127.0.0.1` | Yes (dev exception) |
-| `http://debi9.tail8175e6.ts.net:3000` | **No** — WireGuard ≠ browser HTTPS |
+| `http://your-host.tailXXXX.ts.net:3000` | **No** — WireGuard ≠ browser HTTPS |
 
 **Add to Home screen / shortcut on HTTP is not a PWA** (no proper SW scope / installability). Use Tailscale Serve HTTPS below.
 
@@ -313,22 +313,22 @@ Minimal path — no public DNS, no Caddy, no mkcert. Tailscale provisions `*.ts.
 
 | Surface | URL |
 |---------|-----|
-| Phone browser / **Install app** | `https://debi9.tail8175e6.ts.net` |
-| API (Settings / baked URL) | `https://debi9.tail8175e6.ts.net:8443` |
-| API health | `https://debi9.tail8175e6.ts.net:8443/health` |
-| OAuth redirect URI | `https://debi9.tail8175e6.ts.net:8443/archive/drive/oauth/callback` |
+| Phone browser / **Install app** | `https://your-host.tailXXXX.ts.net` |
+| API (Settings / baked URL) | `https://your-host.tailXXXX.ts.net:8443` |
+| API health | `https://your-host.tailXXXX.ts.net:8443/health` |
+| OAuth redirect URI | `https://your-host.tailXXXX.ts.net:8443/archive/drive/oauth/callback` |
 
 `:8443` avoids clashing with Docker publishing `0.0.0.0:4000`. Loopback HTTP `:3000` / `:4000` stay up for host curls.
 
-#### One-liner (ralph@debi9)
+#### One-liner (deploy@your-host)
 
 ```bash
 # 1) Once per tailnet: https://login.tailscale.com/admin/dns → Enable HTTPS
 cd /etc/personaios
 git fetch && git reset --hard origin/main
-./scripts/vps-verify.sh debi9.tail8175e6.ts.net
-HTTPS=1 ./scripts/vps-tailscale.sh debi9.tail8175e6.ts.net
-# equivalent: ./scripts/vps-tailscale.sh --https debi9.tail8175e6.ts.net
+./scripts/vps-verify.sh your-host.tailXXXX.ts.net
+HTTPS=1 ./scripts/vps-tailscale.sh your-host.tailXXXX.ts.net
+# equivalent: ./scripts/vps-tailscale.sh --https your-host.tailXXXX.ts.net
 tailscale serve status
 ```
 
@@ -339,21 +339,21 @@ Serve was never set or was cleared. Loopback `:3000`/`:4000` can be healthy whil
 **A) Quick path — HTTP for Drive today (not Install app):**
 
 ```text
-Phone → http://debi9.tail8175e6.ts.net:3000
-Settings → API Server → http://debi9.tail8175e6.ts.net:4000 → Save & test
+Phone → http://your-host.tailXXXX.ts.net:3000
+Settings → API Server → http://your-host.tailXXXX.ts.net:4000 → Save & test
 ```
 
 **B) Full path — restore Serve for PWA (no rebuild if stack is up):**
 
 ```bash
 cd /etc/personaios
-HTTPS=1 ./scripts/vps-tailscale.sh --serve-only debi9.tail8175e6.ts.net
+HTTPS=1 ./scripts/vps-tailscale.sh --serve-only your-host.tailXXXX.ts.net
 # manual:
 sudo tailscale serve reset
 sudo tailscale serve --bg --yes --https=443 3000
 sudo tailscale serve --bg --yes --https=8443 4000
 sudo tailscale serve status
-curl -skS https://debi9.tail8175e6.ts.net:8443/health
+curl -skS https://your-host.tailXXXX.ts.net:8443/health
 ```
 
 If the web image still bakes a stale API URL, run the full bake+rebuild (`HTTPS=1 ./scripts/vps-tailscale.sh HOST`).
@@ -362,20 +362,20 @@ Then bake HTTPS URLs + recreate (script does this when `HTTPS=1`):
 
 ```bash
 # .env (no trailing slash on API URL)
-NEXT_PUBLIC_API_URL=https://debi9.tail8175e6.ts.net:8443
-PUBLIC_API_URL=https://debi9.tail8175e6.ts.net:8443
-PUBLIC_WEB_URL=https://debi9.tail8175e6.ts.net
-GOOGLE_OAUTH_REDIRECT_URI=https://debi9.tail8175e6.ts.net:8443/archive/drive/oauth/callback
+NEXT_PUBLIC_API_URL=https://your-host.tailXXXX.ts.net:8443
+PUBLIC_API_URL=https://your-host.tailXXXX.ts.net:8443
+PUBLIC_WEB_URL=https://your-host.tailXXXX.ts.net
+GOOGLE_OAUTH_REDIRECT_URI=https://your-host.tailXXXX.ts.net:8443/archive/drive/oauth/callback
 COMPOSE_PROFILES= docker compose build web api && COMPOSE_PROFILES= docker compose up -d
 ```
 
 #### On the phone (HTTPS / Install app)
 
-1. Phone on the same Tailscale tailnet as `debi9`.
-2. Chrome → open **`https://debi9.tail8175e6.ts.net`** (no `:3000`).
+1. Phone on the same Tailscale tailnet as `your-host`.
+2. Chrome → open **`https://your-host.tailXXXX.ts.net`** (no `:3000`).
 3. Delete site data for any old **`http://…:3000`** origin; uninstall bogus shortcuts.
 4. Unlock on `/profiles/`.
-5. Settings → API Server → `https://debi9.tail8175e6.ts.net:8443` if needed → Save & test.
+5. Settings → API Server → `https://your-host.tailXXXX.ts.net:8443` if needed → Save & test.
 6. Chrome menu → **Install app** (or Install PersonAI). Homescreeen shortcut from HTTP does not count.
 
 If OAuth is configured, add the **HTTPS** redirect URI in Google Cloud (exact match).
@@ -384,14 +384,14 @@ If OAuth is configured, add the **HTTPS** redirect URI in Google Cloud (exact ma
 
 | Surface | URL |
 |---------|-----|
-| Phone browser | `http://debi9.tail8175e6.ts.net:3000` |
-| API | `http://debi9.tail8175e6.ts.net:4000` |
+| Phone browser | `http://your-host.tailXXXX.ts.net:3000` |
+| API | `http://your-host.tailXXXX.ts.net:4000` |
 
 ```bash
-./scripts/vps-tailscale.sh debi9.tail8175e6.ts.net   # HTTP bake-in
+./scripts/vps-tailscale.sh your-host.tailXXXX.ts.net   # HTTP bake-in
 ```
 
-**Android:** always use the **full** `*.ts.net` FQDN — short names like `debi9` often fail.
+**Android:** always use the **full** `*.ts.net` FQDN — short names like `your-host` often fail.
 
 **Security:** Tailscale encrypts transit; browsers still require HTTPS for PWA APIs. PersonAI still requires password + session.
 
@@ -403,7 +403,7 @@ If OAuth is configured, add the **HTTPS** redirect URI in Google Cloud (exact ma
 
 ```bash
 cd /etc/personaios
-./scripts/vps-verify.sh debi9.tail8175e6.ts.net
+./scripts/vps-verify.sh your-host.tailXXXX.ts.net
 ```
 
 ### Manual success criteria
@@ -426,14 +426,14 @@ curl -sS -o /dev/null -w 'web %{http_code}\n' http://127.0.0.1:3000/
 curl -sS http://127.0.0.1:11434/api/tags | head -c 200
 
 # Via Tailscale hostname (from VPS)
-curl -sS http://debi9.tail8175e6.ts.net:4000/health
-curl -sS -o /dev/null -w 'web-ts %{http_code}\n' http://debi9.tail8175e6.ts.net:3000/
+curl -sS http://your-host.tailXXXX.ts.net:4000/health
+curl -sS -o /dev/null -w 'web-ts %{http_code}\n' http://your-host.tailXXXX.ts.net:3000/
 ```
 
 ### From the phone browser
 
-- `http://debi9.tail8175e6.ts.net:3000` — PersonAI UI loads
-- `http://debi9.tail8175e6.ts.net:4000/health` — JSON health response
+- `http://your-host.tailXXXX.ts.net:3000` — PersonAI UI loads
+- `http://your-host.tailXXXX.ts.net:4000/health` — JSON health response
 
 ### What success looks like
 
@@ -451,14 +451,14 @@ curl -sS -o /dev/null -w 'web-ts %{http_code}\n' http://debi9.tail8175e6.ts.net:
 
 | Cause | Fix |
 |-------|-----|
-| Wrong baked `NEXT_PUBLIC_API_URL` (`localhost`) | `./scripts/vps-tailscale.sh debi9.tail8175e6.ts.net` |
+| Wrong baked `NEXT_PUBLIC_API_URL` (`localhost`) | `./scripts/vps-tailscale.sh your-host.tailXXXX.ts.net` |
 | Stale phone cache / Service Worker | Delete site data; reinstall PWA |
 | Profile not unlocked (401) | `/profiles/` → enter password |
 | API down or loopback-only bind | `docker compose ps`; API must publish `0.0.0.0:4000` |
 | API crash-loop (`curl` → connection reset; container “Up Less than a second”) | See below — usually missing `--experimental-sqlite` in API image |
 | Settings override wrong | Settings → API URL without trailing slash |
 
-Run: `./scripts/vps-verify.sh debi9.tail8175e6.ts.net`
+Run: `./scripts/vps-verify.sh your-host.tailXXXX.ts.net`
 
 ### API `:4000` connection reset / crash-loop
 
@@ -479,7 +479,7 @@ sleep 3; curl -v http://127.0.0.1:4000/health
 docker inspect personaios-api-1 --format '{{.State.Status}} {{.State.ExitCode}} {{.RestartCount}}'
 ```
 
-Profile `21deba4b-…` / `profiles.json` are untouched by this rebuild (data volume / `DATA_DIR` bind).
+Profile `YOUR-PROFILE-UUID` / `profiles.json` are untouched by this rebuild (data volume / `DATA_DIR` bind).
 
 ### Install stops silently at "Scanning for Ollama"
 
@@ -497,8 +497,8 @@ Symptom: `bind: address already in use` or unexpected `ollama` container.
 cd /etc/personaios
 ./scripts/vps-recover-api.sh
 # or one-shot from curl:
-# curl -fsSL https://raw.githubusercontent.com/danielrlutz/personai/main/scripts/vps-recover-api.sh | bash
-./scripts/vps-tailscale.sh debi9.tail8175e6.ts.net
+# curl -fsSL https://raw.githubusercontent.com/YOUR_ORG/personai-os/main/scripts/vps-recover-api.sh | bash
+./scripts/vps-tailscale.sh your-host.tailXXXX.ts.net
 ```
 
 Also verify:
@@ -531,7 +531,7 @@ Ensure `.env` has `OLLAMA_HOST=http://host.docker.internal:11434` (not `127.0.0.
 
 ### Can't unlock / "Restore unlock keys" / CRYPTO_RESTORE_REQUIRED
 
-Symptom: profile `Daniel Robin Lutz` (`21deba4b-…`) still listed, but Unlock fails or the UI says **Restore unlock keys** / API returns `CRYPTO_RESTORE_REQUIRED`.
+Symptom: profile `Example User` (`YOUR-PROFILE-UUID`) still listed, but Unlock fails or the UI says **Restore unlock keys** / API returns `CRYPTO_RESTORE_REQUIRED`.
 
 Cause: `profiles.json` lost `passwordHash` / `kdfSalt` / `wrappedDek` (empty-registry / Default-profile chaos, bad `DATA_DIR`, or partial restore) while `profiles/<uuid>/personai.db.enc` remains. Password alone cannot unwrap the DEK without those fields.
 
@@ -541,21 +541,21 @@ Cause: `profiles.json` lost `passwordHash` / `kdfSalt` / `wrappedDek` (empty-reg
 cd /etc/personaios
 docker compose stop api
 ls -lt data/profiles.json* /etc/personaios/data/profiles.json* 2>/dev/null | head
-# Restore the newest backup that still contains wrappedDek for 21deba4b-…
+# Restore the newest backup that still contains wrappedDek for YOUR-PROFILE-UUID
 # Example:
 #   cp -a data/profiles.json.bak.<stamp> data/profiles.json
 docker compose start api
 curl -sS http://127.0.0.1:4000/profiles | python3 -m json.tool | head
 ```
 
-Phone: clear site data if needed → open `http://debi9.tail8175e6.ts.net:3000/profiles/` (or HTTPS once Serve is up) → **Unlock** with the old password.
+Phone: clear site data if needed → open `http://your-host.tailXXXX.ts.net:3000/profiles/` (or HTTPS once Serve is up) → **Unlock** with the old password.
 
 **Emergency reset (one profile — keeps uploads/archive files, fresh empty DB):**
 
 ```bash
 cd /etc/personaios
 docker compose stop api
-./scripts/emergency-reset-profile-crypto.sh 21deba4b-391d-4467-a7ea-4bd3fce304d0
+./scripts/emergency-reset-profile-crypto.sh YOUR-PROFILE-UUID
 docker compose start api
 ```
 
@@ -567,8 +567,8 @@ Phone → `/profiles/` → **Set password & continue**. Quarantined `*.quarantin
 cd /etc/personaios
 git fetch && git reset --hard origin/main
 ./scripts/vps-recover-api.sh
-./scripts/vps-tailscale.sh debi9.tail8175e6.ts.net
-./scripts/vps-verify.sh debi9.tail8175e6.ts.net
+./scripts/vps-tailscale.sh your-host.tailXXXX.ts.net
+./scripts/vps-verify.sh your-host.tailXXXX.ts.net
 ```
 
 ---

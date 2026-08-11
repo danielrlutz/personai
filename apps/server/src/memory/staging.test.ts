@@ -15,7 +15,7 @@ assert.equal(
   stagingHasSubstance(
     `# USER
 
-Who you are — name, location (e.g. Cham / Zug), household, work context.
+Who you are — name, location (e.g. Example City), household, work context.
 
 Edit freely. PersonAI injects a truncated slice into Staff and specialist chats.
 `,
@@ -27,7 +27,7 @@ assert.equal(
   stagingHasSubstance(
     `# USER
 
-Daniel · Cham / Zug · hotel budget usually ≤ CHF 180 when traveling for work.
+Alex · Example City · hotel budget usually ≤ CHF 180 when traveling for work.
 `,
     "USER",
   ),
@@ -40,7 +40,7 @@ await writeStagingDoc(
   `# Preferences
 
 - Hotel budget ≤ CHF 180
-- Prefer Cham / Zug area for meetings
+- Prefer Example City area for meetings
 `,
 );
 

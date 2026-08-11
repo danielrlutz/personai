@@ -6,6 +6,7 @@ import multipart from "@fastify/multipart";
 import fastifyStatic from "@fastify/static";
 import Fastify from "fastify";
 import { config } from "./config.js";
+import { replayUndispatchedReadyBatches } from "./dispatch/cursor-sdk-bridge.js";
 import { registerRoutes } from "./routes.js";
 import { store } from "./store.js";
 import { startWorker, stopWorker } from "./worker.js";
@@ -14,6 +15,12 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 async function main(): Promise<void> {
   await store.init();
+  const replayed = replayUndispatchedReadyBatches();
+  if (replayed > 0) {
+    console.log(
+      `[agent-debug] replayed ${replayed} undispatched ready batch(es) for SDK dispatch`,
+    );
+  }
 
   const app = Fastify({
     logger: true,

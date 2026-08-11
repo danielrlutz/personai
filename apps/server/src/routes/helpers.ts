@@ -2,6 +2,7 @@ import type { FastifyReply, FastifyRequest } from "fastify";
 import { getRequestSession } from "../auth/middleware.js";
 import { getPrisma } from "../db/prisma-singleton.js";
 import { publicErrorMessage } from "../lib/safe-data.js";
+import { tryGetFileLogger } from "../lib/file-logger.js";
 import { requireProfileId } from "../profiles/registry.js";
 
 /**
@@ -43,9 +44,22 @@ export async function withPrisma(request: FastifyRequest) {
   return { profileId, prisma };
 }
 
-export function sendError(reply: FastifyReply, err: unknown, status = 400) {
+export function sendError(
+  reply: FastifyReply,
+  err: unknown,
+  status = 400,
+  request?: FastifyRequest,
+) {
   const code = (err as { statusCode?: number } | null)?.statusCode;
   const httpStatus = typeof code === "number" && code >= 400 && code < 600 ? code : status;
+  const logger = tryGetFileLogger();
+  if (logger) {
+    const level = httpStatus >= 500 ? "error" : "warning";
+    logger.log(level, publicErrorMessage(err), {
+      status: httpStatus,
+      ...(request ? { method: request.method, url: request.url } : {}),
+    }, err);
+  }
   return reply.status(httpStatus).send({ error: publicErrorMessage(err) });
 }
 

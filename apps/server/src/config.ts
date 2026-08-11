@@ -25,8 +25,10 @@ for (const candidate of [
 export const config = {
   port: Number(process.env.PORT ?? 4000),
   dataDir: path.resolve(process.env.DATA_DIR ?? path.join(repoRoot, "data")),
+  /** Structured file logs: logs/{info,warning,error}/ (gitignored). */
+  logsDir: path.resolve(process.env.LOG_DIR ?? path.join(repoRoot, "logs")),
   ollamaHost: process.env.OLLAMA_HOST ?? "http://127.0.0.1:11434",
-  /** Defaults match models already pulled on Daniel's host — see model-catalog.ts */
+  /** Defaults match models already pulled on your host — see model-catalog.ts */
   visionModel: process.env.OLLAMA_VISION_MODEL ?? "maternion/LightOnOCR-2:latest",
   reasoningModel: process.env.OLLAMA_REASONING_MODEL ?? "deepseek-r1:8b",
   architectModel: process.env.OLLAMA_ARCHITECT_MODEL ?? "deepseek-r1:14b",
@@ -42,6 +44,8 @@ export const config = {
   keepAlive: "0",
   /** Soul News sidecar base URL (no trailing slash). Proxied at GET /integrations/soul-news/feed */
   soulNewsUrl: (process.env.SOUL_NEWS_URL ?? "http://127.0.0.1:8787").replace(/\/$/, ""),
+  /** Optional shared token for POST /v1/brief/context on Soul News sidecar */
+  soulNewsContextToken: process.env.SOUL_NEWS_CONTEXT_TOKEN ?? "",
 };
 
 export function profilesDir(): string {

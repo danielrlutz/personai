@@ -15,11 +15,20 @@ import {
 } from "./profiles/registry.js";
 import { registerAuthHook } from "./auth/middleware.js";
 import { dbLooksEncryptedOnDisk } from "./auth/crypto-db.js";
+import {
+  initFileLogger,
+  registerProcessLogHandlers,
+} from "./lib/file-logger.js";
+import { registerFastifyLogging } from "./lib/fastify-logging.js";
 import fs from "node:fs";
 
 async function bootstrap() {
   fs.mkdirSync(config.dataDir, { recursive: true });
+  const fileLogger = initFileLogger({ logsDir: config.logsDir, service: "personai-server" });
+  registerProcessLogHandlers(fileLogger);
   console.log(`[personai] DATA_DIR=${config.dataDir}`);
+  console.log(`[personai] LOG_DIR=${config.logsDir}`);
+  fileLogger.info("Server bootstrap started");
 
   // ignoreTrailingSlash: phones / proxies often hit /health/ or /profiles/
   // Do not log request bodies — auth routes carry passwords.
@@ -63,6 +72,7 @@ async function bootstrap() {
     }
   });
 
+  registerFastifyLogging(app, fileLogger);
   await registerAuthHook(app);
   await registerRoutes(app);
 
@@ -98,6 +108,7 @@ async function bootstrap() {
       }
     }
   } catch (err) {
+    fileLogger.error("Profile bootstrap failed (server stays up for /health)", undefined, err);
     console.error("[personai] Profile bootstrap failed (server stays up for /health):", err);
   }
 
@@ -116,6 +127,15 @@ async function bootstrap() {
 }
 
 bootstrap().catch((err) => {
+  try {
+    initFileLogger({ logsDir: config.logsDir, service: "personai-server" }).error(
+      "Bootstrap failed",
+      undefined,
+      err,
+    );
+  } catch {
+    // logger init may fail if config is broken
+  }
   console.error(err);
   process.exit(1);
 });

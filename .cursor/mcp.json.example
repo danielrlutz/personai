@@ -3,7 +3,7 @@
     "agent-debug": {
       "command": "node",
       "args": [
-        "C:/Users/danie/OneDrive/source/personai-os/apps/agent-debug/dist/mcp/index.js"
+        "/path/to/personai-os/apps/agent-debug/dist/mcp/index.js"
       ],
       "env": {
         "AGENT_DEBUG_URL": "http://127.0.0.1:8790",

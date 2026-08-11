@@ -10,10 +10,10 @@
 # After this, open /profiles/ → Set password & continue (fresh empty SQLite).
 # The quarantined sealed DB is unreadable without the old wrappedDek.
 #
-# Usage (ralph@debi9):
+# Usage (deploy@your-host):
 #   cd /etc/personaios
 #   docker compose stop api
-#   ./scripts/emergency-reset-profile-crypto.sh 21deba4b-391d-4467-a7ea-4bd3fce304d0
+#   ./scripts/emergency-reset-profile-crypto.sh YOUR-PROFILE-UUID
 #   docker compose start api
 #   # phone: /profiles/ → Set password & continue
 #

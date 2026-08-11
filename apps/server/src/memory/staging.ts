@@ -65,7 +65,7 @@ export const STAGING_TOTAL_INJECT_BUDGET = 3500;
 const TEMPLATES: Record<StagingDocId, string> = {
   USER: `# USER
 
-Who you are — name, location (e.g. Cham / Zug), household, work context.
+Who you are — name, location (e.g. Example City), household, work context.
 
 Edit freely. PersonAI injects a truncated slice into Staff and specialist chats.
 `,
@@ -91,12 +91,12 @@ Not the Soul News widget.
 Standing prefs Staff should use **proactively** when present (do not wait to be asked):
 
 - Hotel / travel budget (e.g. ≤ CHF 180)
-- Preferred area: Cham / Zug
+- Preferred area: Example City
 - Invoice language: say **Invoice** (or Rechnung) — never raw enum BILL in chat
 - Tools, banks, communication style
 - Hard nos
 
-Example: hotel budget ≤ CHF 180 · prefer Zug / Cham area · archive says Invoice not BILL
+Example: hotel budget ≤ CHF 180 · prefer Example City area · archive says Invoice not BILL
 `,
   people: `# People
 
@@ -280,7 +280,7 @@ export async function loadStagingForPrompt(profileId: string): Promise<{
   }
 
   const parts = [
-    `Personality vault (local markdown under memory/ — use proactively when relevant; never invent beyond this). When prefs list hotels (Cham/Zug), budgets, or Invoice language, apply them without being asked. Confirm-before-write still applies.`,
+    `Personality vault (local markdown under memory/ — use proactively when relevant; never invent beyond this). When prefs list hotels (your area), budgets, or Invoice language, apply them without being asked. Confirm-before-write still applies.`,
     ...slices.map(
       (s) => `### ${s.filename}${s.truncated ? " (truncated)" : ""}\n${s.injected}`,
     ),

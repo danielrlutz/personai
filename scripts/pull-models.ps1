@@ -1,4 +1,4 @@
-# Optional pulls — defaults assume Daniel's host already has these tags.
+# Optional pulls — defaults assume your host already has these tags.
 $Models = @(
   "maternion/LightOnOCR-2:latest",
   "deepseek-r1:8b",

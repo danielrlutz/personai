@@ -6,6 +6,8 @@ import { apiGet, apiPostBlob, apiUpload, type PendingConfirmation } from "@/lib/
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useProfileNameLimits } from "@/lib/use-profile-name-limits";
+import { validateProfileNameClient } from "@/lib/profile-name-limits";
 
 type ArchiveBlobOption = {
   path: string;
@@ -26,6 +28,7 @@ function downloadBlob(blob: Blob, filename: string) {
 
 /** Export / import a password-sealed .pao suitcase (new profile on import confirm). */
 export function SealedSuitcaseCard() {
+  const nameLimits = useProfileNameLimits();
   const [exportPassword, setExportPassword] = useState("");
   const [exportConfirm, setExportConfirm] = useState("");
   const [includeArchive, setIncludeArchive] = useState(false);
@@ -96,6 +99,13 @@ export function SealedSuitcaseCard() {
     if (importPassword.length < 8) {
       setImportNote("Suitcase password must be at least 8 characters.");
       return;
+    }
+    if (importName.trim()) {
+      const nameError = validateProfileNameClient(importName, nameLimits);
+      if (nameError) {
+        setImportNote(nameError);
+        return;
+      }
     }
     setImportBusy(true);
     setImportNote(null);
@@ -183,8 +193,9 @@ export function SealedSuitcaseCard() {
           <Input
             type="text"
             value={importName}
-            onChange={(e) => setImportName(e.target.value)}
+            onChange={(e) => setImportName(e.target.value.slice(0, nameLimits.maxLength))}
             placeholder="New profile name (optional)"
+            maxLength={nameLimits.maxLength}
           />
           <Button type="button" variant="secondary" onClick={runImport} disabled={importBusy}>
             {importBusy ? "Staging..." : "Stage import (confirm next)"}

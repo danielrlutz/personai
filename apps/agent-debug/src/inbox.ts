@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { config } from "./config.js";
+import { cursorDispatchInfo } from "./cursor-ids.js";
 import { detectWaitSignal, looksLikeFollowUp } from "./batching.js";
 import { captionImage, ensureThumbPath } from "./caption.js";
 import { composeBatchPrompt } from "./compose.js";
@@ -9,8 +10,9 @@ import {
   isSdkDispatchEnabled,
 } from "./dispatch/cursor-sdk-bridge.js";
 import { dispatchQueueSnapshot } from "./dispatch/queue.js";
+import { batchLifecycle } from "./lifecycle.js";
 import { store } from "./store.js";
-import type { Batch, ImageMeta, InboxMessage, StatusSnapshot } from "./types.js";
+import type { AckReason, Batch, DeployStatus, ImageMeta, InboxMessage, StatusSnapshot } from "./types.js";
 
 export type PostMessageInput = {
   sessionId?: string;
@@ -24,12 +26,29 @@ export type PostMessageInput = {
   }>;
   /** Force flush after this message */
   sendNow?: boolean;
+  /** Deploy script: mark batch live after VPS deploy */
+  deployBatchId?: string;
+  deployStatus?: DeployStatus;
+  deployNote?: string;
 };
 
 export async function postMessage(input: PostMessageInput): Promise<{
   message: InboxMessage;
   batch: Batch;
+  deploy?: { batchId: string; deployStatus: DeployStatus; deployedAt: string | null };
 }> {
+  if (input.deployBatchId && input.deployStatus) {
+    const deployed = await markDeployed(input.deployBatchId, input.deployNote, input.deployStatus);
+    const batch = store.getBatch(input.deployBatchId)!;
+    const firstMsg = batch.messageIds
+      .map((id) => store.getMessage(id))
+      .find((m): m is InboxMessage => Boolean(m));
+    if (!firstMsg) {
+      throw new Error(`batch has no messages: ${input.deployBatchId}`);
+    }
+    return { message: firstMsg, batch, deploy: deployed };
+  }
+
   const session = store.getOrCreateSession(input.sessionId);
   const text = (input.text ?? "").trim();
   const urgent = Boolean(input.urgent);
@@ -73,7 +92,15 @@ export async function postMessage(input: PostMessageInput): Promise<{
       composeError: null,
       createdAt: new Date().toISOString(),
       readyAt: null,
+      composedAt: null,
+      dispatchedAt: null,
+      cursorAgentId: null,
+      cursorRunId: null,
       ackedAt: null,
+      ackReason: null,
+      deployStatus: "none",
+      deployNote: null,
+      deployedAt: null,
     };
     await store.addBatch(batch);
   }
@@ -161,6 +188,7 @@ export async function runCompose(batchId: string): Promise<Batch | null> {
       state: "ready",
       composedPrompt: prompt,
       readyAt,
+      composedAt: readyAt,
       composeError: null,
     });
     for (const mid of batch.messageIds) {
@@ -227,6 +255,12 @@ export function getStatus(): StatusSnapshot {
     dispatchedPrompts: dispatchedCount(),
     dispatchQueuePending: dq.pending,
     dispatchLastError: dq.lastError,
+    readyDispatches: ready.map((b) => ({
+      batchId: b.id,
+      urgent: b.urgent,
+      readyAt: b.readyAt,
+      ...cursorDispatchInfo(b),
+    })),
   };
 }
 
@@ -248,8 +282,14 @@ export function listPending() {
       sessionId: b.sessionId,
       urgent: b.urgent,
       readyAt: b.readyAt,
+      composedAt: b.composedAt ?? b.readyAt,
       prompt: b.composedPrompt,
       messageIds: b.messageIds,
+      lifecycle: batchLifecycle(b),
+      ...cursorDispatchInfo(b),
+      deployStatus: b.deployStatus,
+      deployNote: b.deployNote,
+      deployedAt: b.deployedAt,
     })),
     openBatches: open.map((b) => ({
       batchId: b.id,
@@ -260,6 +300,7 @@ export function listPending() {
       awaitingUntil: b.awaitingUntil,
       messageIds: b.messageIds,
       composeError: b.composeError,
+      lifecycle: batchLifecycle(b),
     })),
     pendingMessages,
   };
@@ -268,28 +309,102 @@ export function listPending() {
 export async function ack(ids: {
   batchIds?: string[];
   messageIds?: string[];
-}): Promise<{ ackedBatches: string[]; ackedMessages: string[] }> {
-  const ackedBatches: string[] = [];
-  const ackedMessages: string[] = [];
-  const now = new Date().toISOString();
+  reason?: AckReason;
+}): Promise<{
+  ackedBatches: Array<{ batchId: string; reason: AckReason; ackedAt: string }>;
+  ackedMessages: Array<{ messageId: string; reason: AckReason; ackedAt: string }>;
+}> {
+  const reason = ids.reason ?? "implemented";
+  const ackedBatches: Array<{ batchId: string; reason: AckReason; ackedAt: string }> =
+    [];
+  const ackedMessages: Array<{
+    messageId: string;
+    reason: AckReason;
+    ackedAt: string;
+  }> = [];
 
   for (const id of ids.batchIds ?? []) {
-    const batch = store.getBatch(id);
-    if (!batch) continue;
-    await store.updateBatch(id, { state: "acked", ackedAt: now });
-    ackedBatches.push(id);
-    for (const mid of batch.messageIds) {
-      await store.updateMessage(mid, { status: "acked" });
-      ackedMessages.push(mid);
+    const result = await store.archiveBatch(id, reason);
+    if (!result) continue;
+    ackedBatches.push({
+      batchId: id,
+      reason,
+      ackedAt: result.batch.ackedAt,
+    });
+    for (const msg of result.messages) {
+      ackedMessages.push({
+        messageId: msg.id,
+        reason,
+        ackedAt: msg.ackedAt,
+      });
     }
   }
 
+  const batchAckedMsgIds = new Set(
+    ackedMessages.map((m) => m.messageId),
+  );
   for (const mid of ids.messageIds ?? []) {
-    const msg = store.getMessage(mid);
-    if (!msg || msg.status === "acked") continue;
-    await store.updateMessage(mid, { status: "acked" });
-    ackedMessages.push(mid);
+    if (batchAckedMsgIds.has(mid)) continue;
+    const archived = await store.archiveMessage(mid, reason);
+    if (!archived) continue;
+    ackedMessages.push({
+      messageId: mid,
+      reason,
+      ackedAt: archived.ackedAt,
+    });
   }
 
   return { ackedBatches, ackedMessages };
+}
+
+export function listArchive(limit = 20) {
+  return {
+    archivedBatches: store.listArchivedBatches(limit).map((b) => ({
+      batchId: b.id,
+      sessionId: b.sessionId,
+      urgent: b.urgent,
+      readyAt: b.readyAt,
+      composedAt: b.composedAt ?? b.readyAt,
+      ackedAt: b.ackedAt,
+      ackReason: b.ackReason,
+      promptPreview: (b.composedPrompt || "").slice(0, 200),
+      lifecycle: batchLifecycle(b),
+      deployStatus: b.deployStatus,
+      deployNote: b.deployNote,
+      deployedAt: b.deployedAt,
+      ...cursorDispatchInfo(b),
+    })),
+  };
+}
+
+export async function markDeployed(
+  batchId: string,
+  deployNote?: string | null,
+  deployStatus: DeployStatus = "live",
+): Promise<{ batchId: string; deployStatus: DeployStatus; deployedAt: string | null }> {
+  const batch = store.getBatch(batchId);
+  if (!batch) throw new Error(`batch not found: ${batchId}`);
+
+  const deployedAt = deployStatus === "live" ? new Date().toISOString() : batch.deployedAt;
+  await store.updateBatch(batchId, {
+    deployStatus,
+    deployNote: deployNote?.trim() || batch.deployNote,
+    deployedAt,
+  });
+  return { batchId, deployStatus, deployedAt };
+}
+
+export function enrichMessages(sessionId?: string) {
+  return store.listMessages(sessionId).map((m) => {
+    const batch = m.batchId ? store.getBatch(m.batchId) : undefined;
+    const lifecycle = batch ? batchLifecycle(batch) : null;
+    return {
+      ...m,
+      lifecycle,
+      composedPromptPreview: batch?.composedPrompt
+        ? batch.composedPrompt.slice(0, 320)
+        : null,
+      ...(batch ? cursorDispatchInfo(batch) : {}),
+    };
+  });
 }

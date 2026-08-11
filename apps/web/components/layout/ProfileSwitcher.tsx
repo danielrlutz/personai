@@ -7,7 +7,13 @@ import { getActiveProfileId, logoutToProfiles } from "@/lib/session";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-export function ProfileSwitcher({ className }: { className?: string }) {
+type ProfileSwitcherProps = {
+  className?: string;
+  /** Matches signup max — used for title + optional ch cap in the pill. */
+  maxVisibleChars?: number;
+};
+
+export function ProfileSwitcher({ className, maxVisibleChars }: ProfileSwitcherProps) {
   const [open, setOpen] = useState(false);
   const [confirming, setConfirming] = useState<"switch" | "signout" | null>(null);
   const [activeProfile, setActiveProfile] = useState<Profile | null>(null);
@@ -50,7 +56,8 @@ export function ProfileSwitcher({ className }: { className?: string }) {
     <div className={cn("relative", className)}>
       <Button
         variant="outline"
-        className="w-full justify-between border-border/70 bg-surface-container/90 shadow-elev-1 hover:bg-surface-container-high"
+        className="w-full min-w-0 justify-between border-border/70 bg-surface-container/90 px-3 shadow-elev-1 hover:bg-surface-container-high sm:px-4"
+        title={activeProfile?.name}
         onClick={() => {
           setOpen((v) => !v);
           setConfirming(null);
@@ -64,7 +71,12 @@ export function ProfileSwitcher({ className }: { className?: string }) {
               <User className="h-3.5 w-3.5 text-primary-on-container" />
             )}
           </span>
-          <span className="truncate font-medium">{activeProfile?.name ?? "Profile"}</span>
+          <span
+            className="truncate font-medium"
+            style={maxVisibleChars ? { maxWidth: `${maxVisibleChars}ch` } : undefined}
+          >
+            {activeProfile?.name ?? "Profile"}
+          </span>
         </span>
         <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
       </Button>

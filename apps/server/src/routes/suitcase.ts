@@ -10,6 +10,7 @@ import { getProfileId, sendError, withPrisma } from "./helpers.js";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { config } from "../config.js";
+import { validateProfileName } from "../profiles/name-limits.js";
 
 export async function registerSuitcaseRoutes(app: FastifyInstance): Promise<void> {
   app.get("/suitcase/archive-blobs", async (req, reply) => {
@@ -88,6 +89,11 @@ export async function registerSuitcaseRoutes(app: FastifyInstance): Promise<void
       }
       if (!password) {
         return reply.status(400).send({ error: "Password is required" });
+      }
+      if (profileName.trim()) {
+        const nameCheck = validateProfileName(profileName);
+        if (!nameCheck.ok) return reply.status(400).send({ error: nameCheck.error });
+        profileName = nameCheck.trimmed;
       }
 
       const staged = await stageSuitcaseImport({

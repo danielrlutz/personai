@@ -12,6 +12,7 @@ const PUBLIC_EXACT = new Set([
   "/auth/login",
   "/auth/setup",
   "/archive/drive/oauth/callback",
+  "/ops/client-log",
 ]);
 
 /** Read-only probes — no profile data; keeps status chips honest before/without a session. */

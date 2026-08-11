@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # PersonAI OS — cross-platform setup wizard (macOS / Linux)
 #
-#   curl -fsSL https://raw.githubusercontent.com/danielrlutz/personai/main/setup.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/YOUR_ORG/personai-os/main/setup.sh | bash
 #
 # Non-interactive:
 #   curl -fsSL .../setup.sh | bash -s -- --yes --mode=desktop
@@ -9,10 +9,10 @@
 #
 set -euo pipefail
 
-REPO_URL="${PERSONAI_REPO_URL:-https://github.com/danielrlutz/personai.git}"
+REPO_URL="${PERSONAI_REPO_URL:-https://github.com/YOUR_ORG/personai-os.git}"
 BRANCH="${PERSONAI_BRANCH:-main}"
 DEFAULT_DIR="${PERSONAI_HOME:-$HOME/personai}"
-RAW_BASE="${PERSONAI_RAW_BASE:-https://raw.githubusercontent.com/danielrlutz/personai/main}"
+RAW_BASE="${PERSONAI_RAW_BASE:-https://raw.githubusercontent.com/YOUR_ORG/personai-os/main}"
 
 MODE=""                 # desktop | vps | full | check
 ASSUME_YES=0

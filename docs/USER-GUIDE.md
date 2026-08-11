@@ -152,7 +152,7 @@ How to reindex: **Settings → Google Drive → Reindex Drive knowledge** (requi
 - **Theme & lock** — theme **system** / **dark** / **light**; optional **Set 4–8 digit PIN** → **Enable PIN** (locks UI on tab hide / idle; database still sealed by password).
 - **Sealed suitcase** — export a password-sealed `.pao` (optional local archive); import stages a **new** sealed profile for confirm (session stays on the current profile).
 - **Password & encryption** — **Change password** anytime.
-- **About you / Personality vault** — edit local markdown (`USER.md`, `SOUL.md`, `preferences.md`, `people.md`, `ADHD.md`) under the profile’s `memory/` folder. Staff and specialists inject budgeted slices (e.g. hotel budget, Cham/Zug). Distinct from the **Soul News** home widget. The same card shows **Learning from your edits** — a private local log of naming fixes, declines, closer-inspection flags, Drive folder prefs, vault edits, and Team **Remember** actions. Use **Remember for later** there to queue a confirm-gated bullet into `preferences.md` (or confirm filing memory after archives). Nothing is sent to train cloud models.
+- **About you / Personality vault** — edit local markdown (`USER.md`, `SOUL.md`, `preferences.md`, `people.md`, `ADHD.md`) under the profile’s `memory/` folder. Staff and specialists inject budgeted slices (e.g. hotel budget, your area). Distinct from the **Soul News** home widget. The same card shows **Learning from your edits** — a private local log of naming fixes, declines, closer-inspection flags, Drive folder prefs, vault edits, and Team **Remember** actions. Use **Remember for later** there to queue a confirm-gated bullet into `preferences.md` (or confirm filing memory after archives). Nothing is sent to train cloud models.
 - **Memory facts** — short key/value facts specialists should remember → **Add**. Distill from chats still waits for **Needs your confirmation** before writing.
 - **First-launch setup** → **Alerts** → **Allow notifications** for Fristen and pending confirms.
 - Profile menu: **Switch profile** / **Sign out** (both return to the account picker and seal the session).
@@ -271,7 +271,7 @@ You do **not** need SSH for normal Drive linking or day-to-day config once the a
 
 ---
 
-## Example: Tailscale MagicDNS (`debi9`) — HTTPS for Install app
+## Example: Tailscale MagicDNS (`your-host`) — HTTPS for Install app
 
 Use your own hostname if different. Full `*.ts.net` names work more reliably on Android than short names.
 
@@ -281,18 +281,18 @@ On the VPS (once HTTPS is enabled in the Tailscale admin DNS page):
 
 ```bash
 cd /etc/personaios
-HTTPS=1 ./scripts/vps-tailscale.sh debi9.tail8175e6.ts.net
+HTTPS=1 ./scripts/vps-tailscale.sh your-host.tailXXXX.ts.net
 ```
 
 If `tailscale serve status` shows **No serve config** (HTTPS `:8443` fails but `http://127.0.0.1:4000/health` works):
 
 ```bash
 # A) Quick — browse + Drive today (not Install app)
-# Phone: http://debi9.tail8175e6.ts.net:3000
-# Settings → API Server → http://debi9.tail8175e6.ts.net:4000 → Save & test
+# Phone: http://your-host.tailXXXX.ts.net:3000
+# Settings → API Server → http://your-host.tailXXXX.ts.net:4000 → Save & test
 
 # B) Full — restore Serve for PWA
-HTTPS=1 ./scripts/vps-tailscale.sh --serve-only debi9.tail8175e6.ts.net
+HTTPS=1 ./scripts/vps-tailscale.sh --serve-only your-host.tailXXXX.ts.net
 # or: sudo tailscale serve reset
 #     sudo tailscale serve --bg --yes --https=443 3000
 #     sudo tailscale serve --bg --yes --https=8443 4000
@@ -301,23 +301,23 @@ HTTPS=1 ./scripts/vps-tailscale.sh --serve-only debi9.tail8175e6.ts.net
 Then on the phone:
 
 ```text
-Web / Install app:  https://debi9.tail8175e6.ts.net
-API:                https://debi9.tail8175e6.ts.net:8443
-API health:         https://debi9.tail8175e6.ts.net:8443/health
+Web / Install app:  https://your-host.tailXXXX.ts.net
+API:                https://your-host.tailXXXX.ts.net:8443
+API health:         https://your-host.tailXXXX.ts.net:8443/health
 
-Product vault → Public web URL:  https://debi9.tail8175e6.ts.net
-Product vault → Public API URL:  https://debi9.tail8175e6.ts.net:8443
+Product vault → Public web URL:  https://your-host.tailXXXX.ts.net
+Product vault → Public API URL:  https://your-host.tailXXXX.ts.net:8443
 
 Google OAuth authorized redirect URI (exact):
-https://debi9.tail8175e6.ts.net:8443/archive/drive/oauth/callback
+https://your-host.tailXXXX.ts.net:8443/archive/drive/oauth/callback
 ```
 
-1. Open **`https://debi9.tail8175e6.ts.net`** (no `:3000`).
+1. Open **`https://your-host.tailXXXX.ts.net`** (no `:3000`).
 2. `/profiles/` → **Unlock**.
-3. If needed: **Settings → API Server** → `https://debi9.tail8175e6.ts.net:8443` → **Save & test**.
+3. If needed: **Settings → API Server** → `https://your-host.tailXXXX.ts.net:8443` → **Save & test**.
 4. Chrome menu → **Install app**.
 
-Browse-only HTTP (not installable): `http://debi9.tail8175e6.ts.net:3000` / API `:4000`.
+Browse-only HTTP (not installable): `http://your-host.tailXXXX.ts.net:3000` / API `:4000`.
 
 ### Can't unlock (sealed DB / missing unlock keys)
 
@@ -325,21 +325,21 @@ If `/profiles/` shows **Restore unlock keys**, or Unlock returns that unlock key
 
 If the UI only says **Could not load profiles**, the phone cannot reach the API (wrong URL, Serve `:8443` down, or API crash) — use the Serve recovery steps below.
 
-### ralph@debi9 — Serve / Drive recovery
+### deploy@your-host — Serve / Drive recovery
 
 If Settings shows **Loading encrypted Settings…**, Active API `https://…:8443`, and `/ceo-profile` / `/memory-facts` fail, Tailscale Serve for the API is usually broken. Product vault and **Link Google Drive** cannot load until the API answers.
 
 **Immediate workaround (Drive setup only — not PWA Install app):**
 
 ```text
-Phone browser → http://debi9.tail8175e6.ts.net:3000
-Settings → API Server → http://debi9.tail8175e6.ts.net:4000 → Save & test
+Phone browser → http://your-host.tailXXXX.ts.net:3000
+Settings → API Server → http://your-host.tailXXXX.ts.net:4000 → Save & test
 Unlock → Product vault → OAuth → Link Google Drive
 ```
 
 Do **not** stay on `https://…` and point the API at `http://…:4000` — browsers block that as mixed content.
 
-**VPS fix (ralph@debi9):**
+**VPS fix (deploy@your-host):**
 
 ```bash
 cd /etc/personaios
@@ -351,30 +351,30 @@ curl -sS -o /dev/null -w 'web %{http_code}\n' http://127.0.0.1:3000/
 
 # 2) Serve status + MagicDNS probes
 sudo tailscale serve status
-curl -sS https://debi9.tail8175e6.ts.net:8443/health
-curl -sS -o /dev/null -w 'https-web %{http_code}\n' https://debi9.tail8175e6.ts.net/
-curl -sS http://debi9.tail8175e6.ts.net:4000/health
+curl -sS https://your-host.tailXXXX.ts.net:8443/health
+curl -sS -o /dev/null -w 'https-web %{http_code}\n' https://your-host.tailXXXX.ts.net/
+curl -sS http://your-host.tailXXXX.ts.net:4000/health
 
 # 3) Recreate Serve only (no docker rebuild) — when status says "No serve config"
-HTTPS=1 ./scripts/vps-tailscale.sh --serve-only debi9.tail8175e6.ts.net
+HTTPS=1 ./scripts/vps-tailscale.sh --serve-only your-host.tailXXXX.ts.net
 # manual equivalent:
 #   sudo tailscale serve reset
 #   sudo tailscale serve --bg --yes --https=443 3000
 #   sudo tailscale serve --bg --yes --https=8443 4000
 sudo tailscale serve status
-curl -sS https://debi9.tail8175e6.ts.net:8443/health
+curl -sS https://your-host.tailXXXX.ts.net:8443/health
 
 # 4) Or full HTTPS rebuild (bake URLs + Serve + probe)
-HTTPS=1 ./scripts/vps-tailscale.sh debi9.tail8175e6.ts.net
-./scripts/vps-verify.sh debi9.tail8175e6.ts.net
+HTTPS=1 ./scripts/vps-tailscale.sh your-host.tailXXXX.ts.net
+./scripts/vps-verify.sh your-host.tailXXXX.ts.net
 ```
 
 **Phone after Serve is healthy:**
 
-1. Open `https://debi9.tail8175e6.ts.net` (clear site data for old HTTP origins if needed).
-2. Unlock → Settings API = `https://debi9.tail8175e6.ts.net:8443` → Save & test.
+1. Open `https://your-host.tailXXXX.ts.net` (clear site data for old HTTP origins if needed).
+2. Unlock → Settings API = `https://your-host.tailXXXX.ts.net:8443` → Save & test.
 3. Product vault → Public API URL + redirect  
-   `https://debi9.tail8175e6.ts.net:8443/archive/drive/oauth/callback` (also in Google Cloud).
+   `https://your-host.tailXXXX.ts.net:8443/archive/drive/oauth/callback` (also in Google Cloud).
 4. **Link Google Drive** → Refresh archive context.
 5. Optional: Chrome → **Install app**.
 

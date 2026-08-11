@@ -10,6 +10,11 @@ import {
   loginWithPassword,
   setupPassword,
 } from "@/lib/session";
+import {
+  DEFAULT_PROFILE_NAME_LIMITS,
+  validateProfileNameClient,
+  type ProfileNameLimits,
+} from "@/lib/profile-name-limits";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -32,10 +37,14 @@ export default function ProfilesPage() {
   const [passwordConfirm, setPasswordConfirm] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [nameLimits, setNameLimits] = useState<ProfileNameLimits>(DEFAULT_PROFILE_NAME_LIMITS);
 
   useEffect(() => {
     void apiGet<ProfileRegistry>("/profiles")
-      .then((registry) => setProfiles(registry.profiles))
+      .then((registry) => {
+        setProfiles(registry.profiles);
+        if (registry.nameLimits) setNameLimits(registry.nameLimits);
+      })
       .catch(() => setError("Could not load profiles. Is the API running?"))
       .finally(() => setLoading(false));
   }, []);
@@ -96,7 +105,11 @@ export default function ProfilesPage() {
   };
 
   const submitCreate = async () => {
-    if (!newName.trim()) return;
+    const nameError = validateProfileNameClient(newName, nameLimits);
+    if (nameError) {
+      setError(nameError);
+      return;
+    }
     if (password.length < 8) {
       setError("Password must be at least 8 characters");
       return;
@@ -258,15 +271,22 @@ export default function ProfilesPage() {
                 />
               )}
               {step.kind === "create" && (
-                <Input
-                  autoFocus
-                  name="username"
-                  placeholder="Profile name"
-                  value={newName}
-                  onChange={(e) => setNewName(e.target.value)}
-                  disabled={submitting}
-                  autoComplete="username"
-                />
+                <>
+                  <Input
+                    autoFocus
+                    name="username"
+                    placeholder="Profile name"
+                    value={newName}
+                    onChange={(e) => setNewName(e.target.value.slice(0, nameLimits.maxLength))}
+                    disabled={submitting}
+                    autoComplete="username"
+                    maxLength={nameLimits.maxLength}
+                  />
+                  <p className="text-xs leading-relaxed text-muted-foreground">
+                    Up to {nameLimits.maxLength} characters — sized to fit the header on phone (
+                    {nameLimits.visibleChars.mobile}) and desktop ({nameLimits.visibleChars.sm}).
+                  </p>
+                </>
               )}
               <Input
                 autoFocus={step.kind !== "create"}
@@ -314,7 +334,7 @@ export default function ProfilesPage() {
                     else if (step.kind === "setup") void submitSetup();
                     else void submitCreate();
                   }}
-                  disabled={submitting || !password}
+                  disabled={submitting || !password || (step.kind === "create" && !newName.trim())}
                 >
                   {submitting
                     ? "Please wait…"

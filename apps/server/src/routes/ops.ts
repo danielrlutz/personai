@@ -3,6 +3,7 @@ import { createConfirmation } from "../confirm/confirm-service.js";
 import { stageCalendarEvent } from "../confirm/apply-confirmation.js";
 import { buildFristenCalendarPack } from "../calendar/fristen-pack.js";
 import { config } from "../config.js";
+import { tryGetFileLogger } from "../lib/file-logger.js";
 import { resolveProductConfig } from "../settings/host-vault.js";
 import { ARCHIVE_TAXONOMY } from "../specialists/roster.js";
 import { sendError, withPrisma } from "./helpers.js";
@@ -21,6 +22,29 @@ async function getPremiumUsage(prisma: Awaited<ReturnType<typeof withPrisma>>["p
 }
 
 export async function registerOpsRoutes(app: FastifyInstance): Promise<void> {
+  /** Browser-reported errors (static web has no local logs dir). No auth — sanitized. */
+  app.post("/ops/client-log", async (req, reply) => {
+    const body = (req.body ?? {}) as {
+      level?: string;
+      message?: string;
+      stack?: string;
+      url?: string;
+      component?: string;
+    };
+    const message = String(body.message ?? "").trim().slice(0, 2000);
+    if (!message) {
+      return reply.status(400).send({ error: "message required" });
+    }
+    const level = body.level === "warning" ? "warning" : body.level === "info" ? "info" : "error";
+    const logger = tryGetFileLogger();
+    logger?.log(level, message, {
+      source: "personai-web",
+      url: String(body.url ?? "").slice(0, 500) || undefined,
+      component: String(body.component ?? "").slice(0, 200) || undefined,
+    }, body.stack);
+    return { ok: true };
+  });
+
   app.get("/activity", async (req, reply) => {
     try {
       const { prisma } = await withPrisma(req);

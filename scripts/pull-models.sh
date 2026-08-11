@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Optional pulls — PersonAI defaults to models already on Daniel's host.
+# Optional pulls — PersonAI defaults to models already on your host.
 # Failover walks the catalog; do not require unknown tags.
 set -euo pipefail
 
