@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <meta name="color-scheme" content="dark" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <title>Agent Debug</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="app">
+      <header class="top">
+        <div>
+          <h1>Agent Debug</h1>
+          <p class="sub">Phone → Ollama compose → Cursor MCP</p>
+        </div>
+        <div class="status" id="statusPill">…</div>
+      </header>
+
+      <section class="toolbar">
+        <label class="token">
+          <span>Token</span>
+          <input
+            id="tokenInput"
+            type="password"
+            autocomplete="off"
+            placeholder="AGENT_DEBUG_TOKEN"
+          />
+        </label>
+        <label class="check">
+          <input type="checkbox" id="urgentToggle" />
+          Urgent
+        </label>
+        <button type="button" id="composeBtn" class="ghost">Send now</button>
+      </section>
+
+      <main id="thread" class="thread" aria-live="polite"></main>
+
+      <footer class="composer">
+        <div id="previews" class="previews"></div>
+        <div class="row">
+          <label class="attach" title="Attach images">
+            <input
+              id="fileInput"
+              type="file"
+              accept="image/*"
+              multiple
+              hidden
+            />
+            +
+          </label>
+          <textarea
+            id="textInput"
+            rows="2"
+            placeholder="Message Cursor… (say “wait for pictures” to batch)"
+          ></textarea>
+          <button type="button" id="sendBtn" class="send">Send</button>
+        </div>
+        <p class="hint">
+          Paste images from clipboard. Batch holds ~90s or until “send now”.
+        </p>
+      </footer>
+    </div>
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>

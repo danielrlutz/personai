@@ -53,3 +53,36 @@ services:
     depends_on:
       - api
     restart: unless-stopped
+
+  # Optional balcony/phone → Cursor MCP inbox. Opt-in profile:
+  #   docker compose --profile agent-debug up -d --build agent-debug
+  agent-debug:
+    profiles: ["agent-debug"]
+    build:
+      context: .
+      dockerfile: apps/agent-debug/Dockerfile
+    ports:
+      - "0.0.0.0:8790:8790"
+    volumes:
+      - ./data/agent-debug:/app/data/agent-debug
+    environment:
+      PORT: "8790"
+      HOST: "0.0.0.0"
+      DATA_DIR: /app/data/agent-debug
+      OLLAMA_HOST: ${OLLAMA_HOST:-http://host.docker.internal:11434}
+      AGENT_DEBUG_COMPOSE_MODEL: ${AGENT_DEBUG_COMPOSE_MODEL:-llama3.1:8b}
+      AGENT_DEBUG_VISION_MODEL: ${AGENT_DEBUG_VISION_MODEL:-${OLLAMA_VISION_MODEL:-maternion/LightOnOCR-2}}
+      AGENT_DEBUG_TOKEN: ${AGENT_DEBUG_TOKEN:-}
+      AGENT_DEBUG_BATCH_TIMEOUT_MS: ${AGENT_DEBUG_BATCH_TIMEOUT_MS:-90000}
+      AGENT_DEBUG_CONTEXT_HINT: ${AGENT_DEBUG_CONTEXT_HINT:-}
+      AGENT_DEBUG_VPS_HOST: ${AGENT_DEBUG_VPS_HOST:-}
+      AGENT_DEBUG_PROFILE_HINT: ${AGENT_DEBUG_PROFILE_HINT:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:8790/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 15s

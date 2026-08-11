@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "agent-debug": {
+      "command": "node",
+      "args": ["apps/agent-debug/dist/mcp/index.js"],
+      "env": {
+        "AGENT_DEBUG_URL": "http://127.0.0.1:8790",
+        "AGENT_DEBUG_TOKEN": ""
+      }
+    }
+  }
+}
