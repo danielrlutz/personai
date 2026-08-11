@@ -21,3 +21,7 @@ coverage
 tmp/
 secrets/
 *.pem
+
+# Local Cursor MCP config (may contain tokens)
+.cursor/mcp.json
+
