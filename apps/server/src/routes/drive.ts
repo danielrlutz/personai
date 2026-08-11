@@ -22,6 +22,7 @@ import {
   enqueueDriveKnowledgeReindexForProfile,
   getDriveKnowledgeStatus,
 } from "../archive/drive-knowledge/index.js";
+import { recordDrivePrefer } from "../memory/corrections.js";
 
 import {
   dryRunCombineFolders,
@@ -318,7 +319,14 @@ export async function registerDriveRoutes(app: FastifyInstance): Promise<void> {
         }
         const category = Number(req.body?.category);
         const folderId = typeof req.body?.folderId === "string" ? req.body.folderId : "";
-        return await preferTaxonomyFolderForever({ profileId, category, folderId });
+        const out = await preferTaxonomyFolderForever({ profileId, category, folderId });
+        await recordDrivePrefer({
+          profileId,
+          category: out.category,
+          folderId: out.folderId,
+          folderName: out.folderName,
+        }).catch(() => undefined);
+        return out;
       } catch (err) {
         return sendError(reply, err);
       }

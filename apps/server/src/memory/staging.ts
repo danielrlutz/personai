@@ -214,6 +214,31 @@ export async function writeStagingDoc(
   return readStagingDoc(profileId, id);
 }
 
+/**
+ * Append a short bullet to preferences.md / ADHD.md (confirm-gated callers only).
+ * Dedupes exact bullet lines; creates the file from template when missing.
+ */
+export async function appendStagingBullet(
+  profileId: string,
+  id: "preferences" | "ADHD",
+  bullet: string,
+): Promise<StagingDoc> {
+  const cleaned = bullet.replace(/\s+/g, " ").trim().replace(/^[-*]\s*/, "");
+  if (!cleaned) {
+    const err = new Error("bullet is required");
+    (err as { statusCode?: number }).statusCode = 400;
+    throw err;
+  }
+  const line = `- ${cleaned.slice(0, 240)}`;
+  const existing = await readStagingDoc(profileId, id);
+  const base = existing.exists ? existing.content.replace(/\r\n/g, "\n") : TEMPLATES[id];
+  if (base.split(/\n/).some((l) => l.trim() === line)) {
+    return existing.exists ? existing : writeStagingDoc(profileId, id, base);
+  }
+  const next = `${base.replace(/\s*$/, "")}\n\n## Learned from corrections\n${line}\n`;
+  return writeStagingDoc(profileId, id, next);
+}
+
 export type StagingPromptSlice = {
   id: StagingDocId;
   filename: string;

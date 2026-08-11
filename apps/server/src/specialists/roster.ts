@@ -1,5 +1,9 @@
 import { config } from "../config.js";
-import { archiveTypeToken, normalizeDocumentType } from "../archive/doc-type-tokens.js";
+import {
+  archiveTypeToken,
+  coerceArchiveTypeToken,
+  normalizeDocumentType,
+} from "../archive/doc-type-tokens.js";
 import {
   archiveDatePrefix,
   sanitizeArchiveEntity,
@@ -274,10 +278,15 @@ export function suggestArchiveName(parts: {
   documentType?: string | null;
   entity?: string | null;
   extension?: string | null;
+  /** Soft override from correction / Drive vocabulary (e.g. Rechnung). */
+  preferredTypeToken?: string | null;
 }): string {
   const date = archiveDatePrefix(parts.date);
   // Drive vocabulary: Invoice / Quittance / Medical — never shouty BILL / MEDICAL_RECORD.
-  const docType = archiveTypeToken(normalizeDocumentType(parts.documentType));
+  const preferred = parts.preferredTypeToken?.trim();
+  const docType = preferred
+    ? coerceArchiveTypeToken(preferred)
+    : archiveTypeToken(normalizeDocumentType(parts.documentType));
   const entity = sanitizeArchiveEntity(parts.entity);
   const ext = sanitizeExtension(parts.extension);
   return `${date}_${docType}_${entity}${ext}`;

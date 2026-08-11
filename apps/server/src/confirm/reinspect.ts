@@ -31,6 +31,11 @@ import {
   suggestArchiveName,
 } from "../specialists/roster.js";
 import { lookupEntityArchiveCategory } from "../memory/filing-memory.js";
+import {
+  lookupCorrectionArchiveCategory,
+  lookupCorrectionDocTypeToken,
+} from "../memory/corrections.js";
+import { getActiveProfileId } from "../db/prisma-singleton.js";
 import { guessMime } from "../archive/commit.js";
 import { normalizeDocumentType } from "../archive/doc-type-tokens.js";
 import { safeDate, safeDateOrNow, safeFiniteNumber } from "../lib/safe-data.js";
@@ -577,14 +582,23 @@ export async function processConfirmReinspect(
     const documentType = normalizeDocumentType(refinedStructured.documentType);
     refinedStructured.documentType = documentType;
     const entity = pickEntity(refinedStructured);
+    const profileId = getActiveProfileId();
+    const preferredTypeToken = profileId
+      ? await lookupCorrectionDocTypeToken(profileId, documentType)
+      : null;
     const archiveName = suggestArchiveName({
       date: refinedStructured.date ? String(refinedStructured.date) : null,
       documentType,
       entity,
       extension,
+      preferredTypeToken,
     });
     const learnedCategory = await lookupEntityArchiveCategory(prisma, entity);
-    const archiveCategory = learnedCategory ?? suggestArchiveCategory(documentType);
+    const correctionCategory = profileId
+      ? await lookupCorrectionArchiveCategory(profileId, entity)
+      : null;
+    const archiveCategory =
+      learnedCategory ?? correctionCategory ?? suggestArchiveCategory(documentType);
     const deadline = safeDate(refinedStructured.dueDate);
     const mimeType = document.mimeType || guessMime(`file${extension}`, null);
     const reinspectAt = new Date().toISOString();

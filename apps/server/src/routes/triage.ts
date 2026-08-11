@@ -5,6 +5,7 @@ import { resolveSpecialistModel } from "../specialists/resolve-model.js";
 import { SPECIALISTS, resolveSpecialistId } from "../specialists/roster.js";
 import { vramLock } from "../ollama/vram-lock.js";
 import { formatSnippetsForPrompt, searchMemorySnippets } from "../memory/rag-lite.js";
+import { buildCorrectionsInjection } from "../memory/corrections.js";
 import { loadStagingPrefsHint } from "../memory/staging.js";
 import { sendError, withPrisma } from "./helpers.js";
 
@@ -73,12 +74,16 @@ export async function registerTriageRoutes(app: FastifyInstance): Promise<void> 
         topK: 4,
       });
 
-      const [snippets, prefsHint] = await Promise.all([
+      const [snippets, prefsHint, correctionsBlock] = await Promise.all([
         searchMemorySnippets(prisma, profileId, { query: seed, limit: 6, snippetChars: 220 }),
         loadStagingPrefsHint(profileId, 700),
+        buildCorrectionsInjection(profileId, 500),
       ]);
       const snippetBlock = formatSnippetsForPrompt(snippets, 1000);
-      const memoryContext = [prefsHint, snippetBlock].filter(Boolean).join("\n\n").slice(0, 1600);
+      const memoryContext = [prefsHint, correctionsBlock, snippetBlock]
+        .filter(Boolean)
+        .join("\n\n")
+        .slice(0, 1800);
 
       // Soft AI refine when Ollama is up — never block triage on model failure
       try {

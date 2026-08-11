@@ -12,6 +12,7 @@ import {
   type CeoProfileCard,
   type MemoryFactCard,
 } from "../memory/user-care.js";
+import { buildCorrectionsInjection } from "../memory/corrections.js";
 import { loadStagingForPrompt } from "../memory/staging.js";
 
 export type BriefingSnapshot = {
@@ -322,12 +323,13 @@ export async function* streamBriefingNarrative(
   });
 
   const profileId = getActiveProfileId();
-  const [ceo, facts, staging] = await Promise.all([
+  const [ceo, facts, staging, correctionsBlock] = await Promise.all([
     getCeoProfileCard(prisma),
     listRecentMemoryFacts(prisma),
     profileId
       ? loadStagingForPrompt(profileId)
       : Promise.resolve({ block: "", slices: [], totalInjected: 0 }),
+    profileId ? buildCorrectionsInjection(profileId, 500) : Promise.resolve(""),
   ]);
   const knowledgeBlock = await buildKnowledgeInjection({
     profileId: getActiveProfileId(),
@@ -335,7 +337,13 @@ export async function* streamBriefingNarrative(
     charBudget: 1000,
     topK: 4,
   });
-  const userCareBlock = formatBriefingUserCare(ceo, facts, staging.block, knowledgeBlock);
+  const userCareBlock = formatBriefingUserCare(
+    ceo,
+    facts,
+    staging.block,
+    knowledgeBlock,
+    correctionsBlock,
+  );
 
   const release = await vramLock.acquire("REASONING");
   let full = "";

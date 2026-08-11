@@ -779,6 +779,22 @@ export interface MemoryFact {
   createdAt?: string;
 }
 
+/** Local correction log entry (privacy-first; not cloud training). */
+export interface UserCorrectionSummary {
+  id: string;
+  at: string;
+  kind: string;
+  summary: string | null;
+  signature: string;
+}
+
+export interface CorrectionsStatus {
+  totalRecent: number;
+  byKind: Record<string, number>;
+  recent: UserCorrectionSummary[];
+  learningNote: string;
+}
+
 /** OpenClaw-style personality staging doc under profile memory/. */
 export interface StagingDoc {
   id: string;

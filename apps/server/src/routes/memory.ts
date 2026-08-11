@@ -6,6 +6,13 @@ import {
 } from "../memory/distill.js";
 import { searchMemorySnippets } from "../memory/rag-lite.js";
 import {
+  correctionsStatus,
+  listCorrections,
+  queueStagingBulletProposal,
+  recordStagingEdit,
+  recordTeamRemember,
+} from "../memory/corrections.js";
+import {
   STAGING_DOCS,
   STAGING_TOTAL_INJECT_BUDGET,
   isStagingDocId,
@@ -118,7 +125,7 @@ export async function registerMemoryRoutes(app: FastifyInstance): Promise<void> 
     };
   }>("/memory-facts", async (req, reply) => {
     try {
-      const { prisma } = await withPrisma(req);
+      const { prisma, profileId } = await withPrisma(req);
       const key = req.body?.key?.trim();
       const value = req.body?.value?.trim();
       if (!key) return reply.status(400).send({ error: "key is required" });
@@ -140,6 +147,13 @@ export async function registerMemoryRoutes(app: FastifyInstance): Promise<void> 
           specialistId: req.body.specialistId?.trim() || null,
         },
       });
+      await recordTeamRemember({
+        profileId,
+        key,
+        value,
+        source: req.body.source?.trim() || "user",
+        specialistId: req.body.specialistId?.trim() || null,
+      }).catch(() => undefined);
       return fact;
     } catch (err) {
       return sendError(reply, err);
@@ -263,10 +277,87 @@ export async function registerMemoryRoutes(app: FastifyInstance): Promise<void> 
         if (typeof req.body?.content !== "string") {
           return reply.status(400).send({ error: "content string is required" });
         }
-        return await writeStagingDoc(profileId, docId, req.body.content);
+        const before = await readStagingDoc(profileId, docId);
+        const saved = await writeStagingDoc(profileId, docId, req.body.content);
+        await recordStagingEdit({
+          profileId,
+          docId,
+          beforeContent: before.content,
+          afterContent: saved.content,
+        }).catch(() => undefined);
+        return saved;
       } catch (err) {
         return sendError(reply, err);
       }
     },
   );
+
+  /** Recent local correction log — Settings → About you learning strip. */
+  app.get("/corrections", async (req, reply) => {
+    try {
+      const { profileId } = await withPrisma(req);
+      return await correctionsStatus(profileId);
+    } catch (err) {
+      return sendError(reply, err);
+    }
+  });
+
+  app.get<{ Querystring: { limit?: string; kind?: string } }>(
+    "/corrections/recent",
+    async (req, reply) => {
+      try {
+        const { profileId } = await withPrisma(req);
+        const limit = req.query?.limit ? Number(req.query.limit) : 20;
+        const kind = req.query?.kind?.trim() || undefined;
+        const corrections = await listCorrections(profileId, {
+          limit: Number.isFinite(limit) ? limit : 20,
+          kind: kind as
+            | "naming.patch"
+            | "confirm.reject"
+            | "reinspect.flag"
+            | "drive.prefer_folder"
+            | "staging.edit"
+            | "team.remember"
+            | undefined,
+        });
+        return { corrections };
+      } catch (err) {
+        return sendError(reply, err);
+      }
+    },
+  );
+
+  /**
+   * Explicit "Remember this" from a correction — queues confirm-gated staging bullet
+   * (preferences.md / ADHD.md). Never silent-writes the vault.
+   */
+  app.post<{
+    Body: {
+      docId?: "preferences" | "ADHD";
+      bullet?: string;
+      reason?: string;
+      correctionId?: string;
+    };
+  }>("/corrections/remember", async (req, reply) => {
+    try {
+      const { prisma } = await withPrisma(req);
+      const docId = req.body?.docId === "ADHD" ? "ADHD" : "preferences";
+      const bullet = String(req.body?.bullet ?? "").trim();
+      if (!bullet) return reply.status(400).send({ error: "bullet is required" });
+      const out = await queueStagingBulletProposal(prisma, {
+        docId,
+        bullet,
+        reason: req.body?.reason,
+        sourceCorrectionId: req.body?.correctionId ?? null,
+      });
+      return {
+        ...out,
+        message: out.queued
+          ? "Queued under Needs your confirmation (Remember for later)."
+          : out.reason,
+      };
+    } catch (err) {
+      return sendError(reply, err);
+    }
+  });
 }

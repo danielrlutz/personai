@@ -2,7 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { Sparkles } from "lucide-react";
-import { apiGet, apiPut } from "@/lib/api-client";
+import {
+  apiGet,
+  apiPost,
+  apiPut,
+  type CorrectionsStatus,
+} from "@/lib/api-client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -42,10 +47,12 @@ type StagingPayload = {
 /** Settings — About you / Personality vault (OpenClaw-style staging markdown). */
 export function PersonalityVaultCard() {
   const [data, setData] = useState<StagingPayload | null>(null);
+  const [corrections, setCorrections] = useState<CorrectionsStatus | null>(null);
   const [activeId, setActiveId] = useState("USER");
   const [draft, setDraft] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [rememberBusyId, setRememberBusyId] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -53,8 +60,12 @@ export function PersonalityVaultCard() {
     setLoading(true);
     setError(null);
     try {
-      const payload = await apiGet<StagingPayload>("/staging", { silent: true });
+      const [payload, corr] = await Promise.all([
+        apiGet<StagingPayload>("/staging", { silent: true }),
+        apiGet<CorrectionsStatus>("/corrections", { silent: true }).catch(() => null),
+      ]);
       setData(payload);
+      setCorrections(corr);
       const id = preferId ?? activeId;
       const doc = payload.docs.find((d) => d.id === id) ?? payload.docs[0];
       if (doc) {
@@ -66,6 +77,30 @@ export function PersonalityVaultCard() {
       setError(err instanceof Error ? err.message : "Could not load personality vault.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const rememberCorrection = async (c: { id: string; summary: string | null }) => {
+    const bullet = (c.summary ?? "").replace(/^[^:]+:\s*/, "").trim();
+    if (!bullet) return;
+    setRememberBusyId(c.id);
+    setNote(null);
+    setError(null);
+    try {
+      const out = await apiPost<{ queued?: boolean; message?: string }>("/corrections/remember", {
+        docId: "preferences",
+        bullet,
+        correctionId: c.id,
+        reason: "Remember this correction in preferences.md",
+      });
+      setNote(
+        out.message ??
+          "Queued under Needs your confirmation — Remember for later.",
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not queue remember.");
+    } finally {
+      setRememberBusyId(null);
     }
   };
 
@@ -189,6 +224,44 @@ export function PersonalityVaultCard() {
                   ? `: ${data.inject.slices.map((s) => s.filename).join(", ")}`
                   : ". Add prefs (hotel budget, Cham/Zug, …) to make triage feel Jarvis-smart."}
               </p>
+            </div>
+
+            <div className="rounded-xl border border-border/60 bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+              <p className="font-medium text-foreground">Learning from your edits</p>
+              <p className="mt-1">
+                {corrections?.learningNote ??
+                  "PersonAI learns locally from naming fixes, declines, flags, Drive folder prefs, and vault edits. Durable memory still needs confirmation — nothing trains cloud models."}
+              </p>
+              {corrections && corrections.recent.length > 0 ? (
+                <ul className="mt-2 space-y-1.5">
+                  {corrections.recent.slice(0, 6).map((c) => (
+                    <li
+                      key={c.id}
+                      className="flex flex-wrap items-center justify-between gap-2 border-t border-border/40 pt-1.5 first:border-0 first:pt-0"
+                    >
+                      <span className="min-w-0 flex-1 truncate text-foreground/90">
+                        {c.summary ?? c.kind}
+                      </span>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 shrink-0 px-2 text-[11px]"
+                        disabled={rememberBusyId === c.id || !c.summary}
+                        onClick={() => void rememberCorrection(c)}
+                        title="Queue a confirm-gated bullet in preferences.md"
+                      >
+                        {rememberBusyId === c.id ? "…" : "Remember for later"}
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-2">
+                  No corrections yet — edit a confirm naming, flag incomplete pages, or Prefer a
+                  Drive folder and they show up here.
+                </p>
+              )}
             </div>
           </>
         ) : null}

@@ -25,6 +25,7 @@ import {
   queueFilingMemoryProposal,
   resolveFilingEntity,
 } from "../memory/filing-memory.js";
+import { applyStagingAppend } from "../memory/corrections.js";
 import { persistUserSkill } from "../skills/registry.js";
 import { buildFristKitPayload } from "../legal/frist-kit.js";
 import {
@@ -516,6 +517,12 @@ export async function resolveConfirmation(prisma, id, decision) {
           specialistId: payload.specialistId ? String(payload.specialistId) : null,
         },
       });
+      break;
+    }
+    case "memory.staging_append": {
+      const profileId = getActiveProfileId();
+      if (!profileId) throw new Error("No active profile for staging append");
+      result = await applyStagingAppend(profileId, payload);
       break;
     }
     case "skill.create": {

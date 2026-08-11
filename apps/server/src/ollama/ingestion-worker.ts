@@ -12,6 +12,10 @@ import {
   suggestArchiveName,
 } from "../specialists/roster.js";
 import { lookupEntityArchiveCategory } from "../memory/filing-memory.js";
+import {
+  lookupCorrectionArchiveCategory,
+  lookupCorrectionDocTypeToken,
+} from "../memory/corrections.js";
 import { prepareDocumentForOcr, prepareWarning } from "../ingest/pdf-prepare.js";
 import { imagesToPdf } from "../ingest/images-to-pdf.js";
 import { guessMime } from "../archive/commit.js";
@@ -225,6 +229,7 @@ async function createConfirmForExtraction(opts: {
 
 async function persistExtraction(opts: {
   prisma: Awaited<ReturnType<typeof getPrisma>>;
+  profileId?: string;
   documentId: string;
   jobId: string | null;
   raw: string;
@@ -232,7 +237,7 @@ async function persistExtraction(opts: {
   confidence: number;
   extension: string;
 }): Promise<void> {
-  const { prisma, documentId, jobId, raw, structured, confidence, extension } = opts;
+  const { prisma, profileId, documentId, jobId, raw, structured, confidence, extension } = opts;
   await prisma.documentExtraction.create({
     data: {
       documentId,
@@ -246,15 +251,23 @@ async function persistExtraction(opts: {
   const normalized = normalizeStructuredExtraction(structured);
   const docType = asDocType(normalized.documentType);
   const entity = pickArchiveEntity(normalized);
+  const preferredTypeToken = profileId
+    ? await lookupCorrectionDocTypeToken(profileId, docType)
+    : null;
   const archiveName = suggestArchiveName({
     date: normalized.date ? String(normalized.date) : null,
     documentType: docType,
     entity,
     extension,
+    preferredTypeToken,
   });
-  // Prefer confirm-learned entity→category muscle memory over DocType default.
+  // Prefer MemoryFact, then soft correction log, then DocType default.
   const learnedCategory = await lookupEntityArchiveCategory(prisma, entity);
-  const archiveCategory = learnedCategory ?? suggestArchiveCategory(docType);
+  const correctionCategory = profileId
+    ? await lookupCorrectionArchiveCategory(profileId, entity)
+    : null;
+  const archiveCategory =
+    learnedCategory ?? correctionCategory ?? suggestArchiveCategory(docType);
   // Invalid OCR dueDate must become null — never Invalid Date into Prisma.
   const deadline = safeDate(normalized.dueDate);
 
@@ -407,6 +420,7 @@ async function spawnChildDocument(opts: {
   const combined = combinePageOcrs(opts.pageOcrs);
   await persistExtraction({
     prisma: opts.prisma,
+    profileId: opts.profileId,
     documentId,
     jobId: null,
     raw: combined.raw,
@@ -550,6 +564,7 @@ async function processJob(profileId: string, jobId: string): Promise<void> {
 
     await persistExtraction({
       prisma,
+      profileId,
       documentId: job.documentId,
       jobId: job.id,
       raw: primary.raw,

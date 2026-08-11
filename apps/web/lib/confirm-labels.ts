@@ -14,6 +14,7 @@ const ACTION_LABELS: Record<string, string> = {
   "premium.spend": "Premium spend (optional cloud)",
   "premium.inference": "Premium inference (optional cloud)",
   "memory.fact": "Remember for later",
+  "memory.staging_append": "Remember for later",
   "skill.create": "Add skill",
   "calendar.event": "Calendar (stage locally — Google write not wired)",
   "calendar.event_staged": "Calendar staged locally",
@@ -61,6 +62,8 @@ export function humanizeConfirmationSummary(summary: string): string {
     .replace(/\bCommit expense\b/gi, "Save expense")
     .replace(/\bUpdate filing memory:\b/gi, "Update how we file:")
     .replace(/\bRemember filing:\b/gi, "Remember how we file:")
+    .replace(/\bRemember in preferences\.md:\b/gi, "Remember in Preferences:")
+    .replace(/\bRemember in ADHD\.md:\b/gi, "Remember in ADHD / focus:")
     .replace(/\s*→\s*archive\s+/gi, " · file as ")
     .replace(/\s*\(cat\s+(\d+)\)/gi, " (folder $1)")
     .replace(/\s*·\s*Frist\s+(\d{4}-\d{2}-\d{2})/gi, " · deadline (Frist) $1")

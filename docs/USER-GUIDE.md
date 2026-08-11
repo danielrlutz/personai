@@ -152,7 +152,7 @@ How to reindex: **Settings → Google Drive → Reindex Drive knowledge** (requi
 - **Theme & lock** — theme **system** / **dark** / **light**; optional **Set 4–8 digit PIN** → **Enable PIN** (locks UI on tab hide / idle; database still sealed by password).
 - **Sealed suitcase** — export a password-sealed `.pao` (optional local archive); import stages a **new** sealed profile for confirm (session stays on the current profile).
 - **Password & encryption** — **Change password** anytime.
-- **About you / Personality vault** — edit local markdown (`USER.md`, `SOUL.md`, `preferences.md`, `people.md`, `ADHD.md`) under the profile’s `memory/` folder. Staff and specialists inject budgeted slices (e.g. hotel budget, Cham/Zug). Distinct from the **Soul News** home widget.
+- **About you / Personality vault** — edit local markdown (`USER.md`, `SOUL.md`, `preferences.md`, `people.md`, `ADHD.md`) under the profile’s `memory/` folder. Staff and specialists inject budgeted slices (e.g. hotel budget, Cham/Zug). Distinct from the **Soul News** home widget. The same card shows **Learning from your edits** — a private local log of naming fixes, declines, closer-inspection flags, Drive folder prefs, vault edits, and Team **Remember** actions. Use **Remember for later** there to queue a confirm-gated bullet into `preferences.md` (or confirm filing memory after archives). Nothing is sent to train cloud models.
 - **Memory facts** — short key/value facts specialists should remember → **Add**. Distill from chats still waits for **Needs your confirmation** before writing.
 - **First-launch setup** → **Alerts** → **Allow notifications** for Fristen and pending confirms.
 - Profile menu: **Switch profile** / **Sign out** (both return to the account picker and seal the session).
@@ -188,7 +188,7 @@ For archive items you can:
 - **Confirm** — writes (local archive and Drive if linked; same filename + MIME)
 - **Decline** — leaves external systems unchanged; local staging kept
 
-After you confirm a filing, PersonAI may offer a second confirm to **remember** that entity→folder mapping (e.g. Swisscom → 4 Financial). Decline skips learning; Confirm trains OCR/Staff for the next bill.
+After you confirm a filing, PersonAI may offer a second confirm to **remember** that entity→folder mapping (e.g. Swisscom → 4 Financial). Decline skips learning; Confirm trains OCR/Staff for the next bill. Edits you make before Confirm (naming / category), declines, and **Flag for closer inspection** are also logged locally so the next similar stack can reuse your vocabulary and widen neighbor merge when you often flag incomplete pages. The same correction twice (e.g. Swisscom → folder 4) can auto-stage a **Remember for later** confirm if that mapping is not already learned.
 
 ### Activity
 

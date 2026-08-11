@@ -292,7 +292,9 @@ export function ConfirmGate({
         summary: `File as ${archiveName} (folder ${d.archiveCategory})`,
       });
       await load();
-      toast.success("Naming updated — still not filed until you Confirm.");
+      toast.success(
+        "Naming updated — learning from your edit. Still not filed until you Confirm.",
+      );
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not update naming");
     } finally {

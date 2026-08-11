@@ -21,6 +21,13 @@ import {
   serializeServerJob,
   SERVER_JOB_CONFIRM_REINSPECT,
 } from "../jobs/server-jobs.js";
+import {
+  namingFieldsFromPayload,
+  preferredReinspectNeighborRadius,
+  recordConfirmReject,
+  recordNamingPatch,
+  recordReinspectFlag,
+} from "../memory/corrections.js";
 import { sendError, withPrisma } from "./helpers.js";
 
 function documentIdFromConfirm(pending) {
@@ -84,8 +91,28 @@ export async function registerConfirmationRoutes(app) {
     });
     app.post("/confirmations/:id/reject", async (req, reply) => {
         try {
-            const { prisma } = await withPrisma(req);
-            return await resolveConfirmation(prisma, req.params.id, "reject");
+            const { prisma, profileId } = await withPrisma(req);
+            const pending = await prisma.pendingConfirmation.findUnique({
+                where: { id: req.params.id },
+            });
+            const out = await resolveConfirmation(prisma, req.params.id, "reject");
+            if (pending) {
+                let payload = {};
+                try {
+                    payload = JSON.parse(pending.payload || "{}");
+                } catch {
+                    payload = {};
+                }
+                await recordConfirmReject({
+                    profileId,
+                    confirmationId: pending.id,
+                    action: pending.action,
+                    summary: pending.summary,
+                    documentId: documentIdFromConfirm(pending),
+                    payload,
+                }).catch(() => undefined);
+            }
+            return out;
         }
         catch (err) {
             return sendError(reply, err);
@@ -98,7 +125,7 @@ export async function registerConfirmationRoutes(app) {
      */
     app.post("/confirmations/:id/reinspect", async (req, reply) => {
         try {
-            const { prisma } = await withPrisma(req);
+            const { prisma, profileId } = await withPrisma(req);
             const pending = await prisma.pendingConfirmation.findUnique({
                 where: { id: req.params.id },
             });
@@ -134,13 +161,18 @@ export async function registerConfirmationRoutes(app) {
                     }
                 }
             }
+            const naming = namingFieldsFromPayload(payload);
+            const neighborRadius = await preferredReinspectNeighborRadius(profileId, {
+                entity: naming.entity,
+                docTypeToken: naming.docTypeToken,
+            });
             const job = await enqueueServerJob(prisma, {
                 type: SERVER_JOB_CONFIRM_REINSPECT,
                 documentId,
                 payload: {
                     confirmationId: pending.id,
                     documentId,
-                    neighborRadius: 1,
+                    neighborRadius,
                 },
             });
             payload.reinspectStatus = "flagged";
@@ -157,12 +189,19 @@ export async function registerConfirmationRoutes(app) {
                     summary: flaggedSummary,
                 },
             });
+            await recordReinspectFlag({
+                profileId,
+                confirmationId: pending.id,
+                documentId,
+                summary: pending.summary,
+                payload,
+            }).catch(() => undefined);
             await prisma.auditLog.create({
                 data: {
                     action: "confirm.reinspect_flagged",
                     entity: "PendingConfirmation",
                     entityId: pending.id,
-                    metadata: JSON.stringify({ documentId, jobId: job.id }),
+                    metadata: JSON.stringify({ documentId, jobId: job.id, neighborRadius }),
                 },
             });
             return reply.status(202).send({
@@ -208,7 +247,7 @@ export async function registerConfirmationRoutes(app) {
     /** Edit archive naming / category on a pending confirm before approve (US-2.x). */
     app.patch("/confirmations/:id", async (req, reply) => {
         try {
-            const { prisma } = await withPrisma(req);
+            const { prisma, profileId } = await withPrisma(req);
             const pending = await prisma.pendingConfirmation.findUnique({
                 where: { id: req.params.id },
             });
@@ -217,7 +256,8 @@ export async function registerConfirmationRoutes(app) {
                 return reply.status(400).send({ error: `Already ${pending.status}` });
             }
             const body = req.body ?? {};
-            const payload = JSON.parse(pending.payload || "{}");
+            const beforePayload = JSON.parse(pending.payload || "{}");
+            const payload = { ...beforePayload };
             if (typeof body.archiveName === "string" && body.archiveName.trim()) {
                 payload.archiveName = body.archiveName.trim();
                 const ext = path.extname(payload.archiveName);
@@ -269,6 +309,15 @@ export async function registerConfirmationRoutes(app) {
                     summary,
                 },
             });
+            await recordNamingPatch({
+                profileId,
+                confirmationId: pending.id,
+                documentId: documentIdFromConfirm(pending),
+                action: pending.action,
+                beforePayload,
+                afterPayload: payload,
+                prisma,
+            }).catch(() => undefined);
             return {
                 confirmation: {
                     ...updated,

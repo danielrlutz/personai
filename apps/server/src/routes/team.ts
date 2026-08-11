@@ -28,6 +28,7 @@ import {
   type ArchiveCareContext,
 } from "../memory/user-care.js";
 import { loadStagingForPrompt } from "../memory/staging.js";
+import { buildCorrectionsInjection } from "../memory/corrections.js";
 import {
   extractDriveVocab,
   formatVocabForPrompt,
@@ -107,7 +108,8 @@ export async function registerTeamRoutes(app: FastifyInstance): Promise<void> {
     sessionSummary: string | null | undefined,
     opts?: { citeFromArchive?: boolean; retrievalQuery?: string | null },
   ) {
-    const [ceo, facts, liveOps, archiveFacts, citables, staging] = await Promise.all([
+    const [ceo, facts, liveOps, archiveFacts, citables, staging, correctionsBlock] =
+      await Promise.all([
       getCeoProfileCard(prisma),
       listRecentMemoryFacts(prisma),
       buildSlimLiveOps(prisma, specialistId),
@@ -125,6 +127,7 @@ export async function registerTeamRoutes(app: FastifyInstance): Promise<void> {
       }),
       listCitableDocuments(prisma),
       loadStagingForPrompt(profileId),
+      buildCorrectionsInjection(profileId, 700),
     ]);
     const drive = driveStatus();
     const archiveMap = new Map(archiveFacts.map((f) => [f.key, f.value]));
@@ -158,6 +161,7 @@ export async function registerTeamRoutes(app: FastifyInstance): Promise<void> {
         sessionSummary,
         archive,
         stagingBlock: staging.block,
+        correctionsBlock,
         vocabBlock: formatVocabForPrompt(vocab),
         knowledgeBlock,
         extraInstructions: citationModeInstructions(Boolean(opts?.citeFromArchive)),

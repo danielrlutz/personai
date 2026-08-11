@@ -244,6 +244,8 @@ export function formatUserCareContext(opts: {
   vocabBlock?: string | null;
   /** Char-budgeted hybrid retrieval hits from local Drive knowledge. */
   knowledgeBlock?: string | null;
+  /** Local correction log (naming / flags / prefs) — char-budgeted. */
+  correctionsBlock?: string | null;
 }): string {
   const blocks = [
     `Profile card: ${compactCeoLine(opts.ceo)}`,
@@ -258,6 +260,9 @@ export function formatUserCareContext(opts: {
   }
   if (opts.stagingBlock?.trim()) {
     blocks.push(opts.stagingBlock.trim());
+  }
+  if (opts.correctionsBlock?.trim()) {
+    blocks.push(opts.correctionsBlock.trim());
   }
   if (opts.knowledgeBlock?.trim()) {
     blocks.push(opts.knowledgeBlock.trim());
@@ -277,12 +282,14 @@ export function formatBriefingUserCare(
   facts: MemoryFactCard[],
   stagingBlock?: string | null,
   knowledgeBlock?: string | null,
+  correctionsBlock?: string | null,
 ): string {
   const parts = [
     `Profile card: ${compactCeoLine(ceo)}`,
     `Memory facts (≤${MEMORY_FACT_INJECT_LIMIT} recent):\n${compactFactsBlock(facts)}`,
   ];
   if (stagingBlock?.trim()) parts.push(stagingBlock.trim().slice(0, 1200));
+  if (correctionsBlock?.trim()) parts.push(correctionsBlock.trim().slice(0, 700));
   if (knowledgeBlock?.trim()) parts.push(knowledgeBlock.trim());
   return parts.join("\n\n");
 }
