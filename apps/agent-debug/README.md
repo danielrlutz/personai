@@ -2,7 +2,7 @@
 
 Mobile-first dark chat UI + Fastify API that batches phone messages/images into Cursor-ready prompts via a light Ollama model, exposed to Cursor through an MCP stdio server.
 
-See **[docs/AGENT-DEBUG.md](../../docs/AGENT-DEBUG.md)** for Tailscale/debi9, MCP config, and agent polling habits.
+See **[docs/AGENT-DEBUG.md](../../docs/AGENT-DEBUG.md)** for Tailscale/yogaproi7 phone URL, MCP config, and agent polling habits.
 
 ## Quick start
 

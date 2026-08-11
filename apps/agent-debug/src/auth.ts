@@ -33,7 +33,7 @@ export async function requireToken(
   }
   const got = extractToken(req);
   if (got !== config.token) {
-    await reply.code(401).send({
+    return reply.code(401).send({
       error: "unauthorized",
       hint: "Authorization: Bearer <AGENT_DEBUG_TOKEN> or X-Agent-Debug-Token",
     });

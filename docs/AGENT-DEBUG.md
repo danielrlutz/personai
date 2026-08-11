@@ -50,13 +50,15 @@ docker compose --profile agent-debug up -d --build agent-debug
 curl -sS http://127.0.0.1:8790/health
 ```
 
-Phone (Tailscale MagicDNS FQDN preferred):
+Phone (Tailscale MagicDNS FQDN preferred — use the machine that runs agent-debug):
 
 ```text
-http://debi9.tail8175e6.ts.net:8790
+http://yogaproi7.tail8175e6.ts.net:8790
 ```
 
-Paste `AGENT_DEBUG_TOKEN` into the UI Token field. Attach/paste images; say “wait for pictures in my second message” to hold the batch, or tap **Send now**.
+Paste `AGENT_DEBUG_TOKEN` into the UI Token field (Send stays disabled until set). Attach/paste images; say “wait for pictures in my second message” to hold the batch, or tap **Send now**.
+
+> Note: the UI is plain `http://` over Tailscale. Session IDs use a secure-context-safe fallback because `crypto.randomUUID()` is unavailable on non-HTTPS hosts.
 
 ## MCP in Cursor
 

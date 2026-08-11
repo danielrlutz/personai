@@ -13,7 +13,25 @@ const els = {
   previews: document.getElementById("previews"),
 };
 
-let sessionId = localStorage.getItem(SESSION_KEY) || crypto.randomUUID();
+/** UUID that works on http:// Tailscale hosts (crypto.randomUUID needs a secure context). */
+function newId() {
+  try {
+    if (globalThis.crypto?.randomUUID) return crypto.randomUUID();
+  } catch {
+    /* ignore */
+  }
+  if (globalThis.crypto?.getRandomValues) {
+    const buf = new Uint8Array(16);
+    crypto.getRandomValues(buf);
+    buf[6] = (buf[6] & 0x0f) | 0x40;
+    buf[8] = (buf[8] & 0x3f) | 0x80;
+    const hex = [...buf].map((b) => b.toString(16).padStart(2, "0")).join("");
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+  }
+  return `sess-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+let sessionId = localStorage.getItem(SESSION_KEY) || newId();
 localStorage.setItem(SESSION_KEY, sessionId);
 els.tokenInput.value = localStorage.getItem(TOKEN_KEY) || "";
 
@@ -22,6 +40,20 @@ let pendingFiles = [];
 
 function token() {
   return els.tokenInput.value.trim();
+}
+
+function persistToken() {
+  localStorage.setItem(TOKEN_KEY, token());
+  syncSendEnabled();
+}
+
+function syncSendEnabled() {
+  const hasToken = Boolean(token());
+  const busy = els.sendBtn.dataset.busy === "1";
+  els.sendBtn.disabled = busy || !hasToken;
+  els.composeBtn.disabled = busy || !hasToken;
+  els.sendBtn.title = hasToken ? "" : "Paste AGENT_DEBUG_TOKEN above first";
+  els.composeBtn.title = hasToken ? "" : "Paste AGENT_DEBUG_TOKEN above first";
 }
 
 function authHeaders(json = false) {
@@ -106,6 +138,11 @@ function escapeHtml(s) {
 }
 
 async function refresh() {
+  if (!token()) {
+    els.statusPill.textContent = "set token to send";
+    els.statusPill.className = "status warn";
+    return;
+  }
   try {
     const [status, messages] = await Promise.all([
       api("/v1/status"),
@@ -145,9 +182,16 @@ async function refresh() {
 }
 
 async function send({ sendNow = false } = {}) {
+  persistToken();
+  if (!token()) {
+    alert("Paste AGENT_DEBUG_TOKEN in the Token field first.");
+    els.tokenInput.focus();
+    return;
+  }
   const text = els.textInput.value.trim();
   if (!text && !pendingFiles.length) return;
-  els.sendBtn.disabled = true;
+  els.sendBtn.dataset.busy = "1";
+  syncSendEnabled();
   try {
     if (pendingFiles.length) {
       const fd = new FormData();
@@ -156,6 +200,7 @@ async function send({ sendNow = false } = {}) {
       fd.append("text", text);
       fd.append("urgent", String(els.urgentToggle.checked));
       fd.append("sendNow", String(sendNow));
+      // Do not set Content-Type — browser must add multipart boundary.
       const res = await fetch("/v1/upload", {
         method: "POST",
         headers: authHeaders(false),
@@ -163,7 +208,13 @@ async function send({ sendNow = false } = {}) {
       });
       if (!res.ok) {
         const t = await res.text();
-        throw new Error(t.slice(0, 200));
+        let err = t.slice(0, 200);
+        try {
+          err = JSON.parse(t)?.error || err;
+        } catch {
+          /* keep slice */
+        }
+        throw new Error(err);
       }
       const data = await res.json();
       if (data.message?.sessionId) {
@@ -192,14 +243,13 @@ async function send({ sendNow = false } = {}) {
   } catch (err) {
     alert(`Send failed: ${err.message}`);
   } finally {
-    els.sendBtn.disabled = false;
+    els.sendBtn.dataset.busy = "0";
+    syncSendEnabled();
   }
 }
 
-els.tokenInput.addEventListener("change", () => {
-  localStorage.setItem(TOKEN_KEY, token());
-  refresh();
-});
+els.tokenInput.addEventListener("input", persistToken);
+els.tokenInput.addEventListener("change", persistToken);
 
 els.fileInput.addEventListener("change", () => {
   pendingFiles.push(...Array.from(els.fileInput.files || []));
@@ -212,6 +262,7 @@ els.composeBtn.addEventListener("click", async () => {
   if (els.textInput.value.trim() || pendingFiles.length) {
     await send({ sendNow: true });
   }
+  if (!token()) return;
   try {
     await api("/v1/compose-now", {
       method: "POST",
@@ -242,5 +293,6 @@ window.addEventListener("paste", (e) => {
   if (pendingFiles.length) renderPreviews();
 });
 
+syncSendEnabled();
 refresh();
 setInterval(refresh, 4000);
