@@ -72,4 +72,10 @@ export type StatusSnapshot = {
   lastActivityAt: string | null;
   composeModel: string;
   visionModel: string;
+  /** True when CURSOR_API_KEY is set (SDK primary delivery armed). */
+  sdkDispatchEnabled: boolean;
+  /** Batches enqueued/attempted via SDK bridge this process lifetime. */
+  dispatchedPrompts: number;
+  dispatchQueuePending: number;
+  dispatchLastError: string | null;
 };

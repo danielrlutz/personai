@@ -1,6 +1,10 @@
 #!/usr/bin/env node
 /**
- * MCP stdio server — Cursor polls the agent-debug HTTP inbox.
+ * MCP stdio server — debug / fallback delivery path.
+ *
+ * Primary delivery (when CURSOR_API_KEY is set) is the SDK bridge in
+ * `src/dispatch/cursor-sdk-bridge.ts`. Keep these tools for inbox inspection,
+ * manual poll/ack, and environments without an API key.
  *
  * Env:
  *   AGENT_DEBUG_URL   default http://127.0.0.1:8790

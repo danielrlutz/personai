@@ -8,6 +8,6 @@
     "moduleResolution": "NodeNext",
     "types": ["node"]
   },
-  "include": ["src/**/*"],
+  "include": ["src/**/*", "src/shims/**/*.d.ts"],
   "exclude": ["src/**/*.test.ts"]
 }

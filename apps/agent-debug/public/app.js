@@ -9,7 +9,8 @@ const els = {
   composeBtn: document.getElementById("composeBtn"),
   urgentToggle: document.getElementById("urgentToggle"),
   tokenInput: document.getElementById("tokenInput"),
-  statusPill: document.getElementById("statusPill"),
+  statusStrip: document.getElementById("statusStrip"),
+  statusLabel: document.getElementById("statusLabel"),
   previews: document.getElementById("previews"),
 };
 
@@ -56,6 +57,11 @@ function syncSendEnabled() {
   els.composeBtn.title = hasToken ? "" : "Paste AGENT_DEBUG_TOKEN above first";
 }
 
+function setStatus(kind, label) {
+  els.statusStrip.className = `status-strip ${kind || ""}`.trim();
+  els.statusLabel.textContent = label;
+}
+
 function authHeaders(json = false) {
   const h = {};
   if (json) h["content-type"] = "application/json";
@@ -95,6 +101,7 @@ function renderPreviews() {
     img.alt = file.name;
     const rm = document.createElement("button");
     rm.type = "button";
+    rm.setAttribute("aria-label", "Remove image");
     rm.textContent = "×";
     rm.onclick = () => {
       pendingFiles.splice(idx, 1);
@@ -106,9 +113,12 @@ function renderPreviews() {
 }
 
 function bubbleHtml(msg) {
-  const time = new Date(msg.createdAt).toLocaleTimeString();
+  const time = new Date(msg.createdAt).toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
   const badges = [
-    `<span class="badge">${msg.status}</span>`,
+    `<span class="badge ${escapeAttr(msg.status)}">${escapeHtml(msg.status)}</span>`,
     msg.urgent ? `<span class="badge urgent">urgent</span>` : "",
   ]
     .filter(Boolean)
@@ -118,12 +128,12 @@ function bubbleHtml(msg) {
       const src = img.thumbUrl || img.url;
       if (!src) return "";
       const q = token() ? `?token=${encodeURIComponent(token())}` : "";
-      return `<img src="${src}${q}" alt="${img.filename || "image"}" />`;
+      return `<img src="${src}${q}" alt="${escapeAttr(img.filename || "image")}" loading="lazy" />`;
     })
     .join("");
   return `
     <article class="bubble">
-      <div class="meta"><span>${time}</span>${badges}</div>
+      <div class="meta"><span>${escapeHtml(time)}</span>${badges}</div>
       <p>${escapeHtml(msg.text || "(image)")}</p>
       ${imgs ? `<div class="thumbs">${imgs}</div>` : ""}
     </article>
@@ -137,10 +147,13 @@ function escapeHtml(s) {
     .replaceAll(">", "&gt;");
 }
 
+function escapeAttr(s) {
+  return escapeHtml(s).replaceAll('"', "&quot;");
+}
+
 async function refresh() {
   if (!token()) {
-    els.statusPill.textContent = "set token to send";
-    els.statusPill.className = "status warn";
+    setStatus("warn", "set token");
     return;
   }
   try {
@@ -150,18 +163,22 @@ async function refresh() {
     ]);
     const awaiting = status.awaitingMore?.length || 0;
     const ready = status.readyPrompts || 0;
-    els.statusPill.textContent =
-      awaiting > 0
-        ? `awaiting ×${awaiting}`
-        : ready > 0
-          ? `ready ×${ready}`
-          : `idle · ${status.pendingMessages || 0} pending`;
-    els.statusPill.className =
-      "status " + (awaiting ? "warn" : ready ? "ok" : "");
+    const dispatched = status.dispatchedPrompts || 0;
+    const sdk = status.sdkDispatchEnabled;
+
+    if (awaiting > 0) {
+      setStatus("warn", `awaiting_more ×${awaiting}`);
+    } else if (dispatched > 0) {
+      setStatus("dispatch", `dispatched ×${dispatched}`);
+    } else if (ready > 0) {
+      setStatus("ok", sdk ? `ready ×${ready}` : `ready ×${ready} · MCP`);
+    } else {
+      setStatus("ok", `connected · ${status.pendingMessages || 0} pending`);
+    }
 
     const rows = messages.messages || [];
     if (!rows.length) {
-      els.thread.innerHTML = `<div class="empty">Send a message or photo.<br/>Cursor agents poll via MCP <code>agent_debug_poll</code>.</div>`;
+      els.thread.innerHTML = `<div class="empty">Send a note or photo from the balcony.<br/>SDK dispatches when configured; otherwise Cursor polls <code>agent_debug_poll</code>.</div>`;
       return;
     }
     els.thread.innerHTML = rows.map(bubbleHtml).join("");
@@ -176,8 +193,7 @@ async function refresh() {
       els.thread.scrollTop = els.thread.scrollHeight;
     }
   } catch (err) {
-    els.statusPill.textContent = `error: ${err.message}`;
-    els.statusPill.className = "status warn";
+    setStatus("warn", `error: ${err.message}`);
   }
 }
 

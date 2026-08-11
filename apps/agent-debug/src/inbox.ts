@@ -3,6 +3,12 @@ import { config } from "./config.js";
 import { detectWaitSignal, looksLikeFollowUp } from "./batching.js";
 import { captionImage, ensureThumbPath } from "./caption.js";
 import { composeBatchPrompt } from "./compose.js";
+import {
+  dispatchedCount,
+  enqueueReadyBatch,
+  isSdkDispatchEnabled,
+} from "./dispatch/cursor-sdk-bridge.js";
+import { dispatchQueueSnapshot } from "./dispatch/queue.js";
 import { store } from "./store.js";
 import type { Batch, ImageMeta, InboxMessage, StatusSnapshot } from "./types.js";
 
@@ -160,7 +166,10 @@ export async function runCompose(batchId: string): Promise<Batch | null> {
     for (const mid of batch.messageIds) {
       await store.updateMessage(mid, { status: "composed" });
     }
-    return store.getBatch(batchId)!;
+    const ready = store.getBatch(batchId)!;
+    // Primary delivery path (no-op without CURSOR_API_KEY). MCP poll remains fallback.
+    enqueueReadyBatch(ready);
+    return ready;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     await store.updateBatch(batchId, {
@@ -199,6 +208,7 @@ export function getStatus(): StatusSnapshot {
   const pendingMsgs = store
     .listMessages()
     .filter((m) => m.status === "pending" || m.status === "batched");
+  const dq = dispatchQueueSnapshot();
   return {
     ok: true,
     queueDepth: ready.length + awaiting.length + store.batchesByState("ready_to_compose", "composing").length,
@@ -213,6 +223,10 @@ export function getStatus(): StatusSnapshot {
     lastActivityAt: store.lastActivityAt(),
     composeModel: config.composeModel,
     visionModel: config.visionModel,
+    sdkDispatchEnabled: isSdkDispatchEnabled(),
+    dispatchedPrompts: dispatchedCount(),
+    dispatchQueuePending: dq.pending,
+    dispatchLastError: dq.lastError,
   };
 }
 

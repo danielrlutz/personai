@@ -1,4 +1,5 @@
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 function envInt(name: string, fallback: number): number {
   const raw = process.env[name];
@@ -12,6 +13,15 @@ function envStr(name: string, fallback = ""): string {
 }
 
 const dataDir = path.resolve(envStr("DATA_DIR", "./data/agent-debug"));
+
+/** Prefer AGENT_DEBUG_REPO_PATH; else walk up from this package toward monorepo root. */
+function resolveRepoPath(): string {
+  const fromEnv = envStr("AGENT_DEBUG_REPO_PATH");
+  if (fromEnv) return path.resolve(fromEnv);
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  // src/ → apps/agent-debug → apps → repo root
+  return path.resolve(here, "../../..");
+}
 
 export const config = {
   port: envInt("PORT", 8790),
@@ -32,17 +42,8 @@ export const config = {
   vpsHost: envStr("AGENT_DEBUG_VPS_HOST"),
   profileHint: envStr("AGENT_DEBUG_PROFILE_HINT"),
   baseUrl: envStr("AGENT_DEBUG_URL", "http://127.0.0.1:8790").replace(/\/$/, ""),
+  repoPath: resolveRepoPath(),
+  /** Optional — server runs without this; SDK dispatch becomes a no-op. */
+  cursorApiKey: envStr("CURSOR_API_KEY"),
+  cursorModel: envStr("CURSOR_MODEL", "composer-2.5"),
 };
-
-export function buildContextPreamble(): string {
-  const lines: string[] = [
-    "You are assisting via PersonAI OS agent-debug inbox (balcony / phone → Cursor).",
-  ];
-  if (config.profileHint) lines.push(`Profile hint: ${config.profileHint}`);
-  if (config.vpsHost) lines.push(`VPS / Tailscale host: ${config.vpsHost}`);
-  if (config.contextHint) lines.push(config.contextHint);
-  lines.push(
-    "Act on the user request below. Prefer local tools, MCP, and the PersonAI repo when relevant.",
-  );
-  return lines.join("\n");
-}

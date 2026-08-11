@@ -1,5 +1,9 @@
 import path from "node:path";
-import { buildContextPreamble, config } from "./config.js";
+import {
+  buildComposeSystemPrompt,
+  buildContextPreamble,
+} from "./compose/system-prompts.js";
+import { config } from "./config.js";
 import { ollamaChat } from "./ollama.js";
 import { store } from "./store.js";
 import type { Batch, InboxMessage } from "./types.js";
@@ -51,13 +55,7 @@ export async function composeBatchPrompt(batch: Batch): Promise<string> {
   try {
     const composed = await ollamaChat({
       model: config.composeModel,
-      system: [
-        "You rewrite a short phone chat dump into ONE clear prompt for a Cursor coding agent.",
-        "Keep all concrete facts, paths, filenames, and user intent.",
-        "Do not invent requirements. Prefer imperative instructions.",
-        "Output only the prompt text, no preamble.",
-        `Start with this context block:\n${buildContextPreamble()}`,
-      ].join("\n"),
+      system: buildComposeSystemPrompt(),
       prompt: [
         "Combine these user messages (and image captions/paths) into one Cursor-ready agent prompt:",
         "",
